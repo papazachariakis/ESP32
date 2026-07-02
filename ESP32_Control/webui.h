@@ -62,8 +62,9 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
   </section>
   <section id="tab-ble" class="tab">
     <div class="card"><h2>Bluetooth σκανάρισμα</h2>
-    <p class="small">Υποστηρίζονται: Tianpower (TP_*), JBD/Xiaoxiang, Daly, JK, ANT. Κλείσε την app της μπαταρίας πριν τη σύνδεση.</p>
+    <p class="small">Εμφανίζονται μόνο πιθανές συσκευές BMS (TP_*, JBD, Daly, JK, ANT). Κλείσε την app της μπαταρίας στο κινητό πριν τη σύνδεση.</p>
     <button class="btn" onclick="bleScan()">Σκανάρισμα συσκευών</button>
+    <p class="small" id="bleScanStatus">-</p>
     <div id="bleList"></div></div>
     <div class="card"><h2>Συνδεδεμένη συσκευή</h2><pre id="bleStatus">-</pre>
     <button class="btn danger" onclick="bleDisconnect()">Αποσύνδεση BLE</button></div>
@@ -71,8 +72,9 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
   <section id="tab-wifi" class="tab">
     <div class="card"><h2>WiFi ρύθμιση</h2>
     <p class="small" id="wifiInfo">-</p>
-    <button class="btn" onclick="wifiReset()">Επαναφορά WiFi (Setup Portal)</button>
-    <p class="small">Μετά την επαναφορά, σύνδεση στο WiFi <b>ESP32-Setup</b> και άνοιγμα captive portal για το WiFi του σπιτιού.</p></div>
+    <p class="small" id="wifiSaved">-</p>
+    <button class="btn" onclick="wifiReset()">Προσθήκη / Αλλαγή WiFi (Setup Portal)</button>
+    <p class="small">Αποθηκεύει έως 5 δίκτυα. Στην επόμενη εκκίνηση συνδέεται αυτόματα στο διαθέσιμο. Μετά το κουμπί: σύνδεση στο <b>ESP32-Setup</b>.</p></div>
     <div class="card"><h2>MQTT (Internet)</h2>
     <label>Broker</label><input id="mqttBroker" placeholder="broker.hivemq.com">
     <label>Port</label><input id="mqttPort" type="number" placeholder="1883">
@@ -172,7 +174,9 @@ document.querySelectorAll('nav button').forEach(b=>{
 
 async function api(path,opt){
   const r=await fetch(API+path,opt);
-  return r.json();
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error(j.error||('HTTP '+r.status)),{status:r.status,data:j});
+  return j;
 }
 
 function renderRelays(outputs){
@@ -199,6 +203,10 @@ async function refresh(){
     }
     document.getElementById('bleStatus').textContent=JSON.stringify(s.ble,null,2);
     document.getElementById('wifiInfo').textContent=`SSID: ${s.wifi_ssid||'-'} | IP: ${s.ip}`;
+    const saved=(s.wifi_saved||[]);
+    document.getElementById('wifiSaved').textContent=saved.length
+      ? `Αποθηκευμένα δίκτυα (${saved.length}): ${saved.join(', ')}`
+      : 'Αποθηκευμένα δίκτυα: κανένα ακόμα';
     document.getElementById('mqttBroker').value=s.mqtt.broker||'';
     document.getElementById('mqttPort').value=s.mqtt.port||1883;
     document.getElementById('remoteDeviceId').value=s.device_id;
@@ -216,14 +224,49 @@ async function allOff(){
   if(remoteMode&&mqttClient){mqttClient.publish(mqttCmdTopic,JSON.stringify({relay:'all',on:false}));return;}
   await api('/api/relay/alloff',{method:'POST'});refresh();
 }
+let bleScanResults=[];
 async function bleScan(){
-  document.getElementById('bleList').innerHTML='<p class="small">Σκανάρισμα... (~8 sec)</p>';
-  const r=await api('/api/ble/scan');
-  document.getElementById('bleList').innerHTML=r.devices.length?r.devices.map(d=>
-    `<div class="ble-item" onclick="bleConnect('${d.mac}','${(d.name||'').replace(/'/g,"\\'")}','${d.bms_type||'auto'}')"><b>${d.bms_label||'BMS'}: ${d.name||'Unknown'}</b><br><span class="small">${d.mac} RSSI ${d.rssi}</span></div>`).join(''):'<p class="small">Δεν βρέθηκαν BMS. Βεβαιώσου ότι η μπαταρία είναι ON και κλειστή η app.</p>';
+  document.getElementById('bleScanStatus').textContent='Σκανάρισμα... (~8 sec)';
+  document.getElementById('bleList').innerHTML='';
+  try{
+    const r=await api('/api/ble/scan');
+    bleScanResults=r.devices||[];
+    document.getElementById('bleScanStatus').textContent=bleScanResults.length
+      ? `Βρέθηκαν ${bleScanResults.length} συσκευή(ές) BMS — πάτα για σύνδεση`
+      : 'Δεν βρέθηκαν BMS. Βεβαιώσου ότι η μπαταρία είναι ON, κοντά στο ESP32, και κλειστή η app στο κινητό.';
+    document.getElementById('bleList').innerHTML=bleScanResults.length?bleScanResults.map((d,i)=>
+      `<div class="ble-item" data-idx="${i}"><b>${d.bms_label||'BMS'}: ${d.name||'Unknown'}</b><br><span class="small">${d.mac} • RSSI ${d.rssi}</span></div>`
+    ).join(''):'';
+  }catch(e){
+    document.getElementById('bleScanStatus').textContent='Σφάλμα σάρωσης: '+e.message;
+  }
 }
+document.getElementById('bleList').addEventListener('click',e=>{
+  const item=e.target.closest('.ble-item');
+  if(!item)return;
+  const d=bleScanResults[+item.dataset.idx];
+  if(d)bleConnect(d.mac,d.name||'',d.bms_type||'auto');
+});
+const BLE_ERR={
+  unknown_bms_type:'Άγνωστος τύπος BMS — επίλεξε συσκευή TP_* (Basen Green)',
+  connect_failed:'Αποτυχία σύνδεσης — κλείσε την app στο κινητό και δοκίμασε ξανά',
+  invalid_mac:'Μη έγκυρη διεύθυνση MAC'
+};
 async function bleConnect(mac,name,type){
-  await api('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,name,type:type||'auto'})});
+  const st=document.getElementById('bleScanStatus');
+  st.textContent=`Σύνδεση σε ${name||mac}... (μπορεί να πάρει 20-30 δευτ.)`;
+  try{
+    const r=await api('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac,name,type:type||'auto'})});
+    if(r.ok){
+      st.textContent='Συνδέθηκε! Λήψη δεδομένων BMS...';
+      setTimeout(refresh,1500);
+      setTimeout(refresh,5000);
+      return;
+    }
+    st.textContent='Αποτυχία σύνδεσης';
+  }catch(e){
+    st.textContent=BLE_ERR[e.data?.error]||('Σφάλμα: '+(e.data?.error||e.message));
+  }
   refresh();
 }
 async function bleDisconnect(){

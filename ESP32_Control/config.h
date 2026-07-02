@@ -7,6 +7,8 @@ static const char* RELAY_LABELS[RELAY_COUNT] = { "LED / D2", "Relay D4", "Relay 
 
 #define WIFI_PORTAL_NAME "ESP32-Setup"
 #define WIFI_PORTAL_TIMEOUT_SEC 180
+#define WIFI_STORE_MAX 5
+#define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 
 #define MQTT_DEFAULT_BROKER "broker.hivemq.com"
 #define MQTT_DEFAULT_PORT 1883

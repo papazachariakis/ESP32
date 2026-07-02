@@ -46,7 +46,11 @@ struct BmsManager {
   }
 
   bool getChars(BLEClient* c, const char* svcUuid, const char* rxUuid, const char* txUuid) {
-    BLERemoteService* svc = c->getService(BLEUUID(svcUuid));
+    BLERemoteService* svc = nullptr;
+    for (int i = 0; i < 20 && !svc; i++) {
+      svc = c->getService(BLEUUID(svcUuid));
+      if (!svc) delay(200);
+    }
     if (!svc) return false;
     chrNotify = svc->getCharacteristic(BLEUUID(rxUuid));
     chrWrite = svc->getCharacteristic(BLEUUID(txUuid));
@@ -66,7 +70,11 @@ struct BmsManager {
   }
 
   bool getJkChars(BLEClient* c) {
-    BLERemoteService* svc = c->getService(BLEUUID(JK_SERVICE_UUID));
+    BLERemoteService* svc = nullptr;
+    for (int i = 0; i < 20 && !svc; i++) {
+      svc = c->getService(BLEUUID(JK_SERVICE_UUID));
+      if (!svc) delay(200);
+    }
     if (!svc) return false;
     chrNotify = svc->getCharacteristic(BLEUUID(JK_CHAR_UUID));
     if (!chrNotify) return false;
@@ -234,6 +242,7 @@ struct BmsManager {
       reset();
       return false;
     }
+    delay(500);
 
     bool ok = false;
     switch (type) {

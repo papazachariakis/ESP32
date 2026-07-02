@@ -122,19 +122,35 @@ inline BmsType bmsDetectFromName(const String& name) {
 inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
   BmsType byName = bmsDetectFromName(name);
   if (byName != BmsType::None) return byName;
-  if (bmsMfgMatch(d, 0x0B65) || bmsMfgMatch(d, 0x4B4A)) return BmsType::Jk;
+  if (name.startsWith("TP_")) return BmsType::Tianpower;
+
+  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
+    if (name.length() == 0) return BmsType::None;
+    if (name.startsWith("TP_")) return BmsType::Tianpower;
+    return bmsDetectFromName(name);
+  }
+
+  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
+    if (name.indexOf("ANT") >= 0) return BmsType::Ant;
+    if (name.length() == 0 || name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0) return BmsType::Jk;
+    return BmsType::None;
+  }
+
   if (bmsMfgMatch(d, 0x0102) || bmsMfgMatch(d, 0x0104) ||
       bmsMfgMatch(d, 0x0302) || bmsMfgMatch(d, 0x0303) || bmsMfgMatch(d, 0x0402)) {
     return BmsType::Daly;
   }
-  if (bmsHasService(d, "0000fff0-0000-1000-8000-00805f9b34fb")) return BmsType::Daly;
-  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
-    if (name.indexOf("ANT") >= 0) return BmsType::Ant;
+
+  if (bmsHasService(d, "0000fff0-0000-1000-8000-00805f9b34fb") &&
+      (bmsNameMatch(name, "DL-") || name.indexOf("Daly") >= 0)) {
+    return BmsType::Daly;
+  }
+
+  if ((bmsMfgMatch(d, 0x0B65) || bmsMfgMatch(d, 0x4B4A)) &&
+      (name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0 || name.length() == 0)) {
     return BmsType::Jk;
   }
-  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
-    return bmsNameMatch(name, "TP_") ? BmsType::Tianpower : BmsType::Jbd;
-  }
+
   return BmsType::None;
 }
 

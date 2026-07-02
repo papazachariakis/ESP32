@@ -41,6 +41,7 @@
 #include "webui.h"
 #include "remote_ui.h"
 #include "bms_manager.h"
+#include "wifi_store.h"
 #include "ota.h"
 
 
@@ -157,6 +158,9 @@ String buildStatusJson() {
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
 
   doc["rssi"] = WiFi.RSSI();
+
+  JsonArray wifiSaved = doc.createNestedArray("wifi_saved");
+  doc["wifi_saved_count"] = wifiStoreAddToJson(prefs, wifiSaved);
 
 
 
@@ -332,15 +336,28 @@ void loadSettings() {
 
 void setupWiFi() {
 
+  WiFi.mode(WIFI_STA);
+
+  bool forcePortal = prefs.getBool(WIFI_FORCE_PORTAL_KEY, false);
+  if (forcePortal) prefs.putBool(WIFI_FORCE_PORTAL_KEY, false);
+
+  if (!forcePortal && wifiStoreTryConnect(prefs)) {
+    Serial.print("WiFi OK (saved list): ");
+    Serial.println(WiFi.localIP());
+    return;
+  }
+
   WiFiManager wm;
 
   wm.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT_SEC);
 
   wm.setConnectTimeout(30);
 
+  wm.setSaveConfigCallback([&wm]() {
+    wifiStoreUpsert(prefs, wm.getWiFiSSID(), wm.getWiFiPass());
+  });
 
-
-  bool ok = wm.autoConnect(WIFI_PORTAL_NAME);
+  bool ok = forcePortal ? wm.startConfigPortal(WIFI_PORTAL_NAME) : wm.autoConnect(WIFI_PORTAL_NAME);
 
   if (!ok) {
 
@@ -351,6 +368,8 @@ void setupWiFi() {
     ESP.restart();
 
   }
+
+  wifiStoreUpsert(prefs, WiFi.SSID(), wm.getWiFiPass(false));
 
   Serial.print("WiFi OK: ");
 
@@ -488,9 +507,17 @@ void handleBleScan() {
 
 void handleBleConnect() {
 
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"no body\"}");
+    return;
+  }
+
   StaticJsonDocument<256> doc;
 
-  deserializeJson(doc, server.arg("plain"));
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
+    return;
+  }
 
   String mac = doc["mac"] | "";
 
@@ -498,15 +525,34 @@ void handleBleConnect() {
 
   String typeStr = doc["type"] | "auto";
 
-  BmsType bt = typeStr == "auto" ? BmsType::None : bmsTypeFromString(typeStr);
+  if (mac.length() < 11) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid mac\"}");
+    return;
+  }
+
+  BmsType bt = BmsType::None;
+  if (typeStr != "auto" && typeStr.length()) bt = bmsTypeFromString(typeStr);
   if (bt == BmsType::None) bt = bmsDetectFromName(name);
+  if (bt == BmsType::None && name.startsWith("TP_")) bt = BmsType::Tianpower;
   if (bt == BmsType::None && bmsMgr.type != BmsType::None) bt = bmsMgr.type;
+
+  if (bt == BmsType::None) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_bms_type\"}");
+    return;
+  }
+
+  Serial.printf("BLE connect request: %s [%s] %s\n", name.c_str(), bmsTypeId(bt), mac.c_str());
 
   bool ok = bmsMgr.connect(bt, name, mac, prefs);
 
-  if (ok) publishBmsMqtt();
+  if (ok) {
+    publishBmsMqtt();
+    publishStatus();
+    server.send(200, "application/json", "{\"ok\":true}");
+    return;
+  }
 
-  server.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  server.send(500, "application/json", "{\"ok\":false,\"error\":\"connect_failed\"}");
 
 }
 
@@ -523,6 +569,8 @@ void handleBleDisconnect() {
 
 
 void handleWifiReset() {
+
+  prefs.putBool(WIFI_FORCE_PORTAL_KEY, true);
 
   server.send(200, "application/json", "{\"ok\":true}");
 
@@ -666,6 +714,17 @@ void setup() {
 void loop() {
   server.handleClient();
   ArduinoOTA.handle();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastWifiTry = 0;
+    if (millis() - lastWifiTry > 45000) {
+      lastWifiTry = millis();
+      if (wifiStoreTryConnect(prefs)) {
+        Serial.println("WiFi reconnected via saved list");
+        mqttConnect();
+      }
+    }
+  }
 
   if (!mqtt.connected()) {
     static unsigned long lastTry = 0;

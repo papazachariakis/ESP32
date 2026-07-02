@@ -8,22 +8,26 @@
   <title>ESP32 Energy Hub — BMS & Γεννήτρια</title>
   <style>
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
-    header{padding:16px 20px;background:#1e293b;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-    h1{margin:0;font-size:1.2rem}
-    main{padding:16px;max-width:980px;margin:0 auto}
-    .card{background:#1e293b;border-radius:12px;padding:16px;margin:12px 0}
+    html{width:100%}
+    body{margin:0;width:100%;min-height:100vh;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;overflow-x:hidden}
+    header{padding:16px clamp(12px,3vw,24px);background:#1e293b;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%}
+    h1{margin:0;font-size:clamp(1rem,2.5vw,1.35rem)}
+    main{padding:clamp(12px,2vw,24px);width:100%;max-width:100%;margin:0}
+    .card{background:#1e293b;border-radius:12px;padding:clamp(12px,2vw,16px);margin:12px 0;width:100%}
     input{width:100%;padding:10px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;margin:6px 0}
     button{padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;width:100%;margin-top:8px;cursor:pointer}
     button.sec{background:#475569}
     button.link{background:transparent;color:#60a5fa;padding:0;margin:0;width:auto;text-decoration:underline}
     .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.75rem;margin-left:8px}
     .ok{background:#14532d;color:#86efac}.warn{background:#713f12;color:#fde047}.off{background:#475569;color:#cbd5e1}
-    .grid{display:grid;gap:12px}
+    .grid{display:grid;gap:12px;width:100%}
     .grid.cols-2{grid-template-columns:1fr}
-    @media(min-width:860px){.grid.cols-2{grid-template-columns:1.1fr .9fr}}
-    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-    @media(min-width:860px){.stats{grid-template-columns:repeat(4,1fr)}}
+    @media(min-width:768px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+    @media(min-width:1400px){.grid.cols-2{grid-template-columns:1.1fr .9fr}}
+    .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;width:100%}
+    @media(min-width:600px){.stats{grid-template-columns:repeat(3,1fr)}}
+    @media(min-width:900px){.stats{grid-template-columns:repeat(4,1fr)}}
+    @media(min-width:1400px){.stats{grid-template-columns:repeat(6,1fr)}}
     .kpi{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:10px}
     .kpi .l{font-size:.75rem;color:#94a3b8}
     .kpi .v{font-size:1.15rem;font-weight:650;margin-top:4px}
@@ -36,7 +40,9 @@
     .meter{height:10px;border-radius:999px;background:#0f172a;border:1px solid #334155;overflow:hidden;margin-top:8px}
     .meter>div{height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e);width:0%;transition:width .4s}
     .cells{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-    @media(min-width:860px){.cells{grid-template-columns:repeat(8,1fr)}}
+    @media(min-width:600px){.cells{grid-template-columns:repeat(6,1fr)}}
+    @media(min-width:900px){.cells{grid-template-columns:repeat(8,1fr)}}
+    @media(min-width:1400px){.cells{grid-template-columns:repeat(16,1fr)}}
     .cell{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:8px}
     .cell .n{font-size:.7rem;color:#94a3b8}
     .cell .cv{font-size:.85rem;font-weight:650;margin-top:2px;display:inline-block;padding:2px 6px;border-radius:999px}
@@ -79,7 +85,7 @@
     .load-row .lbl{display:flex;justify-content:space-between;font-size:.8rem;color:#94a3b8;margin-bottom:4px}
     .load-bar{height:12px;border-radius:999px;background:#0f172a;border:1px solid #334155;overflow:hidden}
     .load-bar>div{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);width:0%;transition:width .4s}
-    .phases{display:grid;grid-template-columns:1fr;gap:10px}
+    .phases{display:grid;grid-template-columns:1fr;gap:10px;width:100%}
     @media(min-width:700px){.phases{grid-template-columns:repeat(3,1fr)}}
     .phase{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px}
     .phase h3{margin:0 0 8px;font-size:.85rem;color:#fbbf24}
@@ -94,8 +100,8 @@
     .gen-actions .sec{background:#334155;color:#e2e8f0}
     .fault-list{margin:0;padding-left:18px;font-size:.8rem;color:#fca5a5}
     .fault-list li{margin:4px 0}
-    nav.tabs{display:flex;gap:6px;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;overflow:auto}
-    nav.tabs button{flex:1;min-width:100px;padding:10px;border:0;border-radius:8px;background:#0f172a;color:#94a3b8;cursor:pointer}
+    nav.tabs{display:flex;gap:6px;padding:8px clamp(12px,3vw,24px);background:#1e293b;border-bottom:1px solid #334155;overflow:auto;width:100%;margin:0 0 12px;box-sizing:border-box}
+    nav.tabs button{flex:1;min-width:90px;padding:10px;border:0;border-radius:8px;background:#0f172a;color:#94a3b8;cursor:pointer}
     nav.tabs button.active{background:#2563eb;color:#fff}
     .view{display:none}.view.active{display:block}
   </style>
@@ -108,6 +114,11 @@
     </div>
     <button class="link hidden" id="settingsBtn" onclick="toggleSetup()">Ρυθμίσεις</button>
   </header>
+  <nav class="tabs">
+    <button class="active" data-view="bms" onclick="switchView('bms')">Μπαταρία BMS</button>
+    <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
+    <button data-view="relays" onclick="switchView('relays')">Relays</button>
+  </nav>
   <main>
     <div class="card" id="setupCard">
       <h2 style="margin:0 0 8px">Σύνδεση</h2>
@@ -125,12 +136,6 @@
       </div>
       <button class="link setup-toggle" onclick="toggleSetup()">Εμφάνιση ρυθμίσεων</button>
     </div>
-
-    <nav class="tabs">
-      <button class="active" data-view="bms" onclick="switchView('bms')">Μπαταρία BMS</button>
-      <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
-      <button data-view="relays" onclick="switchView('relays')">Relays</button>
-    </nav>
 
     <div id="view-bms" class="view active">
     <div class="grid cols-2">

@@ -39,6 +39,17 @@
 #define CUMMINS_REG_TOTAL_RUNS    40069
 #define CUMMINS_REG_RUNTIME_HI    40070
 #define CUMMINS_REG_RUNTIME_LO    40071
+#define CUMMINS_REG_AUX_SPEED     40210
+#define CUMMINS_REG_AUX_VOLT      40211
+#define CUMMINS_REG_BARO_PSI      40229
+#define CUMMINS_REG_LTA_TEMP_F    40242
+#define CUMMINS_REG_FUEL_VALID    40254
+#define CUMMINS_REG_CFG_IN4       40278
+#define CUMMINS_REG_CMD_START     40300
+#define CUMMINS_REG_CMD_RESET     40301
+#define CUMMINS_REG_CMD_ESTOP     40302
+#define CUMMINS_REG_FAULT_BM1     40400
+#define CUMMINS_FAULT_BITMAP_CNT  8
 
 struct GenData {
   bool valid = false;
@@ -75,6 +86,18 @@ struct GenData {
   uint16_t engineRpm = 0;
   uint16_t totalRuns = 0;
   uint32_t runTimeSec = 0;
+  float auxSpeedBias = 0;
+  float auxVoltBias = 0;
+  float baroPsi = 0;
+  int16_t ltaTempF = 0;
+  bool auxValid = false;
+  bool baroValid = false;
+  bool ltaValid = false;
+  bool fuelPressValid = false;
+  bool cfgInput4 = false;
+  bool extrasValid = false;
+  uint16_t faultBitmap[CUMMINS_FAULT_BITMAP_CNT] = {};
+  bool faultBitmapValid = false;
   String lastError;
 };
 
@@ -120,6 +143,27 @@ inline const char* cumminsFaultTypeLabel(uint8_t t) {
   }
 }
 
+inline const char* const CUMMINS_NFPA_BITS[16] = {
+  "Low Fuel Level", "Low Coolant Level", "Overspeed", "Low Oil Pressure",
+  "Pre-low Oil Pressure", "High Engine Temperature", "Pre-high Engine Temperature",
+  "Low Coolant Temperature", "Fail to Start", "Charger AC Failure",
+  "Low Battery Voltage", "High Battery Voltage", "Not in Auto", "Genset Running",
+  "Genset Supplying Load", "Common Alarm"
+};
+
+inline const char* const CUMMINS_EXT_BITS[16] = {
+  "Emergency Stop", "Utility Circuit Breaker Tripped", "Genset Circuit Breaker Tripped",
+  "Load Demand", "Fail to Close", "Fail to Sync", "Reverse kVAR", "Reverse kW",
+  "Short Circuit", "Overcurrent", "Overload", "Under Frequency",
+  "Low AC Voltage", "High AC Voltage", "Ground Fault", "Check Genset"
+};
+
+inline void cumminsAppendBitmapBits(JsonArray& arr, uint16_t word, const char* const* labels) {
+  for (uint8_t b = 0; b < 16; b++) {
+    if ((word >> b) & 1) arr.add(labels[b]);
+  }
+}
+
 inline void genFillJson(JsonObject& o, const GenData& g) {
   o["valid"] = g.valid;
   o["controller_type"] = g.controllerType;
@@ -134,6 +178,10 @@ inline void genFillJson(JsonObject& o, const GenData& g) {
   o["fault_type_label"] = cumminsFaultTypeLabel(g.faultType);
   o["nfpa_fault"] = g.nfpaFault;
   o["ext_annunciation"] = g.extAnnunciation;
+  JsonArray nfpaBits = o.createNestedArray("nfpa_bits");
+  cumminsAppendBitmapBits(nfpaBits, g.nfpaFault, CUMMINS_NFPA_BITS);
+  JsonArray extBits = o.createNestedArray("ext_bits");
+  cumminsAppendBitmapBits(extBits, g.extAnnunciation, CUMMINS_EXT_BITS);
   o["volt_l1n"] = g.voltL1N;
   o["volt_l2n"] = g.voltL2N;
   o["volt_l3n"] = g.voltL3N;
@@ -159,6 +207,20 @@ inline void genFillJson(JsonObject& o, const GenData& g) {
   o["engine_rpm"] = g.engineRpm;
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
+  o["extras_valid"] = g.extrasValid;
+  if (g.auxValid) {
+    o["aux_speed_bias"] = g.auxSpeedBias;
+    o["aux_volt_bias"] = g.auxVoltBias;
+  }
+  if (g.baroValid) o["baro_psi"] = g.baroPsi;
+  if (g.ltaValid) o["lta_temp_f"] = g.ltaTempF;
+  if (g.extrasValid) {
+    o["fuel_press_valid"] = g.fuelPressValid;
+    o["cfg_input4"] = g.cfgInput4;
+  }
+  o["fault_bitmap_valid"] = g.faultBitmapValid;
+  JsonArray fb = o.createNestedArray("fault_bitmap");
+  for (uint8_t i = 0; i < CUMMINS_FAULT_BITMAP_CNT; i++) fb.add(g.faultBitmap[i]);
   if (g.lastError.length()) o["error"] = g.lastError;
 }
 
@@ -200,9 +262,27 @@ struct GenManager {
     return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), count, out);
   }
 
-  void pollReset() {
-    pollStep = 0;
+  bool writeHold(uint16_t reg40001, uint16_t value) {
+    if (!bus) return false;
+    return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value);
   }
+
+  bool cmdStart() { return writeHold(CUMMINS_REG_CMD_START, 1); }
+  bool cmdStop() { return writeHold(CUMMINS_REG_CMD_START, 0); }
+  bool cmdFaultReset() { return writeHold(CUMMINS_REG_CMD_RESET, 1); }
+  bool cmdEstop(bool active) { return writeHold(CUMMINS_REG_CMD_ESTOP, active ? 1 : 0); }
+
+  bool runGensetCmd(const char* action) {
+    if (!enabled || !bus || !action) return false;
+    if (strcmp(action, "start") == 0) return cmdStart();
+    if (strcmp(action, "stop") == 0) return cmdStop();
+    if (strcmp(action, "reset") == 0) return cmdFaultReset();
+    if (strcmp(action, "estop_on") == 0) return cmdEstop(true);
+    if (strcmp(action, "estop_off") == 0) return cmdEstop(false);
+    return false;
+  }
+
+  void pollReset() { pollStep = 0; }
 
   bool pollStepOnce() {
     if (!enabled || !bus) return false;
@@ -273,6 +353,42 @@ struct GenManager {
         if (!readBlock(CUMMINS_REG_ENGINE_RPM, 4, r)) { data.lastError = "modbus 40068"; pollStep = 0; return false; }
         data.engineRpm = r[0]; data.totalRuns = r[1];
         data.runTimeSec = ((uint32_t)r[2] << 16) | r[3];
+        pollStep = 10; return false;
+      }
+      case 10: {
+        uint16_t aux[2];
+        data.auxValid = readBlock(CUMMINS_REG_AUX_SPEED, 2, aux);
+        if (data.auxValid) {
+          data.auxSpeedBias = aux[0] * 0.01f;
+          data.auxVoltBias = aux[1] * 0.01f;
+        }
+        pollStep = 11; return false;
+      }
+      case 11: {
+        uint16_t b[1];
+        data.baroValid = readBlock(CUMMINS_REG_BARO_PSI, 1, b);
+        if (data.baroValid) data.baroPsi = b[0] * 0.1f;
+        pollStep = 12; return false;
+      }
+      case 12: {
+        uint16_t lta[1];
+        data.ltaValid = readBlock(CUMMINS_REG_LTA_TEMP_F, 1, lta);
+        if (data.ltaValid) data.ltaTempF = (int16_t)lta[0];
+        pollStep = 13; return false;
+      }
+      case 13: {
+        uint16_t fv[1];
+        if (readBlock(CUMMINS_REG_FUEL_VALID, 1, fv)) data.fuelPressValid = fv[0] != 0;
+        pollStep = 14; return false;
+      }
+      case 14: {
+        uint16_t in4[1];
+        if (readBlock(CUMMINS_REG_CFG_IN4, 1, in4)) data.cfgInput4 = in4[0] != 0;
+        data.extrasValid = data.auxValid || data.baroValid || data.ltaValid;
+        pollStep = 15; return false;
+      }
+      case 15: {
+        data.faultBitmapValid = readBlock(CUMMINS_REG_FAULT_BM1, CUMMINS_FAULT_BITMAP_CNT, data.faultBitmap);
         data.valid = true;
         data.lastUpdate = millis();
         data.lastError = "";
@@ -288,9 +404,9 @@ struct GenManager {
   bool pollOnce() {
     pollReset();
     data.valid = false;
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < 20; i++) {
       if (pollStepOnce()) return true;
-      if (pollStep == 0 && i < 9) return false;
+      if (pollStep == 0 && i < 19) return false;
     }
     return data.valid;
   }
@@ -305,4 +421,3 @@ struct GenManager {
     pollStepOnce();
   }
 };
-

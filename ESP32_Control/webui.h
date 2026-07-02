@@ -69,6 +69,14 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
     <label>Baud</label><select id="modbusBaud"><option>9600</option><option>19200</option><option>38400</option><option>2400</option><option>4800</option></select>
     <button class="btn success" onclick="saveModbus()">Αποθήκευση Modbus</button>
     <p class="small" id="modbusStatus">-</p></div>
+    <div class="card"><h2>Έλεγχος γεννήτριας</h2>
+    <p class="small">Modbus write: 40300 start/stop, 40301 reset, 40302 e-stop</p>
+    <button class="btn success" onclick="genCmd('start')">Εκκίνηση</button>
+    <button class="btn danger" onclick="genCmd('stop')">Διακοπή</button>
+    <button class="btn" onclick="genCmd('reset')">Reset σφάλματος</button>
+    <button class="btn secondary" onclick="genCmd('estop_on')">E-Stop ON</button>
+    <button class="btn secondary" onclick="genCmd('estop_off')">E-Stop OFF</button>
+    <p class="small" id="genCmdStatus">-</p></div>
     <div class="card"><h2>Κατάσταση Γεννήτριας</h2><pre id="genData">Αναμονή δεδομένων Modbus...</pre></div>
   </section>
   <section id="tab-ble" class="tab">
@@ -186,7 +194,30 @@ function formatGenset(g){
   s+=`Μπαταρία: ${Number(g.battery_v).toFixed(1)} V  |  Λάδι: ${Number(g.oil_kpa).toFixed(0)} kPa  |  Νερό: ${Number(g.coolant_c).toFixed(1)} °C\n`;
   s+=`Εκκινήσεις: ${g.total_runs||0}  |  Ώρες λειτ.: ${Math.floor((g.runtime_sec||0)/3600)} h\n`;
   if(g.active_fault)s+=`Σφάλμα: #${g.active_fault} (${g.fault_type_label||''})\n`;
+  if(g.nfpa_bits&&g.nfpa_bits.length)s+=`NFPA: ${g.nfpa_bits.join(', ')}\n`;
+  if(g.ext_bits&&g.ext_bits.length)s+=`Extended: ${g.ext_bits.join(', ')}\n`;
+  if(g.aux_speed_bias!=null)s+=`AUX speed bias: ${Number(g.aux_speed_bias).toFixed(2)} RPM\n`;
+  if(g.aux_volt_bias!=null)s+=`AUX volt bias: ${Number(g.aux_volt_bias).toFixed(2)} V\n`;
+  if(g.baro_psi!=null)s+=`Barometric: ${Number(g.baro_psi).toFixed(1)} PSI\n`;
+  if(g.lta_temp_f!=null)s+=`LTA temp: ${g.lta_temp_f} °F\n`;
+  if(g.extras_valid)s+=`Fuel press valid: ${g.fuel_press_valid?'yes':'no'} | Input4: ${g.cfg_input4?'active':'inactive'}\n`;
+  if(g.fault_bitmap_valid&&g.fault_bitmap){
+    const active=[];
+    g.fault_bitmap.forEach((w,i)=>{if(w)active.push(`4040${i}:0x${(w>>>0).toString(16).toUpperCase()}`);});
+    if(active.length)s+=`Fault bitmaps: ${active.join(' ')}\n`;
+  }
   return s;
+}
+
+async function genCmd(action){
+  if(!confirm('Εκτέλεση: '+action+' ;'))return;
+  try{
+    await api('/api/genset/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    document.getElementById('genCmdStatus').textContent='OK: '+action;
+    refresh();
+  }catch(e){
+    document.getElementById('genCmdStatus').textContent='Σφάλμα: '+(e.message||e);
+  }
 }
 
 document.querySelectorAll('nav button').forEach(b=>{

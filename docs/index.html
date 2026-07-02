@@ -87,6 +87,13 @@
     .phase .row:last-child{border:0}
     .gen-status{padding:12px;border-radius:10px;background:#0f172a;border:1px solid #334155}
     .gen-status.run{border-color:#14532d}.gen-status.warn{border-color:#713f12}.gen-status.off{border-color:#334155}
+    .gen-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .gen-actions button{padding:10px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:600}
+    .gen-actions .start{background:#16a34a;color:#fff}
+    .gen-actions .stop{background:#dc2626;color:#fff}
+    .gen-actions .sec{background:#334155;color:#e2e8f0}
+    .fault-list{margin:0;padding-left:18px;font-size:.8rem;color:#fca5a5}
+    .fault-list li{margin:4px 0}
     nav.tabs{display:flex;gap:6px;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;overflow:auto}
     nav.tabs button{flex:1;min-width:100px;padding:10px;border:0;border-radius:8px;background:#0f172a;color:#94a3b8;cursor:pointer}
     nav.tabs button.active{background:#2563eb;color:#fff}
@@ -209,6 +216,30 @@
         </div>
       </div>
 
+      <div class="card">
+        <h2 style="margin:0 0 12px">Επιπλέον αισθητήρες</h2>
+        <div class="stats">
+          <div class="kpi"><div class="l">AUX speed bias</div><div class="v" style="font-size:.95rem" id="gAuxSpd">-</div></div>
+          <div class="kpi"><div class="l">AUX volt bias</div><div class="v" style="font-size:.95rem" id="gAuxV">-</div></div>
+          <div class="kpi"><div class="l">Barometric</div><div class="v"><span id="gBaro">-</span><span class="u">PSI</span></div></div>
+          <div class="kpi"><div class="l">LTA temp</div><div class="v"><span id="gLta">-</span><span class="u">°F</span></div></div>
+          <div class="kpi"><div class="l">Fuel press valid</div><div class="v" style="font-size:.95rem" id="gFuelV">-</div></div>
+          <div class="kpi"><div class="l">Input #4</div><div class="v" style="font-size:.95rem" id="gIn4">-</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 12px">Έλεγχος γεννήτριας (Modbus)</h2>
+        <p class="small muted">Απομακρυσμένη εκκίνηση/διακοπή μέσω MQTT. Χρησιμοποίησε με προσοχή — απαιτεί Modbus ενεργό στο ESP32.</p>
+        <div class="gen-actions">
+          <button class="start" onclick="genCmd('start')">Εκκίνηση</button>
+          <button class="stop" onclick="genCmd('stop')">Διακοπή</button>
+          <button class="sec" onclick="genCmd('reset')">Reset σφάλματος</button>
+          <button class="sec" onclick="genCmd('estop_on')">E-Stop ON</button>
+          <button class="sec" onclick="genCmd('estop_off')">E-Stop OFF</button>
+        </div>
+      </div>
+
       <div class="grid cols-2">
         <div class="card">
           <h2 style="margin:0 0 12px">Φάσεις (L1 / L2 / L3)</h2>
@@ -223,6 +254,12 @@
             <div class="kpi"><div class="l">Ενεργό σφάλμα</div><div class="v" style="font-size:.95rem" id="gFault">-</div></div>
           </div>
           <div style="height:12px"></div>
+          <h2 style="margin:0 0 8px">NFPA / Extended</h2>
+          <ul class="fault-list" id="genNfpaList"><li class="muted">—</li></ul>
+          <div style="height:10px"></div>
+          <h2 style="margin:0 0 8px">Fault bitmaps (40400+)</h2>
+          <ul class="fault-list" id="genFaultList"><li class="muted">—</li></ul>
+          <div style="height:10px"></div>
           <pre id="genAlarms">—</pre>
         </div>
       </div>
@@ -242,6 +279,36 @@
     const LS = { id: 'esp32_device_id', broker: 'esp32_ws_broker' };
     let client = null, scanClient = null, scanTimer = null, cmdTopic = '', outputs = [], connected = false;
     const foundDevices = new Map();
+    let faultBitsDb = null;
+
+    async function loadFaultBits() {
+      if (faultBitsDb) return faultBitsDb;
+      try {
+        const r = await fetch('cummins_fault_bits.json');
+        if (r.ok) faultBitsDb = await r.json();
+      } catch (e) {}
+      return faultBitsDb;
+    }
+    loadFaultBits();
+
+    function decodeFaultBitmaps(g) {
+      const out = [];
+      if (!g.fault_bitmap_valid || !Array.isArray(g.fault_bitmap) || !faultBitsDb) return out;
+      g.fault_bitmap.forEach((word, i) => {
+        const reg = String(40400 + i);
+        const defs = (faultBitsDb.fault_bitmap && faultBitsDb.fault_bitmap[reg]) || [];
+        defs.forEach(d => {
+          if ((Number(word) >> d.bit) & 1) out.push(`#${d.code} ${d.name}`);
+        });
+      });
+      return out;
+    }
+
+    function genCmd(action) {
+      if (!client) { alert('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Εκτέλεση εντολής γεννήτριας: ' + action + ';')) return;
+      client.publish(cmdTopic, JSON.stringify({ genset: action }));
+    }
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -325,6 +392,13 @@
       document.getElementById('gOil').textContent = f0(g.oil_kpa);
       document.getElementById('gCool').textContent = f2(g.coolant_c, 1);
 
+      document.getElementById('gAuxSpd').textContent = g.aux_speed_bias != null ? f2(g.aux_speed_bias, 2) : '-';
+      document.getElementById('gAuxV').textContent = g.aux_volt_bias != null ? f2(g.aux_volt_bias, 2) : '-';
+      document.getElementById('gBaro').textContent = g.baro_psi != null ? f2(g.baro_psi, 1) : '-';
+      document.getElementById('gLta').textContent = g.lta_temp_f != null ? f0(g.lta_temp_f) : '-';
+      document.getElementById('gFuelV').textContent = g.extras_valid ? (g.fuel_press_valid ? 'Valid' : 'Invalid') : '-';
+      document.getElementById('gIn4').textContent = g.extras_valid ? (g.cfg_input4 ? 'Active' : 'Inactive') : '-';
+
       document.getElementById('gCtrl').textContent = g.controller_type ?? '-';
       document.getElementById('gRuns').textContent = g.total_runs ?? '-';
       document.getElementById('gHours').textContent = Math.floor((Number(g.runtime_sec) || 0) / 3600) + ' h';
@@ -350,6 +424,19 @@
       if (g.active_fault) al.push('Ενεργό σφάλμα: #' + g.active_fault + ' (' + (g.fault_type_label || '') + ')');
       if (!al.length) al.push('Κανένας ενεργός συναγερμός.');
       document.getElementById('genAlarms').textContent = al.join('\n');
+
+      const nfpa = Array.isArray(g.nfpa_bits) ? g.nfpa_bits : [];
+      const ext = Array.isArray(g.ext_bits) ? g.ext_bits : [];
+      const nfpaEl = document.getElementById('genNfpaList');
+      const merged = [...nfpa, ...ext];
+      nfpaEl.innerHTML = merged.length
+        ? merged.map(x => `<li>${x}</li>`).join('')
+        : '<li class="muted">Κανένα ενεργό bit</li>';
+
+      const faults = decodeFaultBitmaps(g);
+      document.getElementById('genFaultList').innerHTML = faults.length
+        ? faults.slice(0, 40).map(x => `<li>${x}</li>`).join('') + (faults.length > 40 ? `<li class="muted">+${faults.length - 40} ακόμα...</li>` : '')
+        : '<li class="muted">Κανένα fault bitmap (ή μη υποστηριζόμενο)</li>';
     }
 
     function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }

@@ -2,7 +2,7 @@ param([string]$Port = "auto")
 
 $cli = "$env:LOCALAPPDATA\arduino-cli\arduino-cli.exe"
 $sketch = Join-Path $PSScriptRoot "ESP32_Control"
-$fqbn = "esp32:esp32:esp32:PartitionScheme=min_spiffs,FlashSize=4M"
+$fqbn = "esp32:esp32:esp32:PartitionScheme=min_spiffs,FlashSize=4M,UploadSpeed=115200"
 
 Write-Host "=== ESP32 Upload (USB) ===" -ForegroundColor Cyan
 

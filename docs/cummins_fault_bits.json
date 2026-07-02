@@ -1,0 +1,2259 @@
+{
+  "nfpa": {
+    "15": "Common Alarm",
+    "14": "Genset Supplying Load",
+    "13": "Genset Running",
+    "12": "Not in Auto",
+    "11": "High Battery Voltage",
+    "10": "Low Battery Voltage",
+    "9": "Charger AC Failure",
+    "8": "Fail to Start",
+    "7": "Low Coolant Temperature",
+    "6": "Pre-high Engine Temperature",
+    "5": "High Engine Temperature",
+    "4": "Pre-low Oil Pressure",
+    "3": "Low Oil Pressure",
+    "2": "Overspeed",
+    "1": "Low Coolant Level",
+    "0": "Low Fuel Level"
+  },
+  "ext": {
+    "15": "Check Genset",
+    "14": "Ground Fault",
+    "13": "High AC Voltage",
+    "12": "Low AC Voltage",
+    "11": "Under Frequency",
+    "10": "Overload",
+    "9": "Overcurrent",
+    "8": "Short Circuit",
+    "7": "Reverse kW",
+    "6": "Reverse kVAR",
+    "5": "Fail to Sync",
+    "4": "Fail to Close",
+    "3": "Load Demand",
+    "2": "Genset Circuit Breaker Tripped",
+    "1": "Utility Circuit Breaker Tripped",
+    "0": "Emergency Stop"
+  },
+  "fault_bitmap": {
+    "40400": [
+      {
+        "reg": 40400,
+        "bit": 0,
+        "code": 115,
+        "name": "Engine Magnetic Crankshaft Speed/Position",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 1,
+        "code": 122,
+        "name": "Intake Manifold 1 Pressure: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 2,
+        "code": 123,
+        "name": "Intake Manifold 1 Pressure: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 3,
+        "code": 124,
+        "name": "Intake Manifold 1 Pressure: Moderately Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 4,
+        "code": 135,
+        "name": "Engine Oil Rifle Pressure 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 5,
+        "code": 141,
+        "name": "Engine Oil Rifle Pressure 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 6,
+        "code": 143,
+        "name": "Engine Oil Rifle Pressure - Moderately Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 7,
+        "code": 144,
+        "name": "Engine Coolant Temp 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 8,
+        "code": 145,
+        "name": "Engine Coolant Temp 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 9,
+        "code": 146,
+        "name": "Engine Coolant Temp: Moderately Above Normal",
+        "resp": "Derate"
+      },
+      {
+        "reg": 40400,
+        "bit": 10,
+        "code": 151,
+        "name": "Engine Coolant Temp: Severely Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 1,
+        "code": 151,
+        "name": "High Coolant Temp",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 11,
+        "code": 153,
+        "name": "Intake Manifold 1 Temp: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 12,
+        "code": 154,
+        "name": "Intake Manifold 1 Temp: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 13,
+        "code": 155,
+        "name": "Intake Manifold 1 Temp: Severely Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 14,
+        "code": 187,
+        "name": "Sensor Supply 2: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 15,
+        "code": 195,
+        "name": "Coolant Level Sensor 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40400,
+        "bit": 8,
+        "code": 234,
+        "name": "Engine Overspeed",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 10,
+        "code": 359,
+        "name": "Fail to Start Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 2,
+        "code": 415,
+        "name": "Low Oil Pressure",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 11,
+        "code": 1123,
+        "name": "Shutdown After Battleshort",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 9,
+        "code": 1434,
+        "name": "Remote E-Stop Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 3,
+        "code": 1446,
+        "name": "High AC Voltage",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 4,
+        "code": 1447,
+        "name": "Low AC Voltage",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 6,
+        "code": 1448,
+        "name": "Underfrequency",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 5,
+        "code": 1449,
+        "name": "Overfrequency",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 13,
+        "code": 1472,
+        "name": "High Current",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 15,
+        "code": 1541,
+        "name": "Common",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 7,
+        "code": 2335,
+        "name": "Loss of AC Voltage Sensing",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 0,
+        "code": 2677,
+        "name": "Fail To Stop",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 14,
+        "code": 2814,
+        "name": "Genset CT Ratio Too Small",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40400,
+        "bit": 12,
+        "code": 4799,
+        "name": "MB Network",
+        "resp": "Shutdown"
+      }
+    ],
+    "40401": [
+      {
+        "reg": 40401,
+        "bit": 0,
+        "code": 196,
+        "name": "Coolant Level Sensor 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 1,
+        "code": 197,
+        "name": "Coolant Level: Below Normal - Moderately Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 2,
+        "code": 212,
+        "name": "Engine Oil Temp Sensor 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 3,
+        "code": 213,
+        "name": "Engine Oil Temp Sensor 1: Vtg below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 4,
+        "code": 214,
+        "name": "Engine Oil Temp: Above Normal - Most severe",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40401,
+        "bit": 5,
+        "code": 221,
+        "name": "Barometric Pressure: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 6,
+        "code": 222,
+        "name": "Barometric Pressure Sensor: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 7,
+        "code": 223,
+        "name": "Engine Oil Burn Valve Solenoid: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 8,
+        "code": 224,
+        "name": "Engine Oil Burn Valve Solenoid: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 9,
+        "code": 227,
+        "name": "Sensor Supply 2: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 10,
+        "code": 228,
+        "name": "Coolant Pressure: Below Normal- Most Severe",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40401,
+        "bit": 11,
+        "code": 231,
+        "name": "Coolant Pressure Sensor: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 12,
+        "code": 232,
+        "name": "Coolant Pressure Sensor: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40401,
+        "bit": 13,
+        "code": 234,
+        "name": "Engine Crankshaft Speed/Posn: Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40401,
+        "bit": 14,
+        "code": 235,
+        "name": "Coolant Level: Below Normal-Most Severe",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40401,
+        "bit": 15,
+        "code": 238,
+        "name": "Sensor Supply 3: Vtg Below Normal",
+        "resp": "Warning"
+      }
+    ],
+    "40402": [
+      {
+        "reg": 40402,
+        "bit": 0,
+        "code": 239,
+        "name": "Voltage Supply C High Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 1,
+        "code": 245,
+        "name": "Radiator Fan Control Driver Low Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 2,
+        "code": 261,
+        "name": "Engine Fuel Temp: Above Normal- Moderately Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 3,
+        "code": 263,
+        "name": "Engine Fuel Temp Sensor 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 4,
+        "code": 265,
+        "name": "Engine Fuel Temp Sensor 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 5,
+        "code": 266,
+        "name": "Engine Fuel Temp: Above Normal- Most severe",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40402,
+        "bit": 6,
+        "code": 271,
+        "name": "Fuel Pump Pressurizing Assembly 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 7,
+        "code": 272,
+        "name": "Fuel Pump Pressurizing Assembly 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 8,
+        "code": 281,
+        "name": "APC_Diesel_CYL_PRS_IMBAL_Erro r",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 9,
+        "code": 285,
+        "name": "SAE J1939 Muxing PGN Timeout: Abnormal Update Rate",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 10,
+        "code": 286,
+        "name": "SAE J1939 Muxing Config: Out of Calibration",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 13,
+        "code": 295,
+        "name": "Ambient_Air_Press_KeyOn_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 14,
+        "code": 319,
+        "name": "RTC PWR Intr: Data Erratic Intermittent or Wrong",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40402,
+        "bit": 15,
+        "code": 322,
+        "name": "Injector Solenoid Driver Cylinder 1: UnderCurrent",
+        "resp": "Warning"
+      }
+    ],
+    "40403": [
+      {
+        "reg": 40403,
+        "bit": 0,
+        "code": 323,
+        "name": "Injector Solenoid Driver Cylinder 5: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 1,
+        "code": 324,
+        "name": "Injector Solenoid Driver Cylinder 3: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 2,
+        "code": 325,
+        "name": "Injector Solenoid Driver Cylinder 6: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 3,
+        "code": 331,
+        "name": "Injector Solenoid Driver Cylinder 2: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 4,
+        "code": 332,
+        "name": "Injector Solenoid Driver Cylinder 4: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 6,
+        "code": 342,
+        "name": "Electronic Calibration Code: Out of Calibration",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40403,
+        "bit": 7,
+        "code": 343,
+        "name": "Eng Ctrl: internal h/w failure-Bad Device/Component",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 8,
+        "code": 351,
+        "name": "Injector Power Supply: Bad Device/Component",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 9,
+        "code": 352,
+        "name": "Sensor Supply 1: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 10,
+        "code": 359,
+        "name": "Fail To Start Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40403,
+        "bit": 11,
+        "code": 386,
+        "name": "Sensor Supply 1: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 12,
+        "code": 415,
+        "name": "Eng Oil Rifle Pressure: Below Normal-Most Severe",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40403,
+        "bit": 13,
+        "code": 418,
+        "name": "Water in Fuel Indicator: Above Normal-Least Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 14,
+        "code": 421,
+        "name": "Eng Oil Temp: Above Normal- Moderately Severe",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40403,
+        "bit": 15,
+        "code": 422,
+        "name": "Coolant_Level_Reading_Incorrect",
+        "resp": "Warning"
+      }
+    ],
+    "40404": [
+      {
+        "reg": 40404,
+        "bit": 0,
+        "code": 425,
+        "name": "OIL_Temperature_In_Range_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 1,
+        "code": 426,
+        "name": "J1939 Datalink: Data Erratic/Intermittent/Wrong NONE PC 2.x, PC 3.x 40404 2 Faul",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 3,
+        "code": 435,
+        "name": "OIL_Pressure_Switch_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 4,
+        "code": 441,
+        "name": "Low Battery Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 5,
+        "code": 442,
+        "name": "High Battery Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 6,
+        "code": 449,
+        "name": "Injector Metering Rail 1 Pressure: Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40404,
+        "bit": 7,
+        "code": 451,
+        "name": "Injector Metering Rail 1 Pressure: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 8,
+        "code": 452,
+        "name": "Injector Metering Rail 1 Pressure: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 9,
+        "code": 488,
+        "name": "Intake Manifold 1 Temp: Above Normal-Moderate",
+        "resp": "Derate"
+      },
+      {
+        "reg": 40404,
+        "bit": 10,
+        "code": 546,
+        "name": "Fuel Delivery Pressure: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 11,
+        "code": 547,
+        "name": "Fuel Delivery Pressure: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 12,
+        "code": 553,
+        "name": "APC_Diesel_High_PRS_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 13,
+        "code": 554,
+        "name": "APC_DieselL_PRS_SIR_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40404,
+        "bit": 15,
+        "code": 559,
+        "name": "Injector Metering Rail 1 Pressure: Below Normal",
+        "resp": "Warning"
+      }
+    ],
+    "40405": [
+      {
+        "reg": 40405,
+        "bit": 1,
+        "code": 611,
+        "name": "Engine Shut Down Hot Condition Exists",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 2,
+        "code": 698,
+        "name": "ECM Internal Temperature Low Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 3,
+        "code": 689,
+        "name": "Eng Crankshaft Speed/Pos",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 4,
+        "code": 731,
+        "name": "Eng Speed: Cam/Crankshaft Misalignment",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 5,
+        "code": 2661,
+        "name": "At Least One ACK: Most Severe Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40405,
+        "bit": 6,
+        "code": 781,
+        "name": "CAN Datalink Failed",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40405,
+        "bit": 7,
+        "code": 1117,
+        "name": "Power Lost With Ignition On",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 8,
+        "code": 1122,
+        "name": "Rated to Idle Transition NONE PC 2.x, PC 3.x 40405 9 Fault Status Bitmap 6 1124 ",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40405,
+        "bit": 10,
+        "code": 1131,
+        "name": "Battle Short Mode Active",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40405,
+        "bit": 11,
+        "code": 1132,
+        "name": "Controlled",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40405,
+        "bit": 13,
+        "code": 1243,
+        "name": "Engine",
+        "resp": "Derate"
+      },
+      {
+        "reg": 40405,
+        "bit": 14,
+        "code": 1244,
+        "name": "Engine Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40405,
+        "bit": 15,
+        "code": 1245,
+        "name": "Engine",
+        "resp": "Shutdown"
+      }
+    ],
+    "40406": [
+      {
+        "reg": 40406,
+        "bit": 0,
+        "code": 1246,
+        "name": "Unrecognized Engine Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 1,
+        "code": 1247,
+        "name": "Engine",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40406,
+        "bit": 2,
+        "code": 1248,
+        "name": "Engine",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 3,
+        "code": 1256,
+        "name": "Ctrl Module ID Input State",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 4,
+        "code": 1257,
+        "name": "Ctrl Module ID I/P State shutdown Error",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40406,
+        "bit": 5,
+        "code": 1322,
+        "name": "kW Load Setpoint OOR High",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 6,
+        "code": 1323,
+        "name": "kW Load Setpoint OOR Low",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 7,
+        "code": 1324,
+        "name": "kVAR Load Setpoint OOR High",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 8,
+        "code": 1325,
+        "name": "kVAR Load Setpoint OOR Low",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 9,
+        "code": 1336,
+        "name": "Cooldown Completed Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40406,
+        "bit": 10,
+        "code": 1357,
+        "name": "Eng Oil Level Remote Reservoir: Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 11,
+        "code": 219,
+        "name": "Eng Oil Level Remote Reservoir: Least Severe Level",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 12,
+        "code": 233,
+        "name": "HT Coolant Pressure Moderate Low",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 13,
+        "code": 254,
+        "name": "FSO NON Low Control Error",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40406,
+        "bit": 14,
+        "code": 686,
+        "name": "Turbo 1 Speed Incorrect",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40406,
+        "bit": 15,
+        "code": 697,
+        "name": "ECM Internal Temperature High Error",
+        "resp": "Warning"
+      }
+    ],
+    "40407": [
+      {
+        "reg": 40407,
+        "bit": 0,
+        "code": 1376,
+        "name": "Eng Camshaft Speed/Pos",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 1,
+        "code": 3611,
+        "name": "Custom Overcurrent Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 2,
+        "code": 3513,
+        "name": "Negative Sequence Overcurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 3,
+        "code": 1416,
+        "name": "Fail to",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 4,
+        "code": 1417,
+        "name": "Power Down Failure",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 5,
+        "code": 1433,
+        "name": "Local E-Stop",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 6,
+        "code": 1434,
+        "name": "Remote E-Stop",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 7,
+        "code": 1435,
+        "name": "Low Coolant Temperature",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 8,
+        "code": 1438,
+        "name": "Fail To Crank Fault",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 9,
+        "code": 1439,
+        "name": "Low Fuel in Day Tank",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 10,
+        "code": 1441,
+        "name": "Low Fuel Level",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 11,
+        "code": 1442,
+        "name": "Weak Battery",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 12,
+        "code": 1443,
+        "name": "Dead Battery",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 13,
+        "code": 1444,
+        "name": "Overload",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40407,
+        "bit": 14,
+        "code": 1445,
+        "name": "Short Circuit",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": 15,
+        "code": 1446,
+        "name": "High AC Voltage",
+        "resp": "Shutdown"
+      }
+    ],
+    "40408": [
+      {
+        "reg": 40408,
+        "bit": 0,
+        "code": 1447,
+        "name": "Low AC Voltage",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 1,
+        "code": 1448,
+        "name": "Underfrequency",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 2,
+        "code": 1449,
+        "name": "Overfrequency",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 3,
+        "code": 1459,
+        "name": "Reverse kW",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 4,
+        "code": 1461,
+        "name": "Loss of Field",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 5,
+        "code": 1463,
+        "name": "Not In Auto NONE PC 2.x, PC 3.x 40408 6 Fault Status Bitmap 9 1464 Load Dump",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 7,
+        "code": 1465,
+        "name": "Ready To Load NONE PC 2.x, PC 3.x 40408 8 Fault Status Bitmap 9 1469 Speed/Frequ",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 9,
+        "code": 1471,
+        "name": "High Current",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 10,
+        "code": 1472,
+        "name": "Overcurrent",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40408,
+        "bit": 11,
+        "code": 1483,
+        "name": "Common",
+        "resp": "Alarm"
+      },
+      {
+        "reg": 40408,
+        "bit": 12,
+        "code": 1548,
+        "name": "Injector Solenoid Driver Cylinder 7: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 13,
+        "code": 1549,
+        "name": "Injector Solenoid Driver Cylinder 8: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 14,
+        "code": 1551,
+        "name": "Injector Solenoid Driver Cylinder 10: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40408,
+        "bit": 15,
+        "code": 1552,
+        "name": "Injector Solenoid Driver Cylinder 11: UnderCurrent",
+        "resp": "Warning"
+      }
+    ],
+    "40409": [
+      {
+        "reg": 40409,
+        "bit": 0,
+        "code": 1553,
+        "name": "Injector Solenoid Driver Cylinder 12: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 1,
+        "code": 1554,
+        "name": "Injector Solenoid Driver Cylinder 13: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 2,
+        "code": 1555,
+        "name": "Injector Solenoid Driver Cylinder 14: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 3,
+        "code": 1556,
+        "name": "Injector Solenoid Driver Cylinder 15: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 4,
+        "code": 1557,
+        "name": "Injector Solenoid Driver Cylinder 16: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 7,
+        "code": 1622,
+        "name": "Injector Solenoid Driver Cylinder 9: UnderCurrent",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 8,
+        "code": 1689,
+        "name": "Real Time Clock Power Interrupt Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 9,
+        "code": 1695,
+        "name": "Sensor_Supply_5_Voltage_High_Err or",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 10,
+        "code": 1696,
+        "name": "SENSOR_SUPPLY_5_VOLTAGE_L OW_ERROR",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 11,
+        "code": 1843,
+        "name": "Crankcase Pressure: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 12,
+        "code": 1844,
+        "name": "Crankcase Pressure: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 13,
+        "code": 1845,
+        "name": "Water in Fuel Indicator: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 14,
+        "code": 1846,
+        "name": "Water in Fuel Indicator: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40409,
+        "bit": 15,
+        "code": 1847,
+        "name": "Eng Coolant Temp -",
+        "resp": "Shutdown"
+      }
+    ],
+    "40410": [
+      {
+        "reg": 40410,
+        "bit": 6,
+        "code": 141,
+        "name": "Low Oil Pressure OOR",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 5,
+        "code": 143,
+        "name": "Low Oil Pressure",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 2,
+        "code": 144,
+        "name": "Coolant Temp OOR",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 0,
+        "code": 146,
+        "name": "High Coolant Temp",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 3,
+        "code": 441,
+        "name": "Low Battery Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 4,
+        "code": 442,
+        "name": "High Battery Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 7,
+        "code": 1131,
+        "name": "Battle Short Mode Active Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 9,
+        "code": 1416,
+        "name": "Fail to",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40410,
+        "bit": 1,
+        "code": 1435,
+        "name": "Low Coolant Temperature",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 10,
+        "code": 1442,
+        "name": "Weak Battery Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 14,
+        "code": 1540,
+        "name": "Common",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 0,
+        "code": 1852,
+        "name": "Water in Fuel Indicator: Above Normal-Moderate",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 1,
+        "code": 1853,
+        "name": "HMI113 Fault 1 NONE PC 2.x, PC 3.x 40410 2 Fault Status Bitmap 11 1854 HMI113 Fa",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 6,
+        "code": 1893,
+        "name": "J39_EGR_Valve_Comm_Timeout_Er ror",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 7,
+        "code": 1894,
+        "name": "J39_VGT_Comm_Timeout_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 8,
+        "code": 1896,
+        "name": "EGR_DL_Valve_Stuck_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 9,
+        "code": 1899,
+        "name": "EGR_Delta_P_IR_Low_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 11,
+        "code": 1912,
+        "name": "Utility Loss Of Phase",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 12,
+        "code": 1913,
+        "name": "Genset Loss Of Phase",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 13,
+        "code": 1914,
+        "name": "Utility Phase Rotation",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 14,
+        "code": 1915,
+        "name": "Genset Phase Rotation",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 15,
+        "code": 1916,
+        "name": "Sync Check OK NONE PC 3.x 40410 13 Fault Status Bitmap 11 6226 Maintenance Requi",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 12,
+        "code": 6227,
+        "name": "Current Imbalance- Condition Exists",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40410,
+        "bit": 8,
+        "code": 2678,
+        "name": "Charging Alternator Failure Fault",
+        "resp": "Warning"
+      }
+    ],
+    "40411": [
+      {
+        "reg": 40411,
+        "bit": 0,
+        "code": 1917,
+        "name": "High Fuel Level",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 1,
+        "code": 1918,
+        "name": "Very Low Fuel Level",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40411,
+        "bit": 2,
+        "code": 1933,
+        "name": "EGR_DL_Voltage_High_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 3,
+        "code": 1934,
+        "name": "EGR_DL_Voltage_Low_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 4,
+        "code": 1935,
+        "name": "EGR_DL_Command_Source_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 5,
+        "code": 1942,
+        "name": "Beyond_THD_AZ_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 6,
+        "code": 1943,
+        "name": "CBR_Density_Detrat_Error_ID NONE PC 2.x, PC 3.x6. PowerCommand 2.x/3.x/PS0500 Mo",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 8,
+        "code": 1961,
+        "name": "EGR_DL_EDU_TMPTR_High_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 9,
+        "code": 1974,
+        "name": "Crankcase_Pressure_Least_Sev_Hig h",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 10,
+        "code": 1992,
+        "name": "Eng Crankshaft Speed/Posn: Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40411,
+        "bit": 11,
+        "code": 1999,
+        "name": "Maximum Parallel Time",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 12,
+        "code": 2185,
+        "name": "Sensor Supply 4: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 13,
+        "code": 2186,
+        "name": "Sensor Supply 4: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 14,
+        "code": 2215,
+        "name": "Fuel Pump Delivery Pressure: Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40411,
+        "bit": 15,
+        "code": 2249,
+        "name": "APC_Diesel_Low2_Prs_Error",
+        "resp": "Warning"
+      }
+    ],
+    "40412": [
+      {
+        "reg": 40412,
+        "bit": 0,
+        "code": 2261,
+        "name": "Fuel Pump Delivery Pressure: Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 1,
+        "code": 2262,
+        "name": "Fuel Pump Delivery-Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 2,
+        "code": 2265,
+        "name": "Electric Lift Pump for Eng Fuel: Vtg Above Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 3,
+        "code": 2266,
+        "name": "Electric Lift Pump for Eng Fuel: Vtg Below Normal",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 4,
+        "code": 2292,
+        "name": "APC_Diesel_Flow_High_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 5,
+        "code": 2293,
+        "name": "APC_Diesel_Flow_Low_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 6,
+        "code": 2311,
+        "name": "Electronic Fuel Injection Control Valve",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 7,
+        "code": 2328,
+        "name": "Utility Available NONE PC 3.x 40412 8 Fault Status Bitmap 13 2331 Utility Underv",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 9,
+        "code": 2332,
+        "name": "Utility Connected NONE PC 3.x6. PowerCommand 2.x/3.x/PS0500 Modbus Fault Status ",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40412,
+        "bit": 13,
+        "code": 2342,
+        "name": "Too Long in Idle",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 14,
+        "code": 2358,
+        "name": "Utility Overvoltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40412,
+        "bit": 15,
+        "code": 2377,
+        "name": "Fan Control: Vtg Above Normal",
+        "resp": "Warning"
+      }
+    ],
+    "40413": [
+      {
+        "reg": 40413,
+        "bit": 0,
+        "code": 2396,
+        "name": "Utility Breaker Fail To Close",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 1,
+        "code": 2397,
+        "name": "Utility Breaker Fail To Open",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 2,
+        "code": 3226,
+        "name": "Base Load NONE PC 3.x 40413 3 Fault Status Bitmap 14 3227 Peak Shave NONE PC 3.x",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 5,
+        "code": 2556,
+        "name": "GHC_High_Voltage_Error_1",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 6,
+        "code": 2678,
+        "name": "Charging Alternator Failure Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 7,
+        "code": 2965,
+        "name": "Genset Available NONE PC 3.x 40413 8 Fault Status Bitmap 14 2971 Test/Exercise i",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40413,
+        "bit": 10,
+        "code": 2973,
+        "name": "Charge_Press_IR_Error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 11,
+        "code": 2943,
+        "name": "Manual Switch Configuration Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 12,
+        "code": 2944,
+        "name": "Auto Switch Configuration Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 13,
+        "code": 2914,
+        "name": "Genset AC Meter Failed",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40413,
+        "bit": 14,
+        "code": 2915,
+        "name": "Genset Bus AC Meter Failed",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40413,
+        "bit": 15,
+        "code": 2916,
+        "name": "Utility AC Meter Failed",
+        "resp": "Warning"
+      }
+    ],
+    "40414": [
+      {
+        "reg": 40414,
+        "bit": 0,
+        "code": 2814,
+        "name": "Genset CT Ratio Too Small",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40414,
+        "bit": 1,
+        "code": 2815,
+        "name": "Genset CT Ratio Too Large",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 2,
+        "code": 2816,
+        "name": "Genset PT Ratio Too Small",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40414,
+        "bit": 3,
+        "code": 2817,
+        "name": "Genset PT Ratio Too Large",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 4,
+        "code": 2818,
+        "name": "Genset Bus PT Ratio Too Small",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40414,
+        "bit": 5,
+        "code": 2819,
+        "name": "Genset Bus PT Ratio Too Large",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 6,
+        "code": 2821,
+        "name": "Utility PT Ratio Too Small",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40414,
+        "bit": 7,
+        "code": 2822,
+        "name": "Utility PT Ratio Too Large",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 8,
+        "code": 2619,
+        "name": "Aux101 0 Input 1 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 9,
+        "code": 2621,
+        "name": "Aux101 0 Input 2 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 10,
+        "code": 2622,
+        "name": "Aux101 0 Input 3 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 11,
+        "code": 2623,
+        "name": "Aux101 0 Input 4 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 12,
+        "code": 2624,
+        "name": "Aux101 0 Input 5 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 13,
+        "code": 2625,
+        "name": "Aux101 0 Input 6 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 14,
+        "code": 2626,
+        "name": "Aux101 0 Input 7 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40414,
+        "bit": 15,
+        "code": 2627,
+        "name": "Aux101 0 Input 8 Fault",
+        "resp": "Warning"
+      }
+    ],
+    "40415": [
+      {
+        "reg": 40415,
+        "bit": 0,
+        "code": 2882,
+        "name": "Aux101 1 Input 1 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40415,
+        "bit": 1,
+        "code": 2883,
+        "name": "Aux101 1 Input 2 Fault",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40415,
+        "bit": 2,
+        "code": 2884,
+        "name": "Aux101 1 Input 3 Fault",
+        "resp": "Warning"
+      }
+    ],
+    "40420": [
+      {
+        "reg": 40420,
+        "bit": 0,
+        "code": 1312,
+        "name": "Customer Input Fault",
+        "resp": "Shutdown"
+      }
+    ],
+    "40496": [
+      {
+        "reg": 40496,
+        "bit": 0,
+        "code": 4615,
+        "name": "Fuel Delivery Pressure Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40496,
+        "bit": 1,
+        "code": 4642,
+        "name": "Water In Fuel Above Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40496,
+        "bit": 2,
+        "code": 4643,
+        "name": "Injector Solenoid Driver7 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 3,
+        "code": 4644,
+        "name": "Injector Solenoid Driver 8 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 4,
+        "code": 4645,
+        "name": "Injector Solenoid Driver 9 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 5,
+        "code": 4646,
+        "name": "Injector Solenoid Driver 10 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 6,
+        "code": 4647,
+        "name": "Injector Solenoid Driver 11 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 7,
+        "code": 4648,
+        "name": "Injector Solenoid Driver 12 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 8,
+        "code": 4649,
+        "name": "Injector Solenoid Driver 13 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 9,
+        "code": 4651,
+        "name": "Injector Solenoid Driver 14 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 10,
+        "code": 4652,
+        "name": "Injector Solenoid Driver 15 Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 11,
+        "code": 4653,
+        "name": "Injector Solenoid Driver 16 calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 12,
+        "code": 4696,
+        "name": "Crankcase Pressure 2 OORH",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 13,
+        "code": 4697,
+        "name": "Crankcase Pressure 2 OORL",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40496,
+        "bit": 14,
+        "code": 4698,
+        "name": "Crankcase Pressure 2 Above Normal",
+        "resp": "None"
+      },
+      {
+        "reg": 40496,
+        "bit": 15,
+        "code": 4699,
+        "name": "Crankcase Pressure 2 Moderate High",
+        "resp": "Warning"
+      }
+    ],
+    "40497": [
+      {
+        "reg": 40497,
+        "bit": 0,
+        "code": 4711,
+        "name": "Crankcase Pressure 2 Below Normal",
+        "resp": "None"
+      },
+      {
+        "reg": 40497,
+        "bit": 1,
+        "code": 4885,
+        "name": "Fuel Supply Pump Not Responding",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40497,
+        "bit": 2,
+        "code": 4886,
+        "name": "Fuel Pump Voltage Moderate Low",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 3,
+        "code": 4887,
+        "name": "Fuel Supply Voltage Below Normal",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40497,
+        "bit": 4,
+        "code": 4888,
+        "name": "Fuel Supply Temperature: Moderate High",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40497,
+        "bit": 5,
+        "code": 4889,
+        "name": "Fuel Supply Temperature Critical High",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40497,
+        "bit": 6,
+        "code": 4891,
+        "name": "Fuel Supply Pump Root Unknown Cause",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 7,
+        "code": 4892,
+        "name": "Fuel Supply Pump Update Rate error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 8,
+        "code": 4893,
+        "name": "Fuel Filter Press Moderate High",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 9,
+        "code": 4894,
+        "name": "Fuel Supply Pump Calib. error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 10,
+        "code": 4927,
+        "name": "Fule Valve 1 Bad Device",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 11,
+        "code": 4928,
+        "name": "Fuel Valve 1 Power Supply Data Incorrect",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 12,
+        "code": 4929,
+        "name": "Fuel Valve 1 Power Supply OORH",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 13,
+        "code": 4931,
+        "name": "Fuel Valve 1 Power Supply OORL",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40497,
+        "bit": 14,
+        "code": 4932,
+        "name": "Fuel Valve 1 Temperature Above Normal",
+        "resp": "None"
+      },
+      {
+        "reg": 40497,
+        "bit": 15,
+        "code": 4933,
+        "name": "Fuel Valve 1 Position Data error",
+        "resp": "None"
+      }
+    ],
+    "40498": [
+      {
+        "reg": 40498,
+        "bit": 0,
+        "code": 4934,
+        "name": "Fuel Valve 1 Voltage OORH",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 1,
+        "code": 4935,
+        "name": "Fuel Valve 1 Voltage OORL",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 2,
+        "code": 4936,
+        "name": "Fuel Valve 1 Unknown Cause",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 3,
+        "code": 4937,
+        "name": "Fuel Valve 1 Calibration error",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 4,
+        "code": 4941,
+        "name": "Starter Control Voltage OORH",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 5,
+        "code": 4942,
+        "name": "Starter Control Voltage OORL",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 6,
+        "code": 4943,
+        "name": "Failed To Crank Condition Exists",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 7,
+        "code": 4944,
+        "name": "Fail To Start Condition Exists",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 8,
+        "code": 4945,
+        "name": "Uncommanded Crank Condition Exists",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 9,
+        "code": 4958,
+        "name": "Fuel Valve 1 Data Incorrect",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 10,
+        "code": 4959,
+        "name": "Fuel Valve 1 Condition Exists",
+        "resp": "None"
+      },
+      {
+        "reg": 40498,
+        "bit": 11,
+        "code": 4961,
+        "name": "Fule Valve 1 Update Rate error",
+        "resp": "None"
+      },
+      {
+        "reg": 40498,
+        "bit": 12,
+        "code": 5119,
+        "name": "Fuel Pump Oil Pressure Sensor OORH",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 13,
+        "code": 5121,
+        "name": "Fuel Pump Oil Pressure Sensor OORL",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 14,
+        "code": 5122,
+        "name": "Fuel Pump Oil Pressure Sensor Data Incorrect",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40498,
+        "bit": 15,
+        "code": 5123,
+        "name": "Injector Solenoid 19 Low Current",
+        "resp": "Warning"
+      }
+    ],
+    "40499": [
+      {
+        "reg": 40499,
+        "bit": 15,
+        "code": 5124,
+        "name": "Injector Solenoid 20 Low Current",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 7,
+        "code": 5155,
+        "name": "Low Battery 1 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 8,
+        "code": 5156,
+        "name": "Low Battery 2 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 9,
+        "code": 5157,
+        "name": "Low Battery 3 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 10,
+        "code": 5158,
+        "name": "Low Battery 4 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 11,
+        "code": 5159,
+        "name": "Weak Battery 1",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 12,
+        "code": 5161,
+        "name": "Weak Battery 2",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 13,
+        "code": 5162,
+        "name": "Weak Battery 3",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 14,
+        "code": 5163,
+        "name": "Weak Battery 4",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 2,
+        "code": 5178,
+        "name": "Crankcase Pressure 2 Data Incorrect",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 3,
+        "code": 5283,
+        "name": "High Battery 1 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 4,
+        "code": 5284,
+        "name": "High Battery 2 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 5,
+        "code": 5285,
+        "name": "High Battery 3 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 6,
+        "code": 5286,
+        "name": "High Battery 4 Voltage",
+        "resp": "Warning"
+      },
+      {
+        "reg": 40499,
+        "bit": 0,
+        "code": 5397,
+        "name": "L-N Short Circuit",
+        "resp": "Shutdown"
+      },
+      {
+        "reg": 40499,
+        "bit": 1,
+        "code": 5398,
+        "name": "L-L Short Circuit",
+        "resp": "Shutdown"
+      }
+    ]
+  }
+}

@@ -99,6 +99,39 @@ inline bool modbusReadHolding(
   return true;
 }
 
+inline bool modbusWriteSingle(
+  HardwareSerial& ser, int dePin, uint8_t slave,
+  uint16_t reg, uint16_t value,
+  uint32_t timeoutMs = 1200) {
+  uint8_t req[8];
+  req[0] = slave;
+  req[1] = 0x06;
+  req[2] = (uint8_t)(reg >> 8);
+  req[3] = (uint8_t)(reg & 0xFF);
+  req[4] = (uint8_t)(value >> 8);
+  req[5] = (uint8_t)(value & 0xFF);
+  uint16_t crc = bmsCrcModbus(req, 6);
+  req[6] = (uint8_t)(crc & 0xFF);
+  req[7] = (uint8_t)(crc >> 8);
+
+  while (ser.available()) ser.read();
+  modbusSetTx(dePin, true);
+  ser.write(req, 8);
+  ser.flush();
+  modbusSetTx(dePin, false);
+  modbusPump();
+  delay(2);
+
+  uint8_t resp[8];
+  if (!modbusReadBytes(ser, resp, 8, timeoutMs)) return false;
+  if (resp[0] != slave || resp[1] != 0x06) return false;
+  uint16_t rxCrc = resp[6] | ((uint16_t)resp[7] << 8);
+  if (bmsCrcModbus(resp, 6) != rxCrc) return false;
+  uint16_t wReg = ((uint16_t)resp[2] << 8) | resp[3];
+  uint16_t wVal = ((uint16_t)resp[4] << 8) | resp[5];
+  return wReg == reg && wVal == value;
+}
+
 // Cummins docs use 4xxxx holding register numbers.
 inline uint16_t modbusHoldAddr(uint16_t reg40001) {
   return (uint16_t)(reg40001 - 40001);

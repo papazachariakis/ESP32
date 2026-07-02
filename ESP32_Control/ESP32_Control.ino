@@ -134,11 +134,11 @@ String getDeviceId() {
 
 void publishGensetMqtt() {
   if (!mqtt.connected() || !genMgr.enabled) return;
-  StaticJsonDocument<1536> doc;
+  StaticJsonDocument<2560> doc;
   JsonObject root = doc.to<JsonObject>();
   genFillJson(root, genMgr.data);
   root["enabled"] = genMgr.enabled;
-  char payload[1536];
+  char payload[2560];
   serializeJson(doc, payload);
   mqtt.publish(topicGenset.c_str(), payload);
 }
@@ -292,6 +292,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     publishStatus();
 
+  }
+
+  if (doc.containsKey("genset")) {
+    const char* action = doc["genset"];
+    if (action && genMgr.runGensetCmd(action)) {
+      genMgr.pollOnce();
+      publishGensetMqtt();
+      publishStatus();
+    }
   }
 
 }
@@ -589,7 +598,7 @@ void handleBleConnect() {
 
 void handleGenset() {
 
-  StaticJsonDocument<1024> doc;
+  StaticJsonDocument<2560> doc;
 
   JsonObject o = doc.to<JsonObject>();
 
@@ -606,6 +615,48 @@ void handleGenset() {
   serializeJson(doc, out);
 
   server.send(200, "application/json", out);
+
+}
+
+
+
+void handleGensetCmd() {
+
+  if (!server.hasArg("plain")) {
+
+    server.send(400, "application/json", "{\"ok\":false}");
+
+    return;
+
+  }
+
+  StaticJsonDocument<128> doc;
+
+  if (deserializeJson(doc, server.arg("plain"))) {
+
+    server.send(400, "application/json", "{\"ok\":false}");
+
+    return;
+
+  }
+
+  const char* action = doc["action"];
+
+  if (!action || !genMgr.runGensetCmd(action)) {
+
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_action\"}");
+
+    return;
+
+  }
+
+  genMgr.pollOnce();
+
+  publishGensetMqtt();
+
+  publishStatus();
+
+  server.send(200, "application/json", "{\"ok\":true}");
 
 }
 
@@ -723,6 +774,7 @@ void setupRoutes() {
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
   server.on("/api/genset", HTTP_GET, handleGenset);
+  server.on("/api/genset/cmd", HTTP_POST, handleGensetCmd);
   server.on("/api/modbus", HTTP_POST, handleModbusSave);
   registerOtaRoutes(server);
 

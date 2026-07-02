@@ -705,7 +705,7 @@ void loop() {
 
   static unsigned long lastBmsMqtt = 0;
 
-  if (bmsMgr.bms.valid && millis() - lastBmsMqtt > 3000) {
+  if (bmsMgr.bms.valid && millis() - lastBmsMqtt > MQTT_BMS_PUBLISH_INTERVAL_MS) {
 
     lastBmsMqtt = millis();
 

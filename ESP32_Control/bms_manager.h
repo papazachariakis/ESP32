@@ -19,7 +19,7 @@ struct BmsManager {
   bool connected = false;
   uint8_t pollIndex = 0;
   unsigned long lastPoll = 0;
-  uint16_t pollIntervalMs = 2000;
+  uint16_t pollIntervalMs = 1500;
 
   static void notifyThunk(BLERemoteCharacteristic* chr, uint8_t* data, size_t len, bool isNotify) {
     if (gInstance) gInstance->onNotify(data, len);
@@ -182,7 +182,7 @@ struct BmsManager {
         tpBuildRequest(frames[pollIndex % 8], buf);
         writeBytes(buf, 4);
         pollIndex++;
-        pollIntervalMs = 2000;
+        pollIntervalMs = 1500;
         break;
       }
       case BmsType::Jbd:

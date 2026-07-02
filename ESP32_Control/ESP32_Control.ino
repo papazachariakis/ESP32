@@ -41,6 +41,7 @@
 #include "webui.h"
 #include "remote_ui.h"
 #include "bms_manager.h"
+#include "ota.h"
 
 
 
@@ -582,6 +583,7 @@ void setupRoutes() {
   server.on("/api/wifi/reset", HTTP_POST, handleWifiReset);
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
+  registerOtaRoutes(server);
 
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
 
@@ -638,7 +640,7 @@ void setup() {
 
 
   setupRoutes();
-
+  setupArduinoOta();
   mqttConnect();
 
 
@@ -662,33 +664,21 @@ void setup() {
 
 
 void loop() {
-
   server.handleClient();
-
-
+  ArduinoOTA.handle();
 
   if (!mqtt.connected()) {
     static unsigned long lastTry = 0;
     if (WiFi.status() == WL_CONNECTED && millis() - lastTry > 10000) {
-
       lastTry = millis();
-
       mqttConnect();
-
     }
-
   } else {
-
     mqtt.loop();
-
     if (millis() - lastMqttPublish > MQTT_PUBLISH_INTERVAL_MS) {
-
       lastMqttPublish = millis();
-
       publishStatus();
-
     }
-
   }
 
 

@@ -66,6 +66,11 @@
     #setupCard.collapsed .setup-toggle{display:block}
     .setup-toggle{display:none;margin-top:8px}
     .hidden{display:none!important}
+    .device-list{margin-top:10px}
+    .device-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid #334155;border-radius:8px;margin:6px 0;background:#0f172a;cursor:pointer}
+    .device-item:hover{border-color:#2563eb}
+    .device-item .id{font-weight:650}
+    .device-item .meta{font-size:.75rem;color:#94a3b8;margin-top:2px}
   </style>
 </head>
 <body>
@@ -80,13 +85,15 @@
     <div class="card" id="setupCard">
       <h2 style="margin:0 0 8px">Σύνδεση</h2>
       <div class="setup-body">
-        <div class="small">Το ESP32 πρέπει να είναι online στο WiFi σπιτιού και να στέλνει MQTT.</div>
+        <div class="small">Το ESP32 πρέπει να είναι online στο WiFi σπιτιού και να στέλνει MQTT στον ίδιο broker.</div>
         <label>Device ID</label>
         <input id="deviceId" placeholder="000401000000" />
         <label>MQTT WebSocket</label>
         <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
         <button onclick="connect()">Σύνδεση</button>
+        <button class="sec" onclick="scanDevices()" id="scanBtn">Εύρεση συσκευών (MQTT)</button>
         <button class="sec" onclick="disconnect()">Αποσύνδεση</button>
+        <div id="deviceList" class="device-list"></div>
         <div class="small" id="statusLine">-</div>
       </div>
       <button class="link setup-toggle" onclick="toggleSetup()">Εμφάνιση ρυθμίσεων</button>
@@ -153,7 +160,8 @@
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const LS = { id: 'esp32_device_id', broker: 'esp32_ws_broker' };
-    let client = null, cmdTopic = '', outputs = [], connected = false;
+    let client = null, scanClient = null, scanTimer = null, cmdTopic = '', outputs = [], connected = false;
+    const foundDevices = new Map();
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -323,6 +331,96 @@
         </div>`).join('');
     }
 
+    function parseDeviceFromTopic(topic) {
+      const m = topic.match(/^home\/([^/]+)\/status$/i);
+      return m ? m[1].toUpperCase() : '';
+    }
+
+    function renderDeviceList() {
+      const el = document.getElementById('deviceList');
+      const items = [...foundDevices.values()].sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
+      if (!items.length) {
+        el.innerHTML = '<div class="small muted">Δεν βρέθηκαν συσκευές ακόμα...</div>';
+        return;
+      }
+      el.innerHTML = items.map(d => `
+        <div class="device-item" onclick="selectDevice('${d.id}')">
+          <div>
+            <div class="id">${d.id}</div>
+            <div class="meta">${d.ip || '?'} • ${d.ssid || '?'} • RSSI ${d.rssi ?? '?'}${d.bmsLabel ? ' • ' + d.bmsLabel : ''}</div>
+          </div>
+          <span class="chip ok">online</span>
+        </div>`).join('');
+    }
+
+    function selectDevice(id) {
+      document.getElementById('deviceId').value = id;
+      connect();
+    }
+
+    function stopScan() {
+      if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
+      if (scanClient) { scanClient.end(true); scanClient = null; }
+      const btn = document.getElementById('scanBtn');
+      if (btn) { btn.disabled = false; btn.textContent = 'Εύρεση συσκευών (MQTT)'; }
+    }
+
+    function scanDevices() {
+      const btn = document.getElementById('scanBtn');
+      const url = document.getElementById('broker').value.trim();
+      if (!url) { alert('Βάλε MQTT broker'); return; }
+
+      stopScan();
+      foundDevices.clear();
+      btn.disabled = true;
+      btn.textContent = 'Αναζήτηση... (10 δευτ.)';
+      document.getElementById('deviceList').innerHTML = '<div class="small muted">Αναμονή μηνυμάτων MQTT (home/+/status)...</div>';
+      document.getElementById('statusLine').textContent = 'Σάρωση broker...';
+
+      scanClient = mqtt.connect(url, {
+        clientId: 'scan-' + Math.random().toString(16).slice(2),
+        reconnectPeriod: 0,
+        connectTimeout: 10000
+      });
+
+      scanClient.on('connect', () => {
+        scanClient.subscribe('home/+/status', (err) => {
+          if (err) document.getElementById('statusLine').textContent = 'Σφάλμα subscribe: ' + err.message;
+        });
+      });
+
+      scanClient.on('message', (t, msg) => {
+        try {
+          const j = JSON.parse(msg.toString());
+          const id = (j.device_id || parseDeviceFromTopic(t) || '').toUpperCase();
+          if (!id) return;
+          const ble = j.ble || {};
+          const bms = j.bms || {};
+          foundDevices.set(id, {
+            id,
+            ip: j.ip || '',
+            ssid: j.wifi_ssid || '',
+            rssi: j.rssi,
+            bmsLabel: ble.bms_label || (bms.valid ? 'BMS' : ''),
+            lastSeen: Date.now()
+          });
+          renderDeviceList();
+        } catch (e) {}
+      });
+
+      scanClient.on('error', (e) => {
+        document.getElementById('statusLine').textContent = 'Σφάλμα: ' + (e.message || e);
+      });
+
+      scanTimer = setTimeout(() => {
+        const n = foundDevices.size;
+        stopScan();
+        document.getElementById('statusLine').textContent = n
+          ? `Βρέθηκαν ${n} συσκευή(ές). Πάτα μία για σύνδεση.`
+          : 'Δεν βρέθηκαν συσκευές — έλεγξε broker και ότι το ESP32 στέλνει MQTT.';
+      }, 10000);
+    }
+
     function connect() {
       const id = document.getElementById('deviceId').value.trim().toUpperCase();
       const url = document.getElementById('broker').value.trim();
@@ -352,6 +450,7 @@
     }
 
     function disconnect() {
+      stopScan();
       if (client) client.end();
       client = null;
       connected = false;

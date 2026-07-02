@@ -77,6 +77,13 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
     <label>Broker</label><input id="mqttBroker" placeholder="broker.hivemq.com">
     <label>Port</label><input id="mqttPort" type="number" placeholder="1883">
     <button class="btn success" onclick="saveMqtt()">Αποθήκευση MQTT</button></div>
+    <div class="card"><h2>Firmware Update (OTA)</h2>
+    <p class="small">Αναβάθμιση μέσω WiFi — χωρίς USB. Πρέπει να είσαι στο ίδιο WiFi σπιτιού.</p>
+    <label>Firmware (.bin)</label>
+    <input type="file" id="otaFile" accept=".bin">
+    <button class="btn" onclick="otaUpload()">Ανέβασμα firmware</button>
+    <p class="small">Ή από PC: <code>upload-ota.ps1</code> (κωδικός: esp32ota)</p>
+    <p class="small" id="otaStatus">-</p></div>
   </section>
   <section id="tab-remote" class="tab">
     <div class="card"><h2>Απομακρυσμένη πρόσβαση (αυτόματη)</h2>
@@ -232,6 +239,19 @@ async function saveMqtt(){
     port:parseInt(document.getElementById('mqttPort').value)||1883
   })});
   alert('Αποθηκεύτηκε');refresh();
+}
+async function otaUpload(){
+  const f=document.getElementById('otaFile').files[0];
+  if(!f){alert('Επίλεξε αρχείο .bin');return;}
+  document.getElementById('otaStatus').textContent='Ανέβασμα... (~1-2 min)';
+  try{
+    const fd=new FormData();
+    fd.append('firmware',f);
+    const r=await fetch('/api/ota',{method:'POST',body:fd});
+    const j=await r.json();
+    document.getElementById('otaStatus').textContent=j.ok?'Επιτυχία — επανεκκίνηση...':'Αποτυχία';
+    if(j.ok)setTimeout(()=>location.reload(),5000);
+  }catch(e){document.getElementById('otaStatus').textContent='Σφάλμα: '+e;}
 }
 let mqttCmdTopic='';
 function ensureRemoteBridge(id){

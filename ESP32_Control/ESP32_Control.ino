@@ -133,11 +133,12 @@ String getDeviceId() {
 
 
 void publishGensetMqtt() {
-  if (!mqtt.connected() || !genMgr.data.valid) return;
-  StaticJsonDocument<1024> doc;
+  if (!mqtt.connected() || !genMgr.enabled) return;
+  StaticJsonDocument<1536> doc;
   JsonObject root = doc.to<JsonObject>();
   genFillJson(root, genMgr.data);
-  char payload[1024];
+  root["enabled"] = genMgr.enabled;
+  char payload[1536];
   serializeJson(doc, payload);
   mqtt.publish(topicGenset.c_str(), payload);
 }
@@ -868,7 +869,7 @@ void loop() {
 
   static unsigned long lastGenMqtt = 0;
 
-  if (genMgr.data.valid && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS) {
+  if (genMgr.enabled && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS) {
 
     lastGenMqtt = millis();
 

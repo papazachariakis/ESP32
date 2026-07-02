@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>ESP32 Control — Basen Green</title>
+  <title>ESP32 Energy Hub — BMS & Γεννήτρια</title>
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
@@ -71,12 +71,32 @@
     .device-item:hover{border-color:#2563eb}
     .device-item .id{font-weight:650}
     .device-item .meta{font-size:.75rem;color:#94a3b8;margin-top:2px}
+    .section-title{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+    .section-title .dot{width:10px;height:10px;border-radius:50%}
+    .dot.bms{background:#22c55e}.dot.gen{background:#f59e0b}
+    .gen-card{border:1px solid #78350f;background:linear-gradient(180deg,#1e293b 0%,#172033 100%)}
+    .load-row{margin:10px 0}
+    .load-row .lbl{display:flex;justify-content:space-between;font-size:.8rem;color:#94a3b8;margin-bottom:4px}
+    .load-bar{height:12px;border-radius:999px;background:#0f172a;border:1px solid #334155;overflow:hidden}
+    .load-bar>div{height:100%;background:linear-gradient(90deg,#22c55e,#f59e0b,#ef4444);width:0%;transition:width .4s}
+    .phases{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:700px){.phases{grid-template-columns:repeat(3,1fr)}}
+    .phase{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px}
+    .phase h3{margin:0 0 8px;font-size:.85rem;color:#fbbf24}
+    .phase .row{display:flex;justify-content:space-between;font-size:.8rem;padding:3px 0;border-bottom:1px solid #1e293b}
+    .phase .row:last-child{border:0}
+    .gen-status{padding:12px;border-radius:10px;background:#0f172a;border:1px solid #334155}
+    .gen-status.run{border-color:#14532d}.gen-status.warn{border-color:#713f12}.gen-status.off{border-color:#334155}
+    nav.tabs{display:flex;gap:6px;padding:8px 16px;background:#1e293b;border-bottom:1px solid #334155;overflow:auto}
+    nav.tabs button{flex:1;min-width:100px;padding:10px;border:0;border-radius:8px;background:#0f172a;color:#94a3b8;cursor:pointer}
+    nav.tabs button.active{background:#2563eb;color:#fff}
+    .view{display:none}.view.active{display:block}
   </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Basen Green BMS <span id="badge" class="badge off">Offline</span></h1>
+      <h1>Energy Hub <span id="badge" class="badge off">Offline</span></h1>
       <div class="small" id="info">Αυτόματη σύνδεση...</div>
     </div>
     <button class="link hidden" id="settingsBtn" onclick="toggleSetup()">Ρυθμίσεις</button>
@@ -99,6 +119,13 @@
       <button class="link setup-toggle" onclick="toggleSetup()">Εμφάνιση ρυθμίσεων</button>
     </div>
 
+    <nav class="tabs">
+      <button class="active" data-view="bms" onclick="switchView('bms')">Μπαταρία BMS</button>
+      <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
+      <button data-view="relays" onclick="switchView('relays')">Relays</button>
+    </nav>
+
+    <div id="view-bms" class="view active">
     <div class="grid cols-2">
       <div class="card">
         <h2 style="margin:0 0 10px">Κατάσταση Μπαταρίας</h2>
@@ -149,11 +176,64 @@
         <pre id="alarms">-</pre>
       </div>
     </div>
+    </div>
 
+    <div id="view-gen" class="view">
+      <div class="card gen-card">
+        <div class="section-title"><span class="dot gen"></span><h2 style="margin:0">Cummins Γεννήτρια</h2><span id="genBadge" class="badge off">—</span></div>
+        <div class="gen-status off" id="genStatusBox">
+          <div style="font-size:1.1rem;font-weight:650" id="genState">Αναμονή δεδομένων...</div>
+          <div class="small muted" id="genMode">—</div>
+          <div class="chips" id="genChips" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 12px">Φόρτιση ανά φάση</h2>
+        <div class="load-row"><div class="lbl"><span>L1</span><span id="loadL1t">-</span></div><div class="load-bar"><div id="loadL1"></div></div></div>
+        <div class="load-row"><div class="lbl"><span>L2</span><span id="loadL2t">-</span></div><div class="load-bar"><div id="loadL2"></div></div></div>
+        <div class="load-row"><div class="lbl"><span>L3</span><span id="loadL3t">-</span></div><div class="load-bar"><div id="loadL3"></div></div></div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 12px">Σύνοψη</h2>
+        <div class="stats">
+          <div class="kpi"><div class="l">Τάση μέση L-L</div><div class="v"><span id="gVll">-</span><span class="u">V</span></div></div>
+          <div class="kpi"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">-</span><span class="u">Hz</span></div></div>
+          <div class="kpi"><div class="l">kVA σύνολο</div><div class="v"><span id="gKva">-</span><span class="u">kVA</span></div></div>
+          <div class="kpi"><div class="l">RPM κινητήρα</div><div class="v"><span id="gRpm">-</span></div></div>
+          <div class="kpi"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">-</span><span class="u">A</span></div></div>
+          <div class="kpi"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">-</span><span class="u">V</span></div></div>
+          <div class="kpi"><div class="l">Λάδι</div><div class="v"><span id="gOil">-</span><span class="u">kPa</span></div></div>
+          <div class="kpi"><div class="l">Νερό ψύξης</div><div class="v"><span id="gCool">-</span><span class="u">°C</span></div></div>
+        </div>
+      </div>
+
+      <div class="grid cols-2">
+        <div class="card">
+          <h2 style="margin:0 0 12px">Φάσεις (L1 / L2 / L3)</h2>
+          <div class="phases" id="genPhases"></div>
+        </div>
+        <div class="card">
+          <h2 style="margin:0 0 12px">Λειτουργία & Σφάλματα</h2>
+          <div class="stats">
+            <div class="kpi"><div class="l">Controller</div><div class="v" style="font-size:.95rem" id="gCtrl">-</div></div>
+            <div class="kpi"><div class="l">Εκκινήσεις</div><div class="v" id="gRuns">-</div></div>
+            <div class="kpi"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">-</div></div>
+            <div class="kpi"><div class="l">Ενεργό σφάλμα</div><div class="v" style="font-size:.95rem" id="gFault">-</div></div>
+          </div>
+          <div style="height:12px"></div>
+          <pre id="genAlarms">—</pre>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-relays" class="view">
     <div class="card">
       <h2 style="margin:0 0 12px">Επαφές / Relays</h2>
       <div id="relays"></div>
       <button class="sec" onclick="allOff()">Όλα OFF</button>
+    </div>
     </div>
   </main>
 
@@ -186,6 +266,90 @@
       document.getElementById('setupCard').classList.add('collapsed');
       document.getElementById('settingsBtn').classList.remove('hidden');
       document.getElementById('info').textContent = `Device: ${id} • MQTT remote`;
+    }
+
+    function switchView(name) {
+      document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+      document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
+    }
+
+    function setLoadBar(id, txtId, pct) {
+      const p = clamp(Number(pct) || 0, 0, 120);
+      document.getElementById(id).style.width = Math.min(p, 100) + '%';
+      document.getElementById(txtId).textContent = Number.isFinite(+pct) ? f2(p, 1) + '%' : '-';
+    }
+
+    function renderGenset(g) {
+      const valid = g && g.valid;
+      const stateEl = document.getElementById('genState');
+      const box = document.getElementById('genStatusBox');
+      const badge = document.getElementById('genBadge');
+
+      if (!valid) {
+        stateEl.textContent = g && g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων γεννήτριας...';
+        document.getElementById('genMode').textContent = '—';
+        badge.textContent = 'Offline'; badge.className = 'badge off';
+        box.className = 'gen-status off';
+        return;
+      }
+
+      const state = g.genset_state_label_el || g.genset_state_label || '—';
+      const mode = g.op_mode_label_el || g.op_mode_label || '—';
+      stateEl.textContent = state;
+      document.getElementById('genMode').textContent = 'Λειτουργία: ' + mode + ' • Controller type ' + (g.controller_type ?? '-');
+
+      const running = Number(g.genset_state) === 3;
+      const warn = Number(g.active_fault) > 0 || Number(g.fault_type) === 4;
+      badge.textContent = running ? 'Running' : (warn ? 'Warning' : 'Ready');
+      badge.className = 'badge ' + (running ? 'ok' : (warn ? 'warn' : 'off'));
+      box.className = 'gen-status ' + (running ? 'run' : (warn ? 'warn' : 'off'));
+
+      const chips = [];
+      if (running) chips.push({ t: 'ΛΕΙΤΟΥΡΓΕΙ', cls: 'ok' });
+      else chips.push({ t: state.toUpperCase(), cls: '' });
+      chips.push({ t: mode.toUpperCase(), cls: 'ok' });
+      if (Number(g.fault_type) === 1) chips.push({ t: 'ΠΡΟΕΙΔΟΠΟΙΗΣΗ', cls: 'warn' });
+      if (Number(g.fault_type) === 4) chips.push({ t: 'SHUTDOWN', cls: 'bad' });
+      document.getElementById('genChips').innerHTML = chips.map(c => `<span class="chip ${c.cls}">${c.t}</span>`).join('');
+
+      setLoadBar('loadL1', 'loadL1t', g.load_l1_pct);
+      setLoadBar('loadL2', 'loadL2t', g.load_l2_pct);
+      setLoadBar('loadL3', 'loadL3t', g.load_l3_pct);
+
+      document.getElementById('gVll').textContent = f0(g.volt_avg_ll);
+      document.getElementById('gHz').textContent = f2(g.frequency, 1);
+      document.getElementById('gKva').textContent = f0(g.kva_total);
+      document.getElementById('gRpm').textContent = f0(g.engine_rpm);
+      document.getElementById('gCurr').textContent = f2(g.curr_avg, 1);
+      document.getElementById('gBatt').textContent = f2(g.battery_v, 1);
+      document.getElementById('gOil').textContent = f0(g.oil_kpa);
+      document.getElementById('gCool').textContent = f2(g.coolant_c, 1);
+
+      document.getElementById('gCtrl').textContent = g.controller_type ?? '-';
+      document.getElementById('gRuns').textContent = g.total_runs ?? '-';
+      document.getElementById('gHours').textContent = Math.floor((Number(g.runtime_sec) || 0) / 3600) + ' h';
+      document.getElementById('gFault').textContent = Number(g.active_fault) ? ('#' + g.active_fault + ' (' + (g.fault_type_label || '') + ')') : 'Κανένα';
+
+      const phases = [
+        { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kva: g.kva_l1, load: g.load_l1_pct },
+        { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kva: g.kva_l2, load: g.load_l2_pct },
+        { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kva: g.kva_l3, load: g.load_l3_pct }
+      ];
+      document.getElementById('genPhases').innerHTML = phases.map(p => `
+        <div class="phase"><h3>Φάση ${p.n}</h3>
+          <div class="row"><span>L-N τάση</span><span>${f0(p.vn)} V</span></div>
+          <div class="row"><span>L-L τάση</span><span>${f0(p.vll)} V</span></div>
+          <div class="row"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
+          <div class="row"><span>kVA</span><span>${f0(p.kva)}</span></div>
+          <div class="row"><span>Φόρτιση</span><span>${f2(p.load, 1)}%</span></div>
+        </div>`).join('');
+
+      const al = [];
+      if (g.nfpa_fault) al.push('NFPA 110: ' + hex(g.nfpa_fault));
+      if (g.ext_annunciation) al.push('Extended annunciation: ' + hex(g.ext_annunciation));
+      if (g.active_fault) al.push('Ενεργό σφάλμα: #' + g.active_fault + ' (' + (g.fault_type_label || '') + ')');
+      if (!al.length) al.push('Κανένας ενεργός συναγερμός.');
+      document.getElementById('genAlarms').textContent = al.join('\n');
     }
 
     function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
@@ -347,7 +511,7 @@
         <div class="device-item" onclick="selectDevice('${d.id}')">
           <div>
             <div class="id">${d.id}</div>
-            <div class="meta">${d.ip || '?'} • ${d.ssid || '?'} • RSSI ${d.rssi ?? '?'}${d.bmsLabel ? ' • ' + d.bmsLabel : ''}</div>
+            <div class="meta">${d.ip || '?'} • ${d.ssid || '?'} • RSSI ${d.rssi ?? '?'}${d.bmsLabel ? ' • ' + d.bmsLabel : ''}${d.genLabel ? ' • ' + d.genLabel : ''}</div>
           </div>
           <span class="chip ok">online</span>
         </div>`).join('');
@@ -402,6 +566,7 @@
             ssid: j.wifi_ssid || '',
             rssi: j.rssi,
             bmsLabel: ble.bms_label || (bms.valid ? 'BMS' : ''),
+            genLabel: (j.genset && j.genset.valid) ? 'GEN' : '',
             lastSeen: Date.now()
           });
           renderDeviceList();
@@ -430,13 +595,14 @@
       cmdTopic = `home/${id}/cmd`;
       if (client) client.end();
       setBadge('Σύνδεση...', 'warn');
-      document.getElementById('statusLine').textContent = `topics: home/${id}/status | home/${id}/bms`;
+      document.getElementById('statusLine').textContent = `topics: home/${id}/status | /bms | /genset`;
       client = mqtt.connect(url, { clientId: 'gh-' + Math.random().toString(16).slice(2), reconnectPeriod: 5000 });
       client.on('connect', () => {
         setBadge('Online', 'ok');
         onConnected(id);
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
+        client.subscribe(`home/${id}/genset`);
       });
       client.on('close', () => { connected = false; setBadge('Offline', 'off'); });
       client.on('message', (t, msg) => {
@@ -445,6 +611,8 @@
           if (t.endsWith('/status') && j.outputs) { outputs = j.outputs; renderRelays(); }
           if (t.endsWith('/bms') && j.valid) renderBms(j);
           if (t.endsWith('/status') && j.bms) renderBms(j.bms);
+          if (t.endsWith('/genset')) renderGenset(j);
+          if (t.endsWith('/status') && j.genset) renderGenset(j.genset);
         } catch (e) {}
       });
     }

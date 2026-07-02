@@ -179,6 +179,7 @@ function formatGenset(g){
   let s='';
   s+=`Κατάσταση: ${g.genset_state_label||'-'}  |  Λειτουργία: ${g.op_mode_label||'-'}\n`;
   s+=`Τάση L-L: ${Number(g.volt_avg_ll).toFixed(0)} V  |  Hz: ${Number(g.frequency).toFixed(1)}\n`;
+  s+=`L-N: ${Number(g.volt_l1n).toFixed(0)}/${Number(g.volt_l2n).toFixed(0)}/${Number(g.volt_l3n).toFixed(0)} V\n`;
   s+=`Ρεύμα: L1 ${Number(g.curr_l1).toFixed(1)}A  L2 ${Number(g.curr_l2).toFixed(1)}A  L3 ${Number(g.curr_l3).toFixed(1)}A\n`;
   s+=`Φόρτιση: ${Number(g.load_l1_pct).toFixed(1)}% / ${Number(g.load_l2_pct).toFixed(1)}% / ${Number(g.load_l3_pct).toFixed(1)}%\n`;
   s+=`kVA: ${Number(g.kva_total).toFixed(0)}  |  RPM: ${g.engine_rpm||0}\n`;

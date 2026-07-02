@@ -3,6 +3,21 @@
 #include <Arduino.h>
 #include "bms_common.h"
 
+typedef void (*ModbusPumpFn)();
+
+inline ModbusPumpFn& modbusPumpFn() {
+  static ModbusPumpFn fn = nullptr;
+  return fn;
+}
+
+inline void modbusSetPump(ModbusPumpFn fn) {
+  modbusPumpFn() = fn;
+}
+
+inline void modbusPump() {
+  if (modbusPumpFn()) modbusPumpFn()();
+}
+
 #ifndef MODBUS_RX_PIN
 #define MODBUS_RX_PIN 16
 #endif
@@ -21,6 +36,7 @@ inline bool modbusReadBytes(HardwareSerial& ser, uint8_t* buf, size_t len, uint3
   uint32_t start = millis();
   size_t got = 0;
   while (got < len && millis() - start < timeoutMs) {
+    modbusPump();
     while (ser.available()) {
       buf[got++] = (uint8_t)ser.read();
       if (got >= len) return true;
@@ -53,7 +69,8 @@ inline bool modbusReadHolding(
   ser.write(req, 8);
   ser.flush();
   modbusSetTx(dePin, false);
-  delay(2);
+  modbusPump();
+  delay(1);
 
   uint8_t hdr[3];
   if (!modbusReadBytes(ser, hdr, 3, timeoutMs)) return false;

@@ -78,6 +78,11 @@ unsigned long lastMqttPublish = 0;
 
 unsigned long lastBleReconnect = 0;
 
+void pumpNetwork() {
+  server.handleClient();
+  ArduinoOTA.handle();
+}
+
 
 
 void saveRelayStates() {
@@ -780,6 +785,7 @@ void setup() {
 
   setupRoutes();
   setupArduinoOta();
+  modbusSetPump(pumpNetwork);
   mqttConnect();
 
 
@@ -803,8 +809,9 @@ void setup() {
 
 
 void loop() {
-  server.handleClient();
-  ArduinoOTA.handle();
+  pumpNetwork();
+
+  if (otaInProgress()) return;
 
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWifiTry = 0;

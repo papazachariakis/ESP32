@@ -14,16 +14,24 @@
 #define OTA_PASSWORD "esp32ota"
 #endif
 
+inline volatile bool& otaInProgress() {
+  static volatile bool busy = false;
+  return busy;
+}
+
 inline void setupArduinoOta() {
   ArduinoOTA.setHostname(OTA_HOSTNAME);
   ArduinoOTA.setPassword(OTA_PASSWORD);
   ArduinoOTA.onStart([]() {
+    otaInProgress() = true;
     Serial.println("ArduinoOTA start");
   });
   ArduinoOTA.onEnd([]() {
+    otaInProgress() = false;
     Serial.println("ArduinoOTA end");
   });
   ArduinoOTA.onError([](ota_error_t err) {
+    otaInProgress() = false;
     Serial.printf("ArduinoOTA error %u\n", err);
   });
   ArduinoOTA.begin();

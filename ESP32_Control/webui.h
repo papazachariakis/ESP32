@@ -50,6 +50,7 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
 </header>
 <nav>
   <button class="active" data-tab="dash">Dashboard</button>
+  <button data-tab="genset">Γεννήτρια</button>
   <button data-tab="ble">Bluetooth</button>
   <button data-tab="wifi">WiFi</button>
   <button data-tab="remote">Internet</button>
@@ -59,6 +60,16 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
     <div class="card"><h2>Επαφές / Relays</h2><div id="relays"></div>
     <button class="btn secondary" onclick="allOff()">Όλα OFF</button></div>
     <div class="card"><h2>BMS Battery</h2><pre id="bmsData">Δεν υπάρχουν δεδομένα</pre></div>
+  </section>
+  <section id="tab-genset" class="tab">
+    <div class="card"><h2>Cummins Modbus (RS485)</h2>
+    <p class="small">PCC 1301 / PowerCommand 1.x / PS0500. Σύνδεση MAX485: RO→GPIO16, DI→GPIO17, DE+RE→GPIO19, A/B στο Cummins RS485.</p>
+    <label><input type="checkbox" id="modbusEn" checked> Ενεργό</label>
+    <label>Slave ID</label><input id="modbusId" type="number" value="1" min="1" max="247">
+    <label>Baud</label><select id="modbusBaud"><option>9600</option><option>19200</option><option>38400</option><option>2400</option><option>4800</option></select>
+    <button class="btn success" onclick="saveModbus()">Αποθήκευση Modbus</button>
+    <p class="small" id="modbusStatus">-</p></div>
+    <div class="card"><h2>Κατάσταση Γεννήτριας</h2><pre id="genData">Αναμονή δεδομένων Modbus...</pre></div>
   </section>
   <section id="tab-ble" class="tab">
     <div class="card"><h2>Bluetooth σκανάρισμα</h2>
@@ -163,6 +174,20 @@ function formatBms(b){
   return s;
 }
 
+function formatGenset(g){
+  if(!g||!g.valid)return g&&g.error?('Modbus σφάλμα: '+g.error):'Δεν υπάρχουν δεδομένα γεννήτριας';
+  let s='';
+  s+=`Κατάσταση: ${g.genset_state_label||'-'}  |  Λειτουργία: ${g.op_mode_label||'-'}\n`;
+  s+=`Τάση L-L: ${Number(g.volt_avg_ll).toFixed(0)} V  |  Hz: ${Number(g.frequency).toFixed(1)}\n`;
+  s+=`Ρεύμα: L1 ${Number(g.curr_l1).toFixed(1)}A  L2 ${Number(g.curr_l2).toFixed(1)}A  L3 ${Number(g.curr_l3).toFixed(1)}A\n`;
+  s+=`Φόρτιση: ${Number(g.load_l1_pct).toFixed(1)}% / ${Number(g.load_l2_pct).toFixed(1)}% / ${Number(g.load_l3_pct).toFixed(1)}%\n`;
+  s+=`kVA: ${Number(g.kva_total).toFixed(0)}  |  RPM: ${g.engine_rpm||0}\n`;
+  s+=`Μπαταρία: ${Number(g.battery_v).toFixed(1)} V  |  Λάδι: ${Number(g.oil_kpa).toFixed(0)} kPa  |  Νερό: ${Number(g.coolant_c).toFixed(1)} °C\n`;
+  s+=`Εκκινήσεις: ${g.total_runs||0}  |  Ώρες λειτ.: ${Math.floor((g.runtime_sec||0)/3600)} h\n`;
+  if(g.active_fault)s+=`Σφάλμα: #${g.active_fault} (${g.fault_type_label||''})\n`;
+  return s;
+}
+
 document.querySelectorAll('nav button').forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
@@ -211,7 +236,14 @@ async function refresh(){
     document.getElementById('mqttPort').value=s.mqtt.port||1883;
     document.getElementById('remoteDeviceId').value=s.device_id;
     document.getElementById('mqttTopics').textContent=
-      `Publish: ${s.mqtt.topic_status}\nSubscribe: ${s.mqtt.topic_cmd}\nBMS: ${s.mqtt.topic_bms}`;
+      `Publish: ${s.mqtt.topic_status}\nSubscribe: ${s.mqtt.topic_cmd}\nBMS: ${s.mqtt.topic_bms}\nGenset: ${s.mqtt.topic_genset||'-'}`;
+    if(s.genset){
+      document.getElementById('modbusEn').checked=!!s.genset.enabled;
+      document.getElementById('modbusId').value=s.genset.slave_id||1;
+      document.getElementById('modbusBaud').value=String(s.genset.baud||9600);
+      document.getElementById('genData').textContent=formatGenset(s.genset);
+      document.getElementById('modbusStatus').textContent=s.genset.valid?'Modbus OK':(s.genset.error||'Αναμονή...');
+    }
   }catch(e){document.getElementById('connBadge').textContent='Offline';}
 }
 
@@ -280,6 +312,14 @@ async function saveMqtt(){
   await api('/api/mqtt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     broker:document.getElementById('mqttBroker').value,
     port:parseInt(document.getElementById('mqttPort').value)||1883
+  })});
+  alert('Αποθηκεύτηκε');refresh();
+}
+async function saveModbus(){
+  await api('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    enabled:document.getElementById('modbusEn').checked,
+    slave_id:parseInt(document.getElementById('modbusId').value)||1,
+    baud:parseInt(document.getElementById('modbusBaud').value)||9600
   })});
   alert('Αποθηκεύτηκε');refresh();
 }

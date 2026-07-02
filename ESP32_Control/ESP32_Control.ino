@@ -43,6 +43,7 @@
 #include "bms_manager.h"
 #include "wifi_store.h"
 #include "ota.h"
+#include "cummins_gen.h"
 
 
 
@@ -55,6 +56,7 @@ PubSubClient mqtt(wifiClient);
 Preferences prefs;
 
 BmsManager bmsMgr;
+GenManager genMgr;
 
 
 
@@ -64,7 +66,7 @@ String mqttBroker = MQTT_DEFAULT_BROKER;
 
 uint16_t mqttPort = MQTT_DEFAULT_PORT;
 
-String topicStatus, topicCmd, topicBms;
+String topicStatus, topicCmd, topicBms, topicGenset;
 
 String bleScanJson = "[]";
 
@@ -125,6 +127,16 @@ String getDeviceId() {
 
 
 
+void publishGensetMqtt() {
+  if (!mqtt.connected() || !genMgr.data.valid) return;
+  StaticJsonDocument<1024> doc;
+  JsonObject root = doc.to<JsonObject>();
+  genFillJson(root, genMgr.data);
+  char payload[1024];
+  serializeJson(doc, payload);
+  mqtt.publish(topicGenset.c_str(), payload);
+}
+
 void publishBmsMqtt() {
 
   if (!mqtt.connected() || !bmsMgr.bms.valid) return;
@@ -147,7 +159,7 @@ void publishBmsMqtt() {
 
 String buildStatusJson() {
 
-  StaticJsonDocument<6144> doc;
+  StaticJsonDocument<8192> doc;
 
   doc["device_id"] = deviceId;
 
@@ -217,6 +229,14 @@ String buildStatusJson() {
   mq["topic_cmd"] = topicCmd;
 
   mq["topic_bms"] = topicBms;
+
+  mq["topic_genset"] = topicGenset;
+
+  JsonObject genset = doc.createNestedObject("genset");
+  genFillJson(genset, genMgr.data);
+  genset["enabled"] = genMgr.enabled;
+  genset["slave_id"] = genMgr.slaveId;
+  genset["baud"] = genMgr.baud;
 
 
 
@@ -321,6 +341,9 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
+
+  genMgr.load(prefs);
+  genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
 
   for (int i = 0; i < RELAY_COUNT; i++) {
 
@@ -558,6 +581,68 @@ void handleBleConnect() {
 
 
 
+void handleGenset() {
+
+  StaticJsonDocument<1024> doc;
+
+  JsonObject o = doc.to<JsonObject>();
+
+  genFillJson(o, genMgr.data);
+
+  o["enabled"] = genMgr.enabled;
+
+  o["slave_id"] = genMgr.slaveId;
+
+  o["baud"] = genMgr.baud;
+
+  String out;
+
+  serializeJson(doc, out);
+
+  server.send(200, "application/json", out);
+
+}
+
+
+
+void handleModbusSave() {
+
+  if (!server.hasArg("plain")) {
+
+    server.send(400, "application/json", "{\"ok\":false}");
+
+    return;
+
+  }
+
+  StaticJsonDocument<256> doc;
+
+  if (deserializeJson(doc, server.arg("plain"))) {
+
+    server.send(400, "application/json", "{\"ok\":false}");
+
+    return;
+
+  }
+
+  genMgr.enabled = doc["enabled"] | true;
+
+  genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
+
+  genMgr.baud = doc["baud"] | 9600;
+
+  genMgr.save(prefs);
+
+  genMgr.applyBaud();
+
+  if (genMgr.enabled) genMgr.pollOnce();
+
+  server.send(200, "application/json", "{\"ok\":true}");
+
+}
+
+
+
 void handleBleDisconnect() {
 
   bmsMgr.disconnect(prefs);
@@ -631,6 +716,8 @@ void setupRoutes() {
   server.on("/api/wifi/reset", HTTP_POST, handleWifiReset);
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
+  server.on("/api/genset", HTTP_GET, handleGenset);
+  server.on("/api/modbus", HTTP_POST, handleModbusSave);
   registerOtaRoutes(server);
 
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
@@ -669,6 +756,8 @@ void setup() {
 
   topicBms = "home/" + deviceId + "/bms";
 
+  topicGenset = "home/" + deviceId + "/genset";
+
 
 
   BLEDevice::init("ESP32-Control");
@@ -676,6 +765,8 @@ void setup() {
 
 
   setupWiFi();
+
+  genMgr.begin();
 
 
 
@@ -765,6 +856,18 @@ void loop() {
 
 
   bmsMgr.poll();
+
+  genMgr.poll();
+
+  static unsigned long lastGenMqtt = 0;
+
+  if (genMgr.data.valid && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS) {
+
+    lastGenMqtt = millis();
+
+    publishGensetMqtt();
+
+  }
 
 }
 

@@ -62,6 +62,9 @@ inline bool tpParseFrame(const uint8_t* data, size_t len, BmsData& bms) {
 
   if (type == TIANPOWER_FRAME_STATUS) {
     bms.soc = bmsU16BE(data, 3);
+    if (bms.capacityAh > 0) {
+      bms.remainingAh = bms.capacityAh * bms.soc / 100.0f;
+    }
     bms.voltage = bmsU16BE(data, 5) / 100.0f;
     bms.avgTemp = bmsS16BE(data, 7) / 10.0f;
     bms.ambientTemp = bmsS16BE(data, 9) / 10.0f;
@@ -80,7 +83,10 @@ inline bool tpParseFrame(const uint8_t* data, size_t len, BmsData& bms) {
     bms.cellCount = data[3];
     bms.tempSensorCount = data[4];
     bms.capacityAh = bmsU16BE(data, 5) / 100.0f;
-    bms.remainingAh = bmsU16BE(data, 7) / 100.0f;
+    bms.cycleChargeAh = bmsU16BE(data, 7) / 100.0f;
+    if (bms.soc > 0) {
+      bms.remainingAh = bms.capacityAh * bms.soc / 100.0f;
+    }
     bms.cycles = bmsU16BE(data, 9);
     bms.voltageProtMask = bmsU16BE(data, 11);
     bms.currentProtMask = bmsU16BE(data, 13);

@@ -33,6 +33,7 @@ struct BmsData {
   float mosfetTemp = 0;
   float capacityAh = 0;
   float remainingAh = 0;
+  float cycleChargeAh = 0;
   int cellCount = 0;
   int tempSensorCount = 0;
   int cycles = 0;
@@ -221,6 +222,7 @@ inline void bmsFillJson(JsonObject& o, const BmsData& b) {
   o["mosfet_temp"] = b.mosfetTemp;
   o["capacity_ah"] = b.capacityAh;
   o["remaining_ah"] = b.remainingAh;
+  o["cycle_charge_ah"] = b.cycleChargeAh;
   o["cell_count"] = b.cellCount;
   o["temp_sensor_count"] = b.tempSensorCount;
   o["cycles"] = b.cycles;

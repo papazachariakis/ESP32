@@ -4,17 +4,19 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f172a" />
-  <title>ESP32 Control (Remote)</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>ESP32 Control — Basen Green</title>
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
-    header{padding:16px 20px;background:#1e293b;border-bottom:1px solid #334155}
+    header{padding:16px 20px;background:#1e293b;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
     h1{margin:0;font-size:1.2rem}
     main{padding:16px;max-width:980px;margin:0 auto}
     .card{background:#1e293b;border-radius:12px;padding:16px;margin:12px 0}
     input{width:100%;padding:10px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;margin:6px 0}
     button{padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;width:100%;margin-top:8px;cursor:pointer}
     button.sec{background:#475569}
+    button.link{background:transparent;color:#60a5fa;padding:0;margin:0;width:auto;text-decoration:underline}
     .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.75rem;margin-left:8px}
     .ok{background:#14532d;color:#86efac}.warn{background:#713f12;color:#fde047}.off{background:#475569;color:#cbd5e1}
     .grid{display:grid;gap:12px}
@@ -30,13 +32,14 @@
     .chip{padding:6px 10px;border-radius:999px;font-size:.75rem;border:1px solid #334155;background:#0f172a;color:#cbd5e1}
     .chip.ok{border-color:#14532d;background:#052e16;color:#86efac}
     .chip.warn{border-color:#713f12;background:#451a03;color:#fde047}
+    .chip.bad{border-color:#7f1d1d;background:#450a0a;color:#fca5a5}
     .meter{height:10px;border-radius:999px;background:#0f172a;border:1px solid #334155;overflow:hidden;margin-top:8px}
-    .meter>div{height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e);width:0%}
+    .meter>div{height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e);width:0%;transition:width .4s}
     .cells{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
     @media(min-width:860px){.cells{grid-template-columns:repeat(8,1fr)}}
-    .cell{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:8px 8px}
+    .cell{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:8px}
     .cell .n{font-size:.7rem;color:#94a3b8}
-    .cell .cv{font-size:.9rem;font-weight:650;margin-top:2px}
+    .cell .cv{font-size:.85rem;font-weight:650;margin-top:2px;display:inline-block;padding:2px 6px;border-radius:999px}
     .cell .bal{font-size:.7rem;color:#86efac;margin-top:2px}
     .temps{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     @media(min-width:860px){.temps{grid-template-columns:repeat(4,1fr)}}
@@ -44,6 +47,12 @@
     .temp .n{font-size:.75rem;color:#94a3b8}
     .temp .tv{font-size:1rem;font-weight:650;margin-top:2px}
     .muted{color:#94a3b8}
+    .small{font-size:.8rem;color:#94a3b8}
+    .health{padding:12px;border-radius:10px;background:#0f172a;border:1px solid #334155}
+    .health.good{border-color:#14532d}
+    .health.warn{border-color:#713f12}
+    .health ul{margin:8px 0 0;padding-left:18px}
+    .health li{margin:4px 0}
     .toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #334155}
     .toggle:last-child{border:0}
     .switch{position:relative;width:52px;height:28px}
@@ -52,37 +61,55 @@
     .slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
     input:checked+.slider{background:#22c55e}
     input:checked+.slider:before{transform:translateX(24px)}
-    pre{background:#0f172a;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:.75rem;max-height:420px;overflow:auto}
-    .small{color:#94a3b8;font-size:.8rem}
+    pre{background:#0f172a;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:.75rem;max-height:200px;overflow:auto}
+    #setupCard.collapsed .setup-body{display:none}
+    #setupCard.collapsed .setup-toggle{display:block}
+    .setup-toggle{display:none;margin-top:8px}
+    .hidden{display:none!important}
   </style>
 </head>
 <body>
   <header>
-    <h1>ESP32 Control <span id="badge" class="badge off">Offline</span></h1>
-    <div class="small" id="info">Σύνδεση μέσω Internet (MQTT)</div>
+    <div>
+      <h1>Basen Green BMS <span id="badge" class="badge off">Offline</span></h1>
+      <div class="small" id="info">Αυτόματη σύνδεση...</div>
+    </div>
+    <button class="link hidden" id="settingsBtn" onclick="toggleSetup()">Ρυθμίσεις</button>
   </header>
   <main>
-    <div class="grid cols-2">
-      <div class="card">
-        <div class="small">Σύνδεση μέσω Internet (MQTT). Το ESP32 πρέπει να είναι online στο WiFi του σπιτιού.</div>
+    <div class="card" id="setupCard">
+      <h2 style="margin:0 0 8px">Σύνδεση</h2>
+      <div class="setup-body">
+        <div class="small">Το ESP32 πρέπει να είναι online στο WiFi σπιτιού και να στέλνει MQTT.</div>
         <label>Device ID</label>
-        <input id="deviceId" placeholder="38182B8BD5CC" />
+        <input id="deviceId" placeholder="000401000000" />
         <label>MQTT WebSocket</label>
         <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
         <button onclick="connect()">Σύνδεση</button>
         <button class="sec" onclick="disconnect()">Αποσύνδεση</button>
         <div class="small" id="statusLine">-</div>
       </div>
+      <button class="link setup-toggle" onclick="toggleSetup()">Εμφάνιση ρυθμίσεων</button>
+    </div>
 
+    <div class="grid cols-2">
       <div class="card">
         <h2 style="margin:0 0 10px">Κατάσταση Μπαταρίας</h2>
         <div class="kpi">
-          <div class="l">SOC</div>
+          <div class="l">Φόρτιση (SOC)</div>
           <div class="v"><span id="soc">-</span><span class="u">%</span></div>
-          <div class="meter" title="SOC"><div id="socBar"></div></div>
+          <div class="meter"><div id="socBar"></div></div>
           <div class="small muted" style="margin-top:8px" id="bmsMeta">-</div>
         </div>
         <div class="chips" id="chips"></div>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 10px">Υγεία Μπαταρίας</h2>
+        <div class="health good" id="healthBox">
+          <div id="healthTitle">Αναμονή δεδομένων...</div>
+          <ul id="healthList"></ul>
+        </div>
       </div>
     </div>
 
@@ -92,33 +119,32 @@
         <div class="kpi"><div class="l">Τάση</div><div class="v"><span id="voltage">-</span><span class="u">V</span></div></div>
         <div class="kpi"><div class="l">Ρεύμα</div><div class="v"><span id="current">-</span><span class="u">A</span></div></div>
         <div class="kpi"><div class="l">Ισχύς</div><div class="v"><span id="power">-</span><span class="u">W</span></div></div>
-        <div class="kpi"><div class="l">SOH</div><div class="v"><span id="soh">-</span><span class="u">%</span></div></div>
-        <div class="kpi"><div class="l">Remaining</div><div class="v"><span id="remAh">-</span><span class="u">Ah</span></div></div>
-        <div class="kpi"><div class="l">Capacity</div><div class="v"><span id="capAh">-</span><span class="u">Ah</span></div></div>
-        <div class="kpi"><div class="l">Cycles</div><div class="v"><span id="cycles">-</span></div></div>
-        <div class="kpi"><div class="l">ΔV Cells</div><div class="v"><span id="dv">-</span><span class="u">V</span></div></div>
+        <div class="kpi"><div class="l">Υγεία (SOH)</div><div class="v"><span id="soh">-</span><span class="u">%</span></div></div>
+        <div class="kpi"><div class="l">Διαθέσιμα Ah</div><div class="v"><span id="remAh">-</span><span class="u">Ah</span></div></div>
+        <div class="kpi"><div class="l">Χωρητικότητα</div><div class="v"><span id="capAh">-</span><span class="u">Ah</span></div></div>
+        <div class="kpi"><div class="l">Κύκλοι</div><div class="v"><span id="cycles">-</span></div></div>
+        <div class="kpi"><div class="l">Διαφορά κελιών</div><div class="v"><span id="dv">-</span><span class="u">V</span></div></div>
       </div>
     </div>
 
     <div class="grid cols-2">
       <div class="card">
-        <h2 style="margin:0 0 12px">Cells (1–16)</h2>
+        <h2 style="margin:0 0 12px">Κελιά (1–16)</h2>
         <div class="small muted" id="cellStats">-</div>
         <div style="height:10px"></div>
         <div class="cells" id="cells"></div>
       </div>
-
       <div class="card">
         <h2 style="margin:0 0 12px">Θερμοκρασίες</h2>
         <div class="temps" id="temps"></div>
         <div style="height:12px"></div>
-        <h2 style="margin:0 0 12px">Alarms / Masks</h2>
+        <h2 style="margin:0 0 12px">Συναγερμοί / Προστασίες</h2>
         <pre id="alarms">-</pre>
       </div>
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 12px">Επαφές</h2>
+      <h2 style="margin:0 0 12px">Επαφές / Relays</h2>
       <div id="relays"></div>
       <button class="sec" onclick="allOff()">Όλα OFF</button>
     </div>
@@ -127,7 +153,7 @@
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const LS = { id: 'esp32_device_id', broker: 'esp32_ws_broker' };
-    let client = null, cmdTopic = '', outputs = [];
+    let client = null, cmdTopic = '', outputs = [], connected = false;
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -140,124 +166,161 @@
       b.className = 'badge ' + cls;
     }
 
-    function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
-    function f2(x, d=2) { return (Number.isFinite(+x) ? Number(x).toFixed(d) : '-'); }
-    function f0(x) { return (Number.isFinite(+x) ? Number(x).toFixed(0) : '-'); }
-    function hex(x) {
-      if (!Number.isFinite(+x)) return '0x0';
-      const n = Number(x) >>> 0;
-      return '0x' + n.toString(16).toUpperCase();
+    function toggleSetup(forceOpen) {
+      const card = document.getElementById('setupCard');
+      const open = forceOpen === true || card.classList.contains('collapsed');
+      card.classList.toggle('collapsed', !open);
+      document.getElementById('settingsBtn').classList.toggle('hidden', !connected || open);
     }
-    function lerp(a,b,t){return a+(b-a)*t;}
-    function mix(c1,c2,t){return `rgb(${lerp(c1[0],c2[0],t)|0},${lerp(c1[1],c2[1],t)|0},${lerp(c1[2],c2[2],t)|0})`;}
+
+    function onConnected(id) {
+      connected = true;
+      document.getElementById('setupCard').classList.add('collapsed');
+      document.getElementById('settingsBtn').classList.remove('hidden');
+      document.getElementById('info').textContent = `Device: ${id} • MQTT remote`;
+    }
+
+    function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+    function f2(x, d=2) { return Number.isFinite(+x) ? Number(x).toFixed(d) : '-'; }
+    function f0(x) { return Number.isFinite(+x) ? Number(x).toFixed(0) : '-'; }
+    function hex(x) { return '0x' + ((Number(x) >>> 0).toString(16).toUpperCase()); }
+
     function cellColor(v, minV, maxV) {
-      if (!Number.isFinite(v) || v < 0.5 || !Number.isFinite(minV) || !Number.isFinite(maxV) || maxV <= minV) return '#0f172a';
+      if (!Number.isFinite(v) || v < 0.5 || !Number.isFinite(minV) || maxV <= minV) return '#334155';
       const t = clamp((v - minV) / (maxV - minV), 0, 1);
-      // red -> amber -> green
+      const lerp = (a,b,x)=>a+(b-a)*x;
+      const mix = (c1,c2,x)=>`rgb(${lerp(c1[0],c2[0],x)|0},${lerp(c1[1],c2[1],x)|0},${lerp(c1[2],c2[2],x)|0})`;
       if (t < 0.5) return mix([239,68,68],[245,158,11], t/0.5);
       return mix([245,158,11],[34,197,94], (t-0.5)/0.5);
     }
 
+    function assessHealth(b) {
+      if (!b || !b.valid) return { level: 'warn', title: 'Αναμονή δεδομένων...', items: ['Σύνδεση σε εξέλιξη ή η μπαταρία δεν στέλνει BMS ακόμα.'] };
+
+      const items = [];
+      let level = 'good';
+      const dv = Number(b.delta_cell_v);
+      const soh = Number(b.soh);
+      const temp = Number(b.avg_temp);
+      const soc = Number(b.soc);
+      const cap = Number(b.capacity_ah);
+      const rem = cap > 0 && soc > 0 ? cap * soc / 100 : Number(b.remaining_ah);
+
+      if (dv > 0 && dv <= 0.03) items.push('✅ Εξαιρετική ισορροπία κελιών (ΔV ≤ 0.03V)');
+      else if (dv <= 0.05) items.push('✅ Καλή ισορροπία κελιών (ΔV ≤ 0.05V)');
+      else { items.push('⚠️ Αυξημένη διαφορά κελιών — έλεγξε balancing'); level = 'warn'; }
+
+      if (soh >= 90) items.push(`✅ SOH πολύ καλό (${f0(soh)}%)`);
+      else if (soh >= 80) items.push(`⚠️ SOH μέτριο (${f0(soh)}%)`);
+      else if (soh > 0) { items.push(`❌ Χαμηλό SOH (${f0(soh)}%)`); level = 'warn'; }
+
+      if (temp > 0 && temp < 40) items.push(`✅ Θερμοκρασία φυσιολογική (${f2(temp,1)}°C)`);
+      else if (temp >= 40 && temp < 50) { items.push(`⚠️ Ζεστή μπαταρία (${f2(temp,1)}°C)`); level = 'warn'; }
+      else if (temp >= 50) { items.push(`❌ Πολύ υψηλή θερμοκρασία (${f2(temp,1)}°C)`); level = 'warn'; }
+
+      if (b.charging && Number(b.current) > 50) items.push(`ℹ️ Υψηλή φόρτιση (${f2(b.current,1)}A) — φυσιολογικό αν το BMS το επιτρέπει`);
+      if (b.discharging && Number(b.current) < -100) items.push(`⚠️ Υψηλή εκφόρτιση (${f2(Math.abs(b.current),1)}A)`);
+
+      if (b.current_prot_mask) {
+        items.push(`⚠️ Ενεργή προστασία ρεύματος (${hex(b.current_prot_mask)}) — πιθανό όριο φόρτισης`);
+        level = 'warn';
+      }
+      if (b.error_mask) { items.push(`❌ Σφάλμα BMS (${hex(b.error_mask)})`); level = 'warn'; }
+
+      if (cap > 0 && soc > 0) items.push(`ℹ️ Διαθέσιμα ~${f2(rem,0)} Ah από ${f2(cap,0)} Ah (${f0(soc)}%)`);
+
+      const title = level === 'good' ? '✅ Η μπαταρία φαίνεται υγιής' : '⚠️ Υπάρχουν σημεία προσοχής';
+      return { level, title, items };
+    }
+
+    function renderHealth(b) {
+      const h = assessHealth(b);
+      const box = document.getElementById('healthBox');
+      box.className = 'health ' + h.level;
+      document.getElementById('healthTitle').textContent = h.title;
+      document.getElementById('healthList').innerHTML = h.items.map(i => `<li>${i}</li>`).join('');
+    }
+
     function renderBms(b) {
       const valid = b && b.valid;
-      document.getElementById('soc').textContent = valid ? f0(b.soc) : '-';
-      document.getElementById('socBar').style.width = valid ? clamp(Number(b.soc),0,100) + '%' : '0%';
+      const soc = valid ? Number(b.soc) : NaN;
+      const cap = valid ? Number(b.capacity_ah) : NaN;
+      const rem = valid && cap > 0 && soc > 0 ? cap * soc / 100 : (valid ? Number(b.remaining_ah) : NaN);
 
+      document.getElementById('soc').textContent = valid ? f0(soc) : '-';
+      document.getElementById('socBar').style.width = valid ? clamp(soc, 0, 100) + '%' : '0%';
       document.getElementById('voltage').textContent = valid ? f2(b.voltage, 2) : '-';
       document.getElementById('current').textContent = valid ? f2(b.current, 2) : '-';
       document.getElementById('power').textContent = valid ? f0(b.power) : '-';
       document.getElementById('soh').textContent = valid ? f0(b.soh) : '-';
-      document.getElementById('remAh').textContent = valid ? f2(b.remaining_ah, 1) : '-';
-      document.getElementById('capAh').textContent = valid ? f2(b.capacity_ah, 1) : '-';
+      document.getElementById('remAh').textContent = valid ? f2(rem, 1) : '-';
+      document.getElementById('capAh').textContent = valid ? f2(cap, 1) : '-';
       document.getElementById('cycles').textContent = valid ? (b.cycles ?? '-') : '-';
       document.getElementById('dv').textContent = valid ? f2(b.delta_cell_v, 3) : '-';
 
       const meta = [];
       if (valid && b.type_label) meta.push(b.type_label);
       if (valid && b.name) meta.push(b.name);
-      if (valid && b.device_model) meta.push('Model: ' + b.device_model);
-      if (valid && b.sw_version) meta.push('FW: ' + b.sw_version);
+      if (valid && b.device_model) meta.push(b.device_model);
+      if (valid && b.sw_version) meta.push('FW ' + b.sw_version);
       document.getElementById('bmsMeta').textContent = meta.length ? meta.join(' • ') : 'Δεν υπάρχουν δεδομένα BMS';
 
+      const chipMap = { charging:'ΦΟΡΤΙΣΗ', discharging:'ΕΚΦΟΡΤΙΣΗ', balancing:'ΙΣΟΡΡΟΠΙΑ', limiting_current:'ΟΡΙΟ ΡΕΥΜΑΤΟΣ' };
       const chips = [];
-      if (valid && b.charging) chips.push({t:'CHARGING',cls:'ok'});
-      if (valid && b.discharging) chips.push({t:'DISCHARGING',cls:'ok'});
-      if (valid && b.balancing) chips.push({t:'BALANCING',cls:'warn'});
-      if (valid && b.limiting_current) chips.push({t:'LIMIT',cls:'warn'});
-      if (valid && !b.charging && !b.discharging && !b.balancing) chips.push({t:'IDLE',cls:''});
+      if (valid) {
+        if (b.charging) chips.push({ t: chipMap.charging, cls: 'ok' });
+        if (b.discharging) chips.push({ t: chipMap.discharging, cls: 'ok' });
+        if (b.balancing) chips.push({ t: chipMap.balancing, cls: 'warn' });
+        if (b.limiting_current) chips.push({ t: chipMap.limiting_current, cls: 'warn' });
+        if (!b.charging && !b.discharging && !b.balancing) chips.push({ t: 'ΑΝΕΝΕΡΓΗ', cls: '' });
+      }
+      document.getElementById('chips').innerHTML = chips.map(c => `<span class="chip ${c.cls}">${c.t}</span>`).join('') || '<span class="chip">-</span>';
 
-      const ce = document.getElementById('chips');
-      ce.innerHTML = chips.map(c => `<span class="chip ${c.cls||''}">${c.t}</span>`).join('') || `<span class="chip">-</span>`;
-
-      // Cells
-      const cells = (valid && Array.isArray(b.cells)) ? b.cells.slice(0,16) : [];
-      const bal = (valid && Array.isArray(b.cell_balancing)) ? b.cell_balancing.slice(0,16) : [];
+      const cells = valid && Array.isArray(b.cells) ? b.cells.slice(0, 16) : [];
+      const bal = valid && Array.isArray(b.cell_balancing) ? b.cell_balancing.slice(0, 16) : [];
       const minV = valid ? Number(b.min_cell_v) : NaN;
       const maxV = valid ? Number(b.max_cell_v) : NaN;
 
-      const cs = document.getElementById('cellStats');
-      if (valid && Number.isFinite(minV) && Number.isFinite(maxV) && minV > 0) {
-        cs.textContent = `min ${f2(minV,3)}V (#${b.min_cell_num}) • max ${f2(maxV,3)}V (#${b.max_cell_num}) • Δ ${f2(b.delta_cell_v,3)}V`;
-      } else {
-        cs.textContent = '—';
-      }
+      document.getElementById('cellStats').textContent = valid && minV > 0
+        ? `Ελάχ. ${f2(minV,3)}V (#${b.min_cell_num}) • Μέγ. ${f2(maxV,3)}V (#${b.max_cell_num}) • Δ ${f2(b.delta_cell_v,3)}V`
+        : '—';
 
-      const cellEl = document.getElementById('cells');
-      if (!cells.length) {
-        cellEl.innerHTML = `<div class="small muted">Δεν υπάρχουν δεδομένα κελιών ακόμα.</div>`;
-      } else {
-        cellEl.innerHTML = cells.map((v,i)=>{
-          const vv = Number(v);
-          const bg = cellColor(vv, minV, maxV);
-          const fg = '#0b1220';
-          const isBal = !!bal[i];
-          return `
-            <div class="cell" style="border-color:${bg}; box-shadow:0 0 0 1px ${bg} inset">
-              <div class="n">C${i+1}</div>
-              <div class="cv" style="color:${Number.isFinite(vv)&&vv>0.5?fg:'#e2e8f0'}; background:${Number.isFinite(vv)&&vv>0.5?bg:'transparent'}; display:inline-block; padding:2px 6px; border-radius:999px">${Number.isFinite(vv)&&vv>0.5?f2(vv,3):'-'} V</div>
-              ${isBal?`<div class="bal">BAL</div>`:''}
-            </div>
-          `;
-        }).join('');
-      }
+      document.getElementById('cells').innerHTML = cells.length
+        ? cells.map((v, i) => {
+            const vv = Number(v);
+            const bg = cellColor(vv, minV, maxV);
+            return `<div class="cell" style="border-color:${bg}">
+              <div class="n">Κ${i+1}</div>
+              <div class="cv" style="background:${vv>0.5?bg:'transparent'};color:${vv>0.5?'#0b1220':'#e2e8f0'}">${vv>0.5?f2(vv,3)+'V':'-'}</div>
+              ${bal[i]?'<div class="bal">BAL</div>':''}
+            </div>`;
+          }).join('')
+        : '<div class="small muted">Δεν υπάρχουν δεδομένα κελιών.</div>';
 
-      // Temps
-      const temps = (valid && Array.isArray(b.temps)) ? b.temps.slice(0,8) : [];
-      const tempsEl = document.getElementById('temps');
-      if (!temps.length || temps.every(t => Number(t) === 0)) {
-        tempsEl.innerHTML = `<div class="small muted">Δεν υπάρχουν θερμοκρασίες ακόμα.</div>`;
-      } else {
-        tempsEl.innerHTML = temps.map((t,i)=>{
-          const tv = Number(t);
-          if (!Number.isFinite(tv) || tv === 0) return '';
-          return `<div class="temp"><div class="n">T${i+1}</div><div class="tv">${f2(tv,1)} °C</div></div>`;
-        }).join('') || `<div class="small muted">—</div>`;
-      }
+      const temps = valid && Array.isArray(b.temps) ? b.temps.slice(0, 8) : [];
+      document.getElementById('temps').innerHTML = temps.some(t => Number(t) !== 0)
+        ? temps.map((t, i) => Number(t) !== 0 ? `<div class="temp"><div class="n">Θ${i+1}</div><div class="tv">${f2(t,1)} °C</div></div>` : '').join('')
+        : '<div class="small muted">Δεν υπάρχουν θερμοκρασίες.</div>';
 
-      // Alarms / masks
       const al = [];
       if (valid) {
-        if (b.error_mask) al.push(`Errors: ${hex(b.error_mask)}`);
-        if (b.alarm_mask) al.push(`Alarms: ${hex(b.alarm_mask)}`);
-        if (b.voltage_prot_mask) al.push(`V-prot: ${hex(b.voltage_prot_mask)}`);
-        if (b.current_prot_mask) al.push(`I-prot: ${hex(b.current_prot_mask)}`);
-        if (b.temp_prot_mask) al.push(`T-prot: ${hex(b.temp_prot_mask)}`);
-        if (!al.length) al.push('No active alarms.');
-      } else {
-        al.push('—');
-      }
+        if (b.error_mask) al.push('Σφάλματα: ' + hex(b.error_mask));
+        if (b.alarm_mask) al.push('Συναγερμοί: ' + hex(b.alarm_mask));
+        if (b.voltage_prot_mask) al.push('Προστασία τάσης: ' + hex(b.voltage_prot_mask));
+        if (b.current_prot_mask) al.push('Προστασία ρεύματος: ' + hex(b.current_prot_mask));
+        if (b.temp_prot_mask) al.push('Προστασία θερμοκρασίας: ' + hex(b.temp_prot_mask));
+        if (!al.length) al.push('Κανένας ενεργός συναγερμός.');
+      } else al.push('—');
       document.getElementById('alarms').textContent = al.join('\n');
+
+      renderHealth(b);
     }
 
     function renderRelays() {
       document.getElementById('relays').innerHTML = outputs.map((o, i) => `
         <div class="toggle"><span>${o.name}</span>
-          <label class="switch">
-            <input type="checkbox" ${o.on ? 'checked' : ''} onchange="setRelay(${i},this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-      `).join('');
+          <label class="switch"><input type="checkbox" ${o.on?'checked':''} onchange="setRelay(${i},this.checked)"><span class="slider"></span></label>
+        </div>`).join('');
     }
 
     function connect() {
@@ -266,27 +329,18 @@
       if (!id) { alert('Βάλε Device ID'); return; }
       localStorage.setItem(LS.id, id);
       localStorage.setItem(LS.broker, url);
-
       cmdTopic = `home/${id}/cmd`;
       if (client) client.end();
-
-      setBadge('Connecting...', 'warn');
+      setBadge('Σύνδεση...', 'warn');
       document.getElementById('statusLine').textContent = `topics: home/${id}/status | home/${id}/bms`;
-
-      client = mqtt.connect(url, {
-        clientId: 'gh-' + Math.random().toString(16).slice(2),
-        reconnectPeriod: 5000
-      });
-
+      client = mqtt.connect(url, { clientId: 'gh-' + Math.random().toString(16).slice(2), reconnectPeriod: 5000 });
       client.on('connect', () => {
         setBadge('Online', 'ok');
+        onConnected(id);
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
       });
-
-      client.on('close', () => setBadge('Offline', 'off'));
-      client.on('error', () => setBadge('Offline', 'off'));
-
+      client.on('close', () => { connected = false; setBadge('Offline', 'off'); });
       client.on('message', (t, msg) => {
         try {
           const j = JSON.parse(msg.toString());
@@ -300,19 +354,15 @@
     function disconnect() {
       if (client) client.end();
       client = null;
+      connected = false;
       setBadge('Offline', 'off');
+      toggleSetup(true);
     }
 
-    function setRelay(i, on) {
-      if (!client) return;
-      client.publish(cmdTopic, JSON.stringify({ relay: i, on }));
-    }
+    function setRelay(i, on) { if (client) client.publish(cmdTopic, JSON.stringify({ relay: i, on })); }
+    function allOff() { if (client) client.publish(cmdTopic, JSON.stringify({ relay: 'all', on: false })); }
 
-    function allOff() {
-      if (!client) return;
-      client.publish(cmdTopic, JSON.stringify({ relay: 'all', on: false }));
-    }
+    if (savedId) connect();
   </script>
 </body>
 </html>
-

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0f172a">
+<title>ESP32 Remote</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+header{padding:16px 20px;background:#1e293b}h1{margin:0;font-size:1.2rem}
+main{padding:16px;max-width:520px;margin:0 auto}
+.card{background:#1e293b;border-radius:12px;padding:16px;margin:12px 0}
+input{width:100%;padding:10px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;margin:6px 0}
+button{padding:12px;border:0;border-radius:8px;background:#2563eb;color:#fff;width:100%;margin-top:8px;cursor:pointer}
+button.sec{background:#475569}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.75rem}
+.on{background:#14532d;color:#86efac}.off{background:#713f12;color:#fde047}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #334155}
+.toggle:last-child{border:0}
+.switch{position:relative;width:52px;height:28px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#475569;border-radius:28px;cursor:pointer;transition:.2s}
+.slider:before{content:"";position:absolute;height:22px;width:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+input:checked+.slider{background:#22c55e}
+input:checked+.slider:before{transform:translateX(24px)}
+pre{background:#0f172a;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:.75rem;max-height:420px;overflow:auto}
+.small{color:#94a3b8;font-size:.8rem}
+</style>
+</head>
+<body>
+<header><h1>ESP32 Remote <span id="badge" class="badge off">Offline</span></h1></header>
+<main>
+<div class="card">
+  <div class="small">Device ID από το ESP32 (καρτέλα Internet στο σπίτι)</div>
+  <label>Device ID</label>
+  <input id="deviceId" placeholder="π.χ. 38182B8BD5CC">
+  <label>MQTT WebSocket</label>
+  <input id="broker" value="wss://broker.hivemq.com:8884/mqtt">
+  <button onclick="connect()">Σύνδεση</button>
+  <button class="sec" onclick="disconnect()">Αποσύνδεση</button>
+</div>
+<div class="card"><h2 style="margin:0 0 12px">Basen Green BMS</h2><pre id="bms">-</pre></div>
+<div class="card"><h2 style="margin:0 0 12px">Επαφές</h2><div id="relays"></div>
+<button class="sec" onclick="allOff()">Όλα OFF</button></div>
+</main>
+<script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+<script>
+let client=null,cmdTopic='',outputs=[];
+const saved=localStorage.getItem('esp32_device_id');
+if(saved)document.getElementById('deviceId').value=saved;
+
+function formatBms(b){
+  if(!b||!b.valid)return'Αναμονή δεδομένων BMS...';
+  let s='';
+  if(b.type_label)s+=b.type_label+'\n';
+  if(b.name)s+='Device: '+b.name+'\n';
+  if(b.device_model)s+='Model: '+b.device_model+'\n';
+  if(b.sw_version)s+='FW: '+b.sw_version+'\n';
+  s+='---\n';
+  s+=`SOC: ${b.soc}%  |  SOH: ${b.soh}%\n`;
+  s+=`Τάση: ${Number(b.voltage).toFixed(2)} V  |  Ρεύμα: ${Number(b.current).toFixed(2)} A\n`;
+  s+=`Ισχύς: ${Number(b.power).toFixed(0)} W`;
+  if(b.charge_power>0)s+=`  (Φόρτιση: ${Number(b.charge_power).toFixed(0)} W)`;
+  if(b.discharge_power>0)s+=`  (Εκφόρτιση: ${Number(b.discharge_power).toFixed(0)} W)`;
+  s+='\n';
+  let st='';
+  if(b.charging)st+='ΦΟΡΤΙΣΗ ';
+  if(b.discharging)st+='ΕΚΦΟΡΤΙΣΗ ';
+  if(b.balancing)st+='BALANCING ';
+  if(b.limiting_current)st+='LIMIT ';
+  s+='Κατάσταση: '+(st||'ΑΝΕΝΕΡΓΟ')+'\n';
+  s+=`Θερμ: avg ${Number(b.avg_temp).toFixed(1)}°C  |  ambient ${Number(b.ambient_temp).toFixed(1)}°C  |  MOSFET ${Number(b.mosfet_temp).toFixed(1)}°C\n`;
+  if(b.capacity_ah>0)s+=`Χωρητικότητα: ${Number(b.remaining_ah).toFixed(1)} / ${Number(b.capacity_ah).toFixed(1)} Ah  |  Cycles: ${b.cycles}\n`;
+  if(b.min_cell_v>0)s+=`Cells: min ${Number(b.min_cell_v).toFixed(3)}V (#${b.min_cell_num})  max ${Number(b.max_cell_v).toFixed(3)}V (#${b.max_cell_num})  delta ${Number(b.delta_cell_v).toFixed(3)}V\n`;
+  if(b.cells&&b.cells.length){
+    s+='--- Cell voltages ---\n';
+    b.cells.forEach((v,i)=>{
+      if(v>0.5){s+=`C${i+1}: ${Number(v).toFixed(3)}V`;if(b.cell_balancing&&b.cell_balancing[i])s+=' [BAL]';s+='  ';if((i+1)%4===0)s+='\n';}
+    });
+    s+='\n';
+  }
+  if(b.temps&&b.temps.some(t=>t!==0)){
+    s+='--- Temperatures ---\n';
+    b.temps.forEach((t,i)=>{if(t!==0)s+=`T${i+1}: ${Number(t).toFixed(1)}°C  `;});
+    s+='\n';
+  }
+  if(b.error_mask||b.alarm_mask||b.voltage_prot_mask||b.current_prot_mask||b.temp_prot_mask){
+    s+='--- Alarms ---\n';
+    if(b.error_mask)s+=`Errors: 0x${b.error_mask.toString(16)}\n`;
+    if(b.alarm_mask)s+=`Alarms: 0x${b.alarm_mask.toString(16)}\n`;
+    if(b.voltage_prot_mask)s+=`V-prot: 0x${b.voltage_prot_mask.toString(16)}\n`;
+    if(b.current_prot_mask)s+=`I-prot: 0x${b.current_prot_mask.toString(16)}\n`;
+    if(b.temp_prot_mask)s+=`T-prot: 0x${b.temp_prot_mask.toString(16)}\n`;
+  }
+  return s;
+}
+
+function renderRelays(){
+  document.getElementById('relays').innerHTML=outputs.map((o,i)=>`
+  <div class="toggle"><span>${o.name}</span>
+  <label class="switch"><input type="checkbox" ${o.on?'checked':''} onchange="setRelay(${i},this.checked)"><span class="slider"></span></label></div>`).join('');
+}
+
+function connect(){
+  const id=document.getElementById('deviceId').value.trim().toUpperCase();
+  if(!id){alert('Βάλε Device ID');return;}
+  localStorage.setItem('esp32_device_id',id);
+  cmdTopic=`home/${id}/cmd`;
+  client=mqtt.connect(document.getElementById('broker').value,{clientId:'remote-'+Math.random().toString(16).slice(2)});
+  client.on('connect',()=>{
+    document.getElementById('badge').textContent='Online';
+    document.getElementById('badge').className='badge on';
+    client.subscribe(`home/${id}/status`);
+    client.subscribe(`home/${id}/bms`);
+  });
+  client.on('close',()=>{document.getElementById('badge').textContent='Offline';document.getElementById('badge').className='badge off';});
+  client.on('message',(t,msg)=>{
+    const j=JSON.parse(msg.toString());
+    if(t.endsWith('/status')&&j.outputs){outputs=j.outputs;renderRelays();}
+    if(t.endsWith('/bms')&&j.valid)document.getElementById('bms').textContent=formatBms(j);
+    if(t.endsWith('/status')&&j.bms&&j.bms.valid)document.getElementById('bms').textContent=formatBms(j.bms);
+  });
+}
+function disconnect(){if(client)client.end();}
+function setRelay(i,on){if(client)client.publish(cmdTopic,JSON.stringify({relay:i,on}));}
+function allOff(){if(client)client.publish(cmdTopic,JSON.stringify({relay:'all',on:false}));}
+</script>
+</body>
+</html>

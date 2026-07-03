@@ -6,11 +6,7 @@
 
 enum class BmsType : uint8_t {
   None = 0,
-  Tianpower,
-  Jbd,
-  Daly,
   Jk,
-  Ant,
 };
 
 struct BmsData {
@@ -61,37 +57,27 @@ struct BmsData {
 
 inline const char* bmsTypeId(BmsType t) {
   switch (t) {
-    case BmsType::Tianpower: return "tianpower";
-    case BmsType::Jbd: return "jbd";
-    case BmsType::Daly: return "daly";
     case BmsType::Jk: return "jk";
-    case BmsType::Ant: return "ant";
     default: return "unknown";
   }
 }
 
 inline const char* bmsTypeLabel(BmsType t) {
   switch (t) {
-    case BmsType::Tianpower: return "Tianpower / Basen Green";
-    case BmsType::Jbd: return "JBD / Xiaoxiang";
-    case BmsType::Daly: return "Daly";
     case BmsType::Jk: return "JK / Jikong";
-    case BmsType::Ant: return "ANT";
     default: return "Unknown BMS";
   }
 }
 
 inline BmsType bmsTypeFromString(const String& s) {
-  if (s == "tianpower" || s == "tp") return BmsType::Tianpower;
-  if (s == "jbd" || s == "xiaoxiang") return BmsType::Jbd;
-  if (s == "daly") return BmsType::Daly;
   if (s == "jk" || s == "jikong") return BmsType::Jk;
-  if (s == "ant") return BmsType::Ant;
   return BmsType::None;
 }
 
-inline bool bmsNameMatch(const String& name, const char* prefix) {
-  return name.startsWith(prefix);
+inline BmsType bmsDetectFromName(const String& name) {
+  if (name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0) return BmsType::Jk;
+  if (name.startsWith("JK_") || name.startsWith("JK-")) return BmsType::Jk;
+  return BmsType::None;
 }
 
 inline bool bmsMfgMatch(BLEAdvertisedDevice& d, uint16_t id) {
@@ -107,43 +93,12 @@ inline bool bmsHasService(BLEAdvertisedDevice& d, const char* uuid16) {
   return d.isAdvertisingService(BLEUUID(uuid16));
 }
 
-inline BmsType bmsDetectFromName(const String& name) {
-  if (bmsNameMatch(name, "TP_")) return BmsType::Tianpower;
-  if (bmsNameMatch(name, "DL-")) return BmsType::Daly;
-  if (name.startsWith("ANT-BLE") || name.startsWith("ANTBLE")) return BmsType::Ant;
-  if (bmsNameMatch(name, "JBD-") || bmsNameMatch(name, "LSG-") || bmsNameMatch(name, "SBL-") ||
-      bmsNameMatch(name, "SX1") || bmsNameMatch(name, "DWF") || bmsNameMatch(name, "OGR-") ||
-      bmsNameMatch(name, "TZ-H")) {
-    return BmsType::Jbd;
-  }
-  return BmsType::None;
-}
-
 inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
   BmsType byName = bmsDetectFromName(name);
   if (byName != BmsType::None) return byName;
-  if (name.startsWith("TP_")) return BmsType::Tianpower;
-
-  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
-    if (name.length() == 0) return BmsType::None;
-    if (name.startsWith("TP_")) return BmsType::Tianpower;
-    return bmsDetectFromName(name);
-  }
 
   if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
-    if (name.indexOf("ANT") >= 0) return BmsType::Ant;
-    if (name.length() == 0 || name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0) return BmsType::Jk;
-    return BmsType::None;
-  }
-
-  if (bmsMfgMatch(d, 0x0102) || bmsMfgMatch(d, 0x0104) ||
-      bmsMfgMatch(d, 0x0302) || bmsMfgMatch(d, 0x0303) || bmsMfgMatch(d, 0x0402)) {
-    return BmsType::Daly;
-  }
-
-  if (bmsHasService(d, "0000fff0-0000-1000-8000-00805f9b34fb") &&
-      (bmsNameMatch(name, "DL-") || name.indexOf("Daly") >= 0)) {
-    return BmsType::Daly;
+    return BmsType::Jk;
   }
 
   if ((bmsMfgMatch(d, 0x0B65) || bmsMfgMatch(d, 0x4B4A)) &&
@@ -178,6 +133,12 @@ inline int32_t bmsS32LE(const uint8_t* d, int o) {
   return (int32_t)bmsU32LE(d, o);
 }
 
+inline uint8_t bmsCrcSum(const uint8_t* data, size_t len) {
+  uint8_t s = 0;
+  for (size_t i = 0; i < len; i++) s += data[i];
+  return s;
+}
+
 inline uint16_t bmsCrcModbus(const uint8_t* data, size_t len) {
   uint16_t crc = 0xFFFF;
   for (size_t i = 0; i < len; i++) {
@@ -187,12 +148,6 @@ inline uint16_t bmsCrcModbus(const uint8_t* data, size_t len) {
     }
   }
   return crc;
-}
-
-inline uint8_t bmsCrcSum(const uint8_t* data, size_t len) {
-  uint8_t s = 0;
-  for (size_t i = 0; i < len; i++) s += data[i];
-  return s;
 }
 
 inline void bmsUpdateCellStats(BmsData& bms) {

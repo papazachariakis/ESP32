@@ -211,7 +211,7 @@ String buildStatusJson() {
 
   ble["bms_label"] = bmsTypeLabel(bmsMgr.type);
 
-  ble["basen"] = bmsMgr.type == BmsType::Tianpower;
+  ble["jk"] = bmsMgr.type == BmsType::Jk;
 
 
 
@@ -356,6 +356,7 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
+  if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
 
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
@@ -457,7 +458,7 @@ void startBleScan() {
 
     o["bms_label"] = bmsTypeLabel(bt);
 
-    o["basen"] = bt == BmsType::Tianpower;
+    o["jk"] = bt == BmsType::Jk;
 
   }
 
@@ -565,8 +566,7 @@ void handleBleConnect() {
   BmsType bt = BmsType::None;
   if (typeStr != "auto" && typeStr.length()) bt = bmsTypeFromString(typeStr);
   if (bt == BmsType::None) bt = bmsDetectFromName(name);
-  if (bt == BmsType::None && name.startsWith("TP_")) bt = BmsType::Tianpower;
-  if (bt == BmsType::None && bmsMgr.type != BmsType::None) bt = bmsMgr.type;
+  if (bt == BmsType::None) bt = BmsType::Jk;
 
   if (bt == BmsType::None) {
     server.send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_bms_type\"}");

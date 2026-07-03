@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bms_common.h"
-#include "tianpower_bms.h"
 #include "bms_protocols.h"
 #include <BLEClient.h>
 #include <Preferences.h>
@@ -17,9 +16,8 @@ struct BmsManager {
   String name;
   String lastDisplay;
   bool connected = false;
-  uint8_t pollIndex = 0;
   unsigned long lastPoll = 0;
-  uint16_t pollIntervalMs = 1500;
+  uint16_t pollIntervalMs = 4000;
 
   static void notifyThunk(BLERemoteCharacteristic* chr, uint8_t* data, size_t len, bool isNotify) {
     if (gInstance) gInstance->onNotify(data, len);
@@ -37,36 +35,11 @@ struct BmsManager {
     chrWrite = nullptr;
     connected = false;
     type = BmsType::None;
-    pollIndex = 0;
     proto = BmsProtoState();
     bms = BmsData();
     mac = "";
     name = "";
     lastDisplay = "";
-  }
-
-  bool getChars(BLEClient* c, const char* svcUuid, const char* rxUuid, const char* txUuid) {
-    BLERemoteService* svc = nullptr;
-    for (int i = 0; i < 20 && !svc; i++) {
-      svc = c->getService(BLEUUID(svcUuid));
-      if (!svc) delay(200);
-    }
-    if (!svc) return false;
-    chrNotify = svc->getCharacteristic(BLEUUID(rxUuid));
-    chrWrite = svc->getCharacteristic(BLEUUID(txUuid));
-    if (!chrNotify || !chrWrite) {
-      if (chrNotify && chrNotify == chrWrite) {
-        chrWrite = chrNotify;
-      } else if (chrNotify && !chrWrite) {
-        chrWrite = chrNotify;
-      } else {
-        return false;
-      }
-    }
-    if (chrNotify->canNotify()) {
-      chrNotify->registerForNotify(notifyThunk);
-    }
-    return true;
   }
 
   bool getJkChars(BLEClient* c) {
@@ -90,27 +63,9 @@ struct BmsManager {
   }
 
   void onNotify(uint8_t* data, size_t len) {
-    bool parsed = false;
-    switch (type) {
-      case BmsType::Tianpower:
-        parsed = tpParseFrame(data, len, bms);
-        break;
-      case BmsType::Jbd:
-        parsed = jbdFeed(proto, data, len, bms);
-        break;
-      case BmsType::Daly:
-        parsed = dalyParse(data, len, bms);
-        break;
-      case BmsType::Jk:
-        parsed = jkFeed(proto, data, len, bms);
-        break;
-      case BmsType::Ant:
-        parsed = antFeed(proto, data, len, bms);
-        break;
-      default:
-        break;
-    }
-    if (parsed) {
+    bool parsed = jkFeed(proto, data, len, bms);
+    if (parsed || bms.valid) {
+      type = BmsType::Jk;
       bms.type = type;
       bms.connected = true;
       lastDisplay = bmsToDisplay(bms);
@@ -128,105 +83,27 @@ struct BmsManager {
 
   void sendInitialPolls() {
     uint8_t buf[32];
-    size_t n = 0;
-    switch (type) {
-      case BmsType::Tianpower:
-        for (uint8_t ft : { TIANPOWER_FRAME_SW_VERSION, TIANPOWER_FRAME_HW_VERSION,
-                            TIANPOWER_FRAME_STATUS, TIANPOWER_FRAME_GENERAL,
-                            TIANPOWER_FRAME_MOSFET, TIANPOWER_FRAME_TEMPS,
-                            TIANPOWER_FRAME_CELLS_1_8, TIANPOWER_FRAME_CELLS_9_16 }) {
-          tpBuildRequest(ft, buf);
-          writeBytes(buf, 4);
-          delay(120);
-        }
-        break;
-      case BmsType::Jbd:
-        n = jbdBuildCmd(0x03, buf);
-        writeBytes(buf, n);
-        delay(200);
-        n = jbdBuildCmd(0x04, buf);
-        writeBytes(buf, n);
-        delay(200);
-        n = jbdBuildCmd(0x05, buf);
-        writeBytes(buf, n);
-        break;
-      case BmsType::Daly:
-        n = dalyBuildRead(0, 62, buf);
-        writeBytes(buf, n);
-        break;
-      case BmsType::Jk:
-        n = jkBuildCmd(0x97, buf);
-        writeBytes(buf, n);
-        delay(400);
-        n = jkBuildCmd(0x96, buf);
-        writeBytes(buf, n);
-        break;
-      case BmsType::Ant:
-        n = antBuildCmd(0x02, 0x026C, 0x20, buf);
-        writeBytes(buf, n);
-        delay(300);
-        n = antBuildCmd(0x01, 0, 0xBE, buf);
-        writeBytes(buf, n);
-        break;
-      default:
-        break;
-    }
+    size_t n = jkBuildCmd(0x97, buf);
+    writeBytes(buf, n);
+    delay(400);
+    n = jkBuildCmd(0x96, buf);
+    writeBytes(buf, n);
   }
 
   void poll() {
-    if (!connected || type == BmsType::None) return;
+    if (!connected || type != BmsType::Jk) return;
     if (millis() - lastPoll < pollIntervalMs) return;
     lastPoll = millis();
 
     uint8_t buf[32];
-    size_t n = 0;
-    switch (type) {
-      case BmsType::Tianpower: {
-        const uint8_t frames[] = {
-          TIANPOWER_FRAME_SW_VERSION, TIANPOWER_FRAME_HW_VERSION, TIANPOWER_FRAME_STATUS,
-          TIANPOWER_FRAME_GENERAL, TIANPOWER_FRAME_MOSFET, TIANPOWER_FRAME_TEMPS,
-          TIANPOWER_FRAME_CELLS_1_8, TIANPOWER_FRAME_CELLS_9_16
-        };
-        tpBuildRequest(frames[pollIndex % 8], buf);
-        writeBytes(buf, 4);
-        pollIndex++;
-        pollIntervalMs = 1500;
-        break;
-      }
-      case BmsType::Jbd:
-        n = jbdBuildCmd(pollIndex % 2 == 0 ? 0x03 : 0x04, buf);
-        writeBytes(buf, n);
-        pollIndex++;
-        pollIntervalMs = 3000;
-        break;
-      case BmsType::Daly:
-        n = dalyBuildRead(0, 62, buf);
-        writeBytes(buf, n);
-        pollIntervalMs = 4000;
-        break;
-      case BmsType::Jk:
-        n = jkBuildCmd(0x96, buf);
-        writeBytes(buf, n);
-        pollIntervalMs = 4000;
-        break;
-      case BmsType::Ant:
-        n = antBuildCmd(0x01, 0, 0xBE, buf);
-        writeBytes(buf, n);
-        pollIntervalMs = 5000;
-        break;
-      default:
-        break;
-    }
+    size_t n = jkBuildCmd(0x96, buf);
+    writeBytes(buf, n);
   }
 
   bool connect(BmsType t, const String& devName, const String& devMac, Preferences& prefs) {
     reset();
     if (t == BmsType::None) t = bmsDetectFromName(devName);
-    if (t == BmsType::None && tpIsBasenDevice(devName)) t = BmsType::Tianpower;
-    if (t == BmsType::None) {
-      Serial.println("BMS type unknown — select from scan list");
-      return false;
-    }
+    if (t == BmsType::None) t = BmsType::Jk;
 
     type = t;
     name = devName;
@@ -244,27 +121,7 @@ struct BmsManager {
     }
     delay(500);
 
-    bool ok = false;
-    switch (type) {
-      case BmsType::Tianpower:
-        ok = getChars(client, TIANPOWER_SERVICE_UUID, TIANPOWER_CHAR_RX_UUID, TIANPOWER_CHAR_TX_UUID);
-        break;
-      case BmsType::Jbd:
-        ok = getChars(client, JBD_SERVICE_UUID, JBD_CHAR_RX_UUID, JBD_CHAR_TX_UUID);
-        break;
-      case BmsType::Daly:
-        ok = getChars(client, DALY_SERVICE_UUID, DALY_CHAR_RX_UUID, DALY_CHAR_TX_UUID);
-        break;
-      case BmsType::Jk:
-      case BmsType::Ant:
-        ok = getJkChars(client);
-        break;
-      default:
-        ok = false;
-        break;
-    }
-
-    if (!ok) {
+    if (!getJkChars(client)) {
       Serial.println("BMS service/char not found");
       reset();
       return false;

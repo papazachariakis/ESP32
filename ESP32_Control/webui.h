@@ -86,7 +86,7 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
   </section>
   <section id="tab-ble" class="tab">
     <div class="card"><h2>Bluetooth σκανάρισμα</h2>
-    <p class="small">Εμφανίζονται μόνο πιθανές συσκευές BMS (TP_*, JBD, Daly, JK, ANT). Κλείσε την app της μπαταρίας στο κινητό πριν τη σύνδεση.</p>
+    <p class="small">Εμφανίζονται συσκευές JK BMS (Bluetooth). Κλείσε την app της μπαταρίας στο κινητό πριν τη σύνδεση.</p>
     <button class="btn" onclick="bleScan()">Σκανάρισμα συσκευών</button>
     <p class="small" id="bleScanStatus">-</p>
     <div id="bleList"></div></div>
@@ -190,7 +190,7 @@ async function refresh(){
     }else if(s.bms&&s.bms.valid){
       document.getElementById('bmsData').textContent=formatBms(s.bms);
     }else{
-      document.getElementById('bmsData').textContent='Δεν υπάρχουν δεδομένα BMS — σύνδεση Bluetooth (TP_*)';
+      document.getElementById('bmsData').textContent='Δεν υπάρχουν δεδομένα BMS — σύνδεση Bluetooth (JK)';
     }
     document.getElementById('bleStatus').textContent=JSON.stringify(s.ble,null,2);
     document.getElementById('wifiInfo').textContent=`SSID: ${s.wifi_ssid||'-'} | IP: ${s.ip}`;
@@ -242,7 +242,7 @@ document.getElementById('bleList').addEventListener('click',e=>{
   if(d)bleConnect(d.mac,d.name||'',d.bms_type||'auto');
 });
 const BLE_ERR={
-  unknown_bms_type:'Άγνωστος τύπος BMS — επίλεξε συσκευή TP_* (Basen Green)',
+  unknown_bms_type:'Άγνωστος τύπος BMS — επίλεξε συσκευή JK',
   connect_failed:'Αποτυχία σύνδεσης — κλείσε την app στο κινητό και δοκίμασε ξανά',
   invalid_mac:'Μη έγκυρη διεύθυνση MAC'
 };

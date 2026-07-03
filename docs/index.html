@@ -100,7 +100,7 @@
     .gen-actions .sec{background:#334155;color:#e2e8f0}
     .fault-list{margin:0;padding-left:18px;font-size:.8rem;color:#fca5a5}
     .fault-list li{margin:4px 0}
-    nav.tabs{display:flex;gap:6px;padding:8px clamp(12px,3vw,24px);background:#1e293b;border-bottom:1px solid #334155;overflow:auto;width:100%;margin:0 0 12px;box-sizing:border-box}
+    nav.tabs{display:flex;gap:6px;padding:8px clamp(12px,3vw,24px);background:#1e293b;border-bottom:1px solid #334155;overflow:auto;width:100%;box-sizing:border-box;position:sticky;top:0;z-index:10}
     nav.tabs button{flex:1;min-width:90px;padding:10px;border:0;border-radius:8px;background:#0f172a;color:#94a3b8;cursor:pointer}
     nav.tabs button.active{background:#2563eb;color:#fff}
     .view{display:none}.view.active{display:block}
@@ -370,8 +370,8 @@
       stateEl.textContent = state;
       document.getElementById('genMode').textContent = 'Λειτουργία: ' + mode + ' • Controller type ' + (g.controller_type ?? '-');
 
-      const running = Number(g.genset_state) === 3;
-      const warn = Number(g.active_fault) > 0 || Number(g.fault_type) === 4;
+      const running = g.running === true || Number(g.genset_state) === 3 || Number(g.genset_state) === 8;
+      const warn = Number(g.active_fault) > 0 || Number(g.fault_type) === 4 || Number(g.fault_type) === 2;
       badge.textContent = running ? 'Running' : (warn ? 'Warning' : 'Ready');
       badge.className = 'badge ' + (running ? 'ok' : (warn ? 'warn' : 'off'));
       box.className = 'gen-status ' + (running ? 'run' : (warn ? 'warn' : 'off'));

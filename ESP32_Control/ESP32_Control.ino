@@ -136,7 +136,7 @@ void publishGensetMqtt() {
   if (!mqtt.connected() || !genMgr.enabled) return;
   StaticJsonDocument<2560> doc;
   JsonObject root = doc.to<JsonObject>();
-  genFillJson(root, genMgr.data);
+  genFillJson(root, genMgr.data, genMgr.profile);
   root["enabled"] = genMgr.enabled;
   char payload[2560];
   serializeJson(doc, payload);
@@ -239,10 +239,11 @@ String buildStatusJson() {
   mq["topic_genset"] = topicGenset;
 
   JsonObject genset = doc.createNestedObject("genset");
-  genFillJson(genset, genMgr.data);
+  genFillJson(genset, genMgr.data, genMgr.profile);
   genset["enabled"] = genMgr.enabled;
   genset["slave_id"] = genMgr.slaveId;
   genset["baud"] = genMgr.baud;
+  genset["profile_id"] = genMgr.profile;
 
 
 
@@ -602,13 +603,15 @@ void handleGenset() {
 
   JsonObject o = doc.to<JsonObject>();
 
-  genFillJson(o, genMgr.data);
+  genFillJson(o, genMgr.data, genMgr.profile);
 
   o["enabled"] = genMgr.enabled;
 
   o["slave_id"] = genMgr.slaveId;
 
   o["baud"] = genMgr.baud;
+
+  o["profile_id"] = genMgr.profile;
 
   String out;
 
@@ -687,6 +690,8 @@ void handleModbusSave() {
   genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
 
   genMgr.baud = doc["baud"] | 9600;
+
+  if (doc.containsKey("profile")) genMgr.profile = (uint8_t)(doc["profile"].as<int>());
 
   genMgr.save(prefs);
 

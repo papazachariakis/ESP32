@@ -63,7 +63,13 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
   </section>
   <section id="tab-genset" class="tab">
     <div class="card"><h2>Cummins Modbus (RS485)</h2>
-    <p class="small">PCC 1301 / PowerCommand 1.x / PS0500. Σύνδεση MAX485: RO→GPIO16, DI→GPIO17, DE+RE→GPIO19, A/B στο Cummins RS485.</p>
+    <p class="small"><b>Καλωδίωση MAX485 → ESP32 screw terminal:</b><br>
+    RO → <b>RX2</b> (GPIO16) &nbsp;|&nbsp; DI → <b>TX2</b> (GPIO17) &nbsp;|&nbsp; DE+RE → <b>D19</b><br>
+    VCC → <b>3V3</b> &nbsp;|&nbsp; GND → <b>GND</b><br>
+    A+ → Cummins TB15-3 &nbsp;|&nbsp; B- → TB15-4 &nbsp;|&nbsp; Common → TB15-1<br>
+    <b>C22D5 = PS0600</b> — ενεργοποίησε Modbus στο TB15 (service tool / LCD).</p>
+    <label>Controller</label>
+    <select id="modbusProf"><option value="1">PS0600 (C22D5)</option><option value="0">PCC1301 / PS0500</option></select>
     <label><input type="checkbox" id="modbusEn" checked> Ενεργό</label>
     <label>Slave ID</label><input id="modbusId" type="number" value="1" min="1" max="247">
     <label>Baud</label><select id="modbusBaud"><option>9600</option><option>19200</option><option>38400</option><option>2400</option><option>4800</option></select>
@@ -271,6 +277,7 @@ async function refresh(){
       `Publish: ${s.mqtt.topic_status}\nSubscribe: ${s.mqtt.topic_cmd}\nBMS: ${s.mqtt.topic_bms}\nGenset: ${s.mqtt.topic_genset||'-'}`;
     if(s.genset){
       document.getElementById('modbusEn').checked=!!s.genset.enabled;
+      document.getElementById('modbusProf').value=String(s.genset.profile_id!=null?s.genset.profile_id:1);
       document.getElementById('modbusId').value=s.genset.slave_id||1;
       document.getElementById('modbusBaud').value=String(s.genset.baud||9600);
       document.getElementById('genData').textContent=formatGenset(s.genset);
@@ -350,6 +357,7 @@ async function saveMqtt(){
 async function saveModbus(){
   await api('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     enabled:document.getElementById('modbusEn').checked,
+    profile:parseInt(document.getElementById('modbusProf').value)||1,
     slave_id:parseInt(document.getElementById('modbusId').value)||1,
     baud:parseInt(document.getElementById('modbusBaud').value)||9600
   })});

@@ -48,8 +48,13 @@
 #define CUMMINS_REG_CMD_START     40300
 #define CUMMINS_REG_CMD_RESET     40301
 #define CUMMINS_REG_CMD_ESTOP     40302
+#define CUMMINS_PS0600_CMD_START  400300
+#define CUMMINS_PS0600_CMD_RESET  400301
+#define CUMMINS_PS0600_CMD_ESTOP  400302
 #define CUMMINS_REG_FAULT_BM1     40400
 #define CUMMINS_FAULT_BITMAP_CNT  8
+#define CUMMINS_PROFILE_PCC1301   0
+#define CUMMINS_PROFILE_PS0600    1
 
 struct GenData {
   bool valid = false;
@@ -109,7 +114,17 @@ inline const char* cumminsOpModeLabelEl(uint8_t m) {
   }
 }
 
-inline const char* cumminsStateLabelEl(uint8_t s) {
+inline const char* cumminsStateLabelEl(uint8_t s, uint8_t profile = CUMMINS_PROFILE_PCC1301) {
+  if (profile == CUMMINS_PROFILE_PS0600) {
+    switch (s) {
+      case 8: return "Λειτουργία";
+      case 9: return "Σφάλμα Shutdown";
+      case 4: return "Εκκίνηση";
+      case 7: return "Ανέβασμα";
+      case 1: return "Stop";
+      default: return "Έτοιμη";
+    }
+  }
   switch (s) {
     case 1: return "Προεκκίνηση";
     case 2: return "Ανέβασμα";
@@ -126,7 +141,16 @@ inline const char* cumminsOpModeLabel(uint8_t m) {
   }
 }
 
-inline const char* cumminsStateLabel(uint8_t s) {
+inline const char* cumminsStateLabel(uint8_t s, uint8_t profile = CUMMINS_PROFILE_PCC1301) {
+  if (profile == CUMMINS_PROFILE_PS0600) {
+    switch (s) {
+      case 8: return "Running";
+      case 9: return "Fault Shutdown";
+      case 4: return "Crank";
+      case 7: return "Ramp";
+      default: return "Ready";
+    }
+  }
   switch (s) {
     case 1: return "Precrank";
     case 2: return "Ramp";
@@ -135,12 +159,27 @@ inline const char* cumminsStateLabel(uint8_t s) {
   }
 }
 
-inline const char* cumminsFaultTypeLabel(uint8_t t) {
+inline bool cumminsIsRunning(uint8_t s, uint8_t profile) {
+  return profile == CUMMINS_PROFILE_PS0600 ? (s == 8) : (s == 3);
+}
+
+inline const char* cumminsFaultTypeLabel(uint8_t t, uint8_t profile = CUMMINS_PROFILE_PCC1301) {
+  if (profile == CUMMINS_PROFILE_PS0600) {
+    switch (t) {
+      case 1: return "Warning";
+      case 2: return "Shutdown";
+      default: return "Normal";
+    }
+  }
   switch (t) {
     case 1: return "Warning";
     case 4: return "Shutdown";
     default: return "Normal";
   }
+}
+
+inline const char* cumminsProfileLabel(uint8_t profile) {
+  return profile == CUMMINS_PROFILE_PS0600 ? "PS0600" : "PCC1301/PS0500";
 }
 
 inline const char* const CUMMINS_NFPA_BITS[16] = {
@@ -164,18 +203,20 @@ inline void cumminsAppendBitmapBits(JsonArray& arr, uint16_t word, const char* c
   }
 }
 
-inline void genFillJson(JsonObject& o, const GenData& g) {
+inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile = CUMMINS_PROFILE_PCC1301) {
   o["valid"] = g.valid;
+  o["profile"] = cumminsProfileLabel(profile);
   o["controller_type"] = g.controllerType;
   o["op_mode"] = g.opMode;
   o["op_mode_label"] = cumminsOpModeLabel(g.opMode);
   o["op_mode_label_el"] = cumminsOpModeLabelEl(g.opMode);
   o["genset_state"] = g.gensetState;
-  o["genset_state_label"] = cumminsStateLabel(g.gensetState);
-  o["genset_state_label_el"] = cumminsStateLabelEl(g.gensetState);
+  o["genset_state_label"] = cumminsStateLabel(g.gensetState, profile);
+  o["genset_state_label_el"] = cumminsStateLabelEl(g.gensetState, profile);
+  o["running"] = cumminsIsRunning(g.gensetState, profile);
   o["active_fault"] = g.activeFault;
   o["fault_type"] = g.faultType;
-  o["fault_type_label"] = cumminsFaultTypeLabel(g.faultType);
+  o["fault_type_label"] = cumminsFaultTypeLabel(g.faultType, profile);
   o["nfpa_fault"] = g.nfpaFault;
   o["ext_annunciation"] = g.extAnnunciation;
   JsonArray nfpaBits = o.createNestedArray("nfpa_bits");
@@ -229,6 +270,7 @@ struct GenManager {
   GenData data;
   bool enabled = true;
   uint8_t slaveId = 1;
+  uint8_t profile = CUMMINS_PROFILE_PS0600;
   uint32_t baud = 9600;
   unsigned long lastPoll = 0;
   uint16_t pollIntervalMs = 3000;
@@ -237,12 +279,14 @@ struct GenManager {
   void load(Preferences& prefs) {
     enabled = prefs.getBool("modbus_en", false);
     slaveId = (uint8_t)prefs.getUInt("modbus_id", 1);
+    profile = (uint8_t)prefs.getUInt("modbus_prof", CUMMINS_PROFILE_PS0600);
     baud = prefs.getUInt("modbus_baud", 9600);
   }
 
   void save(Preferences& prefs) {
     prefs.putBool("modbus_en", enabled);
     prefs.putUInt("modbus_id", slaveId);
+    prefs.putUInt("modbus_prof", profile);
     prefs.putUInt("modbus_baud", baud);
   }
 
@@ -267,10 +311,19 @@ struct GenManager {
     return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value);
   }
 
-  bool cmdStart() { return writeHold(CUMMINS_REG_CMD_START, 1); }
-  bool cmdStop() { return writeHold(CUMMINS_REG_CMD_START, 0); }
-  bool cmdFaultReset() { return writeHold(CUMMINS_REG_CMD_RESET, 1); }
-  bool cmdEstop(bool active) { return writeHold(CUMMINS_REG_CMD_ESTOP, active ? 1 : 0); }
+  bool cmdStart() {
+    return writeHold(profile == CUMMINS_PROFILE_PS0600 ? CUMMINS_PS0600_CMD_START : CUMMINS_REG_CMD_START, 1);
+  }
+  bool cmdStop() {
+    return writeHold(profile == CUMMINS_PROFILE_PS0600 ? CUMMINS_PS0600_CMD_START : CUMMINS_REG_CMD_START, 0);
+  }
+  bool cmdFaultReset() {
+    return writeHold(profile == CUMMINS_PROFILE_PS0600 ? CUMMINS_PS0600_CMD_RESET : CUMMINS_REG_CMD_RESET, 1);
+  }
+  bool cmdEstop(bool active) {
+    uint16_t reg = profile == CUMMINS_PROFILE_PS0600 ? CUMMINS_PS0600_CMD_ESTOP : CUMMINS_REG_CMD_ESTOP;
+    return writeHold(reg, active ? 1 : 0);
+  }
 
   bool runGensetCmd(const char* action) {
     if (!enabled || !bus || !action) return false;
@@ -290,7 +343,10 @@ struct GenManager {
     switch (pollStep) {
       case 0: {
         uint16_t a[5];
-        if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) { data.lastError = "modbus 40009"; pollStep = 0; return false; }
+        if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
+          data.lastError = "modbus 40009 — έλεγξε RS485: RO→RX2, DI→TX2, DE→D19, VCC→3V3, GND→GND";
+          pollStep = 0; return false;
+        }
         data.controllerType = (uint8_t)a[0];
         data.opMode = (uint8_t)a[1];
         data.gensetState = (uint8_t)a[2];
@@ -301,7 +357,12 @@ struct GenManager {
       case 1: {
         uint16_t f[2];
         if (!readBlock(CUMMINS_REG_NFPA_FAULT, 2, f)) { data.lastError = "modbus 40016"; pollStep = 0; return false; }
-        data.nfpaFault = f[0]; data.extAnnunciation = f[1];
+        if (profile == CUMMINS_PROFILE_PS0600) {
+          data.nfpaFault = f[1];
+          data.extAnnunciation = 0;
+        } else {
+          data.nfpaFault = f[0]; data.extAnnunciation = f[1];
+        }
         pollStep = 2; return false;
       }
       case 2: {
@@ -317,10 +378,18 @@ struct GenManager {
         pollStep = 4; return false;
       }
       case 4: {
-        uint16_t c[5];
-        if (!readBlock(CUMMINS_REG_VOLT_AVG_LL, 5, c)) { data.lastError = "modbus 40025"; pollStep = 0; return false; }
-        data.voltAvgLL = c[0];
-        data.currL1 = c[1] * 0.1f; data.currL2 = c[2] * 0.1f; data.currL3 = c[3] * 0.1f; data.currAvg = c[4] * 0.1f;
+        if (profile == CUMMINS_PROFILE_PS0600) {
+          uint16_t c[3];
+          if (!readBlock(CUMMINS_REG_CURR_L1, 3, c)) { data.lastError = "modbus 40026"; pollStep = 0; return false; }
+          data.currL1 = c[0] * 0.1f; data.currL2 = c[1] * 0.1f; data.currL3 = c[2] * 0.1f;
+          data.currAvg = (data.currL1 + data.currL2 + data.currL3) / 3.0f;
+          data.voltAvgLL = (data.voltL1L2 + data.voltL2L3 + data.voltL3L1) / 3.0f;
+        } else {
+          uint16_t c[5];
+          if (!readBlock(CUMMINS_REG_VOLT_AVG_LL, 5, c)) { data.lastError = "modbus 40025"; pollStep = 0; return false; }
+          data.voltAvgLL = c[0];
+          data.currL1 = c[1] * 0.1f; data.currL2 = c[2] * 0.1f; data.currL3 = c[3] * 0.1f; data.currAvg = c[4] * 0.1f;
+        }
         pollStep = 5; return false;
       }
       case 5: {
@@ -339,7 +408,8 @@ struct GenManager {
       case 7: {
         uint16_t e[2];
         if (!readBlock(CUMMINS_REG_BATTERY_V, 2, e)) { data.lastError = "modbus 40061"; pollStep = 0; return false; }
-        data.batteryV = e[0] * 0.1f; data.oilKpa = e[1];
+        data.batteryV = e[0] * 0.1f;
+        data.oilKpa = (profile == CUMMINS_PROFILE_PS0600) ? e[1] * 0.1f : (float)e[1];
         pollStep = 8; return false;
       }
       case 8: {
@@ -356,6 +426,13 @@ struct GenManager {
         pollStep = 10; return false;
       }
       case 10: {
+        if (profile == CUMMINS_PROFILE_PS0600) {
+          data.valid = true;
+          data.lastUpdate = millis();
+          data.lastError = "";
+          pollStep = 0;
+          return true;
+        }
         uint16_t aux[2];
         data.auxValid = readBlock(CUMMINS_REG_AUX_SPEED, 2, aux);
         if (data.auxValid) {

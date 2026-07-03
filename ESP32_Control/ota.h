@@ -3,15 +3,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
-#include <ArduinoOTA.h>
 #include <Update.h>
-
-#ifndef OTA_HOSTNAME
-#define OTA_HOSTNAME "esp32"
-#endif
 
 #ifndef OTA_PASSWORD
 #define OTA_PASSWORD "esp32ota"
+#endif
+
+#ifndef OTA_REMOTE_URL
+#define OTA_REMOTE_URL "https://raw.githubusercontent.com/papazachariakis/ESP32/master/docs/firmware.bin"
 #endif
 
 inline volatile bool& otaInProgress() {
@@ -20,22 +19,7 @@ inline volatile bool& otaInProgress() {
 }
 
 inline void setupArduinoOta() {
-  ArduinoOTA.setHostname(OTA_HOSTNAME);
-  ArduinoOTA.setPassword(OTA_PASSWORD);
-  ArduinoOTA.onStart([]() {
-    otaInProgress() = true;
-    Serial.println("ArduinoOTA start");
-  });
-  ArduinoOTA.onEnd([]() {
-    otaInProgress() = false;
-    Serial.println("ArduinoOTA end");
-  });
-  ArduinoOTA.onError([](ota_error_t err) {
-    otaInProgress() = false;
-    Serial.printf("ArduinoOTA error %u\n", err);
-  });
-  ArduinoOTA.begin();
-  Serial.println("ArduinoOTA ready: " + String(OTA_HOSTNAME) + ".local");
+  Serial.println("OTA: web /api/ota");
 }
 
 inline void handleOtaUpload(WebServer& server) {

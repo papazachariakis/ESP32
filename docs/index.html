@@ -133,6 +133,10 @@
         <button class="sec" onclick="disconnect()">Αποσύνδεση</button>
         <div id="deviceList" class="device-list"></div>
         <div class="small" id="statusLine">-</div>
+        <div style="height:12px"></div>
+        <div class="small"><b>Απομακρυσμένο OTA</b> (από οπουδήποτε, μέσω MQTT + GitHub)</div>
+        <button class="sec" onclick="remoteOta()">Ενημέρωση firmware (remote)</button>
+        <div class="small muted">Απαιτεί firmware με remote OTA (επόμενο USB flash). Κωδικός: esp32ota</div>
       </div>
       <button class="link setup-toggle" onclick="toggleSetup()">Εμφάνιση ρυθμίσεων</button>
     </div>
@@ -313,6 +317,15 @@
       if (!client) { alert('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Εκτέλεση εντολής γεννήτριας: ' + action + ';')) return;
       client.publish(cmdTopic, JSON.stringify({ genset: action }));
+    }
+
+    function remoteOta() {
+      if (!client) { alert('Σύνδεση MQTT απαιτείται'); return; }
+      const pw = prompt('Κωδικός OTA (esp32ota):', 'esp32ota');
+      if (!pw) return;
+      if (!confirm('Απομακρυσμένη ενημέρωση firmware;\nΤο ESP32 θα κάνει reboot (~2 λεπτά).\nΣυνέχεια;')) return;
+      client.publish(cmdTopic, JSON.stringify({ ota: pw }));
+      alert('Εντολή OTA στάλθηκε. Περίμενε ~2 λεπτά και κάνε refresh.');
     }
 
     const savedId = localStorage.getItem(LS.id);

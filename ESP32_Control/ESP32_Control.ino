@@ -39,7 +39,6 @@
 #include "config.h"
 
 #include "webui.h"
-#include "remote_ui.h"
 #include "bms_manager.h"
 #include "wifi_store.h"
 #include "ota.h"
@@ -80,7 +79,7 @@ unsigned long lastBleReconnect = 0;
 
 void pumpNetwork() {
   server.handleClient();
-  ArduinoOTA.handle();
+  // Web OTA upload handled in server routes
 }
 
 
@@ -478,12 +477,6 @@ void handleRoot() {
   server.send_P(200, "text/html", WEB_UI);
 }
 
-void handleRemoteApp() {
-  server.send_P(200, "text/html", REMOTE_UI);
-}
-
-
-
 void handleStatus() {
 
   server.send(200, "application/json", buildStatusJson());
@@ -760,8 +753,7 @@ void handleMqttSave() {
 void setupRoutes() {
 
   server.on("/", HTTP_GET, handleRoot);
-  server.on("/remote", HTTP_GET, handleRemoteApp);
-  server.on("/app", HTTP_GET, handleRemoteApp);
+  server.on("/app", HTTP_GET, handleRoot);
 
   server.on("/api/status", HTTP_GET, handleStatus);
 

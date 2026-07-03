@@ -182,27 +182,6 @@ inline const char* cumminsProfileLabel(uint8_t profile) {
   return profile == CUMMINS_PROFILE_PS0600 ? "PS0600" : "PCC1301/PS0500";
 }
 
-inline const char* const CUMMINS_NFPA_BITS[16] = {
-  "Low Fuel Level", "Low Coolant Level", "Overspeed", "Low Oil Pressure",
-  "Pre-low Oil Pressure", "High Engine Temperature", "Pre-high Engine Temperature",
-  "Low Coolant Temperature", "Fail to Start", "Charger AC Failure",
-  "Low Battery Voltage", "High Battery Voltage", "Not in Auto", "Genset Running",
-  "Genset Supplying Load", "Common Alarm"
-};
-
-inline const char* const CUMMINS_EXT_BITS[16] = {
-  "Emergency Stop", "Utility Circuit Breaker Tripped", "Genset Circuit Breaker Tripped",
-  "Load Demand", "Fail to Close", "Fail to Sync", "Reverse kVAR", "Reverse kW",
-  "Short Circuit", "Overcurrent", "Overload", "Under Frequency",
-  "Low AC Voltage", "High AC Voltage", "Ground Fault", "Check Genset"
-};
-
-inline void cumminsAppendBitmapBits(JsonArray& arr, uint16_t word, const char* const* labels) {
-  for (uint8_t b = 0; b < 16; b++) {
-    if ((word >> b) & 1) arr.add(labels[b]);
-  }
-}
-
 inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile = CUMMINS_PROFILE_PCC1301) {
   o["valid"] = g.valid;
   o["profile"] = cumminsProfileLabel(profile);
@@ -219,10 +198,6 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile = CUMMI
   o["fault_type_label"] = cumminsFaultTypeLabel(g.faultType, profile);
   o["nfpa_fault"] = g.nfpaFault;
   o["ext_annunciation"] = g.extAnnunciation;
-  JsonArray nfpaBits = o.createNestedArray("nfpa_bits");
-  cumminsAppendBitmapBits(nfpaBits, g.nfpaFault, CUMMINS_NFPA_BITS);
-  JsonArray extBits = o.createNestedArray("ext_bits");
-  cumminsAppendBitmapBits(extBits, g.extAnnunciation, CUMMINS_EXT_BITS);
   o["volt_l1n"] = g.voltL1N;
   o["volt_l2n"] = g.voltL2N;
   o["volt_l3n"] = g.voltL3N;
@@ -248,20 +223,6 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile = CUMMI
   o["engine_rpm"] = g.engineRpm;
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
-  o["extras_valid"] = g.extrasValid;
-  if (g.auxValid) {
-    o["aux_speed_bias"] = g.auxSpeedBias;
-    o["aux_volt_bias"] = g.auxVoltBias;
-  }
-  if (g.baroValid) o["baro_psi"] = g.baroPsi;
-  if (g.ltaValid) o["lta_temp_f"] = g.ltaTempF;
-  if (g.extrasValid) {
-    o["fuel_press_valid"] = g.fuelPressValid;
-    o["cfg_input4"] = g.cfgInput4;
-  }
-  o["fault_bitmap_valid"] = g.faultBitmapValid;
-  JsonArray fb = o.createNestedArray("fault_bitmap");
-  for (uint8_t i = 0; i < CUMMINS_FAULT_BITMAP_CNT; i++) fb.add(g.faultBitmap[i]);
   if (g.lastError.length()) o["error"] = g.lastError;
 }
 
@@ -344,7 +305,7 @@ struct GenManager {
       case 0: {
         uint16_t a[5];
         if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
-          data.lastError = "modbus 40009 — έλεγξε RS485: RO→RX2, DI→TX2, DE→D19, VCC→3V3, GND→GND";
+          data.lastError = "modbus 40009 - check RS485 wiring";
           pollStep = 0; return false;
         }
         data.controllerType = (uint8_t)a[0];
@@ -423,49 +384,6 @@ struct GenManager {
         if (!readBlock(CUMMINS_REG_ENGINE_RPM, 4, r)) { data.lastError = "modbus 40068"; pollStep = 0; return false; }
         data.engineRpm = r[0]; data.totalRuns = r[1];
         data.runTimeSec = ((uint32_t)r[2] << 16) | r[3];
-        pollStep = 10; return false;
-      }
-      case 10: {
-        if (profile == CUMMINS_PROFILE_PS0600) {
-          data.valid = true;
-          data.lastUpdate = millis();
-          data.lastError = "";
-          pollStep = 0;
-          return true;
-        }
-        uint16_t aux[2];
-        data.auxValid = readBlock(CUMMINS_REG_AUX_SPEED, 2, aux);
-        if (data.auxValid) {
-          data.auxSpeedBias = aux[0] * 0.01f;
-          data.auxVoltBias = aux[1] * 0.01f;
-        }
-        pollStep = 11; return false;
-      }
-      case 11: {
-        uint16_t b[1];
-        data.baroValid = readBlock(CUMMINS_REG_BARO_PSI, 1, b);
-        if (data.baroValid) data.baroPsi = b[0] * 0.1f;
-        pollStep = 12; return false;
-      }
-      case 12: {
-        uint16_t lta[1];
-        data.ltaValid = readBlock(CUMMINS_REG_LTA_TEMP_F, 1, lta);
-        if (data.ltaValid) data.ltaTempF = (int16_t)lta[0];
-        pollStep = 13; return false;
-      }
-      case 13: {
-        uint16_t fv[1];
-        if (readBlock(CUMMINS_REG_FUEL_VALID, 1, fv)) data.fuelPressValid = fv[0] != 0;
-        pollStep = 14; return false;
-      }
-      case 14: {
-        uint16_t in4[1];
-        if (readBlock(CUMMINS_REG_CFG_IN4, 1, in4)) data.cfgInput4 = in4[0] != 0;
-        data.extrasValid = data.auxValid || data.baroValid || data.ltaValid;
-        pollStep = 15; return false;
-      }
-      case 15: {
-        data.faultBitmapValid = readBlock(CUMMINS_REG_FAULT_BM1, CUMMINS_FAULT_BITMAP_CNT, data.faultBitmap);
         data.valid = true;
         data.lastUpdate = millis();
         data.lastError = "";

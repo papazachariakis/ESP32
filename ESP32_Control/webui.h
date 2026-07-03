@@ -53,7 +53,6 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
   <button data-tab="genset">Γεννήτρια</button>
   <button data-tab="ble">Bluetooth</button>
   <button data-tab="wifi">WiFi</button>
-  <button data-tab="remote">Internet</button>
 </nav>
 <main>
   <section id="tab-dash" class="tab active">
@@ -110,81 +109,24 @@ pre{background:#0f172a;padding:12px;border-radius:8px;overflow:auto;font-size:.7
     <input type="file" id="otaFile" accept=".bin">
     <button class="btn" onclick="otaUpload()">Ανέβασμα firmware</button>
     <p class="small">Ή από PC: <code>upload-ota.ps1</code> (κωδικός: esp32ota)</p>
-    <p class="small" id="otaStatus">-</p></div>
-  </section>
-  <section id="tab-remote" class="tab">
-    <div class="card"><h2>Απομακρυσμένη πρόσβαση (αυτόματη)</h2>
-    <p class="small">Όταν το ESP32 είναι στο WiFi σπιτιού, δημοσιεύει αυτόματα στο MQTT.</p>
-    <p class="small" id="remoteStatus">Σύνδεση...</p>
-    <pre id="mqttTopics">-</pre>
-    <p class="small"><b>Για κινητό (4G):</b> άνοιξε <a href="/remote" style="color:#60a5fa">/remote</a> και «Προσθήκη στην αρχική» — δουλεύει αυτόματα και εκτός σπιτιού.</p>
-    <label>Device ID</label><input id="remoteDeviceId" readonly>
-    <label>MQTT Broker (WebSocket)</label><input id="wsBroker" value="wss://broker.hivemq.com:8884/mqtt" readonly>
-    </div>
+    <p class="small" id="otaStatus">-</p>
+    <p class="small">Remote OTA: GitHub Pages → Ενημέρωση firmware (MQTT)</p></div>
   </section>
 </main>
-<script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
 <script>
 const API='';
-let mqttClient=null, remoteMode=false, mqttBridgeReady=false;
-
-function saveRemoteProfile(s){
-  if(!s||!s.device_id)return;
-  localStorage.setItem('esp32_device_id',s.device_id);
-  localStorage.setItem('esp32_ip',s.ip||'');
-  localStorage.setItem('esp32_ws_broker',document.getElementById('wsBroker').value);
-}
 
 function updateConnBadge(s){
   const el=document.getElementById('connBadge');
-  if(mqttBridgeReady&&s&&s.wifi_connected){el.textContent='Local + Remote';el.className='badge ok';}
-  else if(s&&s.wifi_connected){el.textContent='Local';el.className='badge ok';}
+  if(s&&s.wifi_connected){el.textContent='Online';el.className='badge ok';}
   else{el.textContent='Offline';el.className='badge warn';}
 }
-
 function formatBms(b){
   if(!b||!b.valid)return'Δεν υπάρχουν δεδομένα BMS';
   let s='';
   if(b.type_label)s+=b.type_label+'\n';
-  if(b.name)s+='Device: '+b.name+'\n';
-  if(b.device_model)s+='Model: '+b.device_model+'\n';
-  if(b.sw_version)s+='FW: '+b.sw_version+'\n';
-  s+='---\n';
-  s+=`SOC: ${b.soc}%  |  SOH: ${b.soh}%\n`;
-  s+=`Τάση: ${Number(b.voltage).toFixed(2)} V  |  Ρεύμα: ${Number(b.current).toFixed(2)} A\n`;
-  s+=`Ισχύς: ${Number(b.power).toFixed(0)} W`;
-  if(b.charge_power>0)s+=`  (Φόρτιση: ${Number(b.charge_power).toFixed(0)} W)`;
-  if(b.discharge_power>0)s+=`  (Εκφόρτιση: ${Number(b.discharge_power).toFixed(0)} W)`;
-  s+='\n';
-  let st='';
-  if(b.charging)st+='ΦΟΡΤΙΣΗ ';
-  if(b.discharging)st+='ΕΚΦΟΡΤΙΣΗ ';
-  if(b.balancing)st+='BALANCING ';
-  if(b.limiting_current)st+='LIMIT ';
-  s+='Κατάσταση: '+(st||'ΑΝΕΝΕΡΓΟ')+'\n';
-  s+=`Θερμ: avg ${Number(b.avg_temp).toFixed(1)}°C  |  ambient ${Number(b.ambient_temp).toFixed(1)}°C  |  MOSFET ${Number(b.mosfet_temp).toFixed(1)}°C\n`;
-  if(b.capacity_ah>0)s+=`Χωρητικότητα: ${Number(b.remaining_ah).toFixed(1)} / ${Number(b.capacity_ah).toFixed(1)} Ah  |  Cycles: ${b.cycles}\n`;
-  if(b.min_cell_v>0)s+=`Cells: min ${Number(b.min_cell_v).toFixed(3)}V (#${b.min_cell_num})  max ${Number(b.max_cell_v).toFixed(3)}V (#${b.max_cell_num})  delta ${Number(b.delta_cell_v).toFixed(3)}V\n`;
-  if(b.cells&&b.cells.length){
-    s+='--- Cell voltages ---\n';
-    b.cells.forEach((v,i)=>{
-      if(v>0.5){s+=`C${i+1}: ${Number(v).toFixed(3)}V`;if(b.cell_balancing&&b.cell_balancing[i])s+=' [BAL]';s+='  ';if((i+1)%4===0)s+='\n';}
-    });
-    s+='\n';
-  }
-  if(b.temps&&b.temps.some(t=>t!==0)){
-    s+='--- Temperatures ---\n';
-    b.temps.forEach((t,i)=>{if(t!==0)s+=`T${i+1}: ${Number(t).toFixed(1)}°C  `;});
-    s+='\n';
-  }
-  if(b.error_mask||b.alarm_mask||b.voltage_prot_mask||b.current_prot_mask||b.temp_prot_mask){
-    s+='--- Alarms ---\n';
-    if(b.error_mask)s+=`Errors: 0x${b.error_mask.toString(16)}\n`;
-    if(b.alarm_mask)s+=`Alarms: 0x${b.alarm_mask.toString(16)}\n`;
-    if(b.voltage_prot_mask)s+=`V-prot: 0x${b.voltage_prot_mask.toString(16)}\n`;
-    if(b.current_prot_mask)s+=`I-prot: 0x${b.current_prot_mask.toString(16)}\n`;
-    if(b.temp_prot_mask)s+=`T-prot: 0x${b.temp_prot_mask.toString(16)}\n`;
-  }
+  s+=`SOC: ${b.soc}%  SOH: ${b.soh}%  |  ${Number(b.voltage).toFixed(2)}V  ${Number(b.current).toFixed(2)}A  ${Number(b.power).toFixed(0)}W\n`;
+  if(b.min_cell_v>0)s+=`Cells dV: ${Number(b.delta_cell_v).toFixed(3)}V\n`;
   return s;
 }
 
@@ -200,18 +142,6 @@ function formatGenset(g){
   s+=`Μπαταρία: ${Number(g.battery_v).toFixed(1)} V  |  Λάδι: ${Number(g.oil_kpa).toFixed(0)} kPa  |  Νερό: ${Number(g.coolant_c).toFixed(1)} °C\n`;
   s+=`Εκκινήσεις: ${g.total_runs||0}  |  Ώρες λειτ.: ${Math.floor((g.runtime_sec||0)/3600)} h\n`;
   if(g.active_fault)s+=`Σφάλμα: #${g.active_fault} (${g.fault_type_label||''})\n`;
-  if(g.nfpa_bits&&g.nfpa_bits.length)s+=`NFPA: ${g.nfpa_bits.join(', ')}\n`;
-  if(g.ext_bits&&g.ext_bits.length)s+=`Extended: ${g.ext_bits.join(', ')}\n`;
-  if(g.aux_speed_bias!=null)s+=`AUX speed bias: ${Number(g.aux_speed_bias).toFixed(2)} RPM\n`;
-  if(g.aux_volt_bias!=null)s+=`AUX volt bias: ${Number(g.aux_volt_bias).toFixed(2)} V\n`;
-  if(g.baro_psi!=null)s+=`Barometric: ${Number(g.baro_psi).toFixed(1)} PSI\n`;
-  if(g.lta_temp_f!=null)s+=`LTA temp: ${g.lta_temp_f} °F\n`;
-  if(g.extras_valid)s+=`Fuel press valid: ${g.fuel_press_valid?'yes':'no'} | Input4: ${g.cfg_input4?'active':'inactive'}\n`;
-  if(g.fault_bitmap_valid&&g.fault_bitmap){
-    const active=[];
-    g.fault_bitmap.forEach((w,i)=>{if(w)active.push(`4040${i}:0x${(w>>>0).toString(16).toUpperCase()}`);});
-    if(active.length)s+=`Fault bitmaps: ${active.join(' ')}\n`;
-  }
   return s;
 }
 
@@ -253,8 +183,6 @@ async function refresh(){
   try{
     const s=await api('/api/status');
     updateConnBadge(s);
-    saveRemoteProfile(s);
-    ensureRemoteBridge(s.device_id);
     document.getElementById('deviceInfo').textContent=`${s.device_id} | ${s.ip} | RSSI ${s.rssi}`;
     renderRelays(s.outputs);
     if(s.ble&&s.ble.data&&s.ble.data.length>10){
@@ -272,9 +200,6 @@ async function refresh(){
       : 'Αποθηκευμένα δίκτυα: κανένα ακόμα';
     document.getElementById('mqttBroker').value=s.mqtt.broker||'';
     document.getElementById('mqttPort').value=s.mqtt.port||1883;
-    document.getElementById('remoteDeviceId').value=s.device_id;
-    document.getElementById('mqttTopics').textContent=
-      `Publish: ${s.mqtt.topic_status}\nSubscribe: ${s.mqtt.topic_cmd}\nBMS: ${s.mqtt.topic_bms}\nGenset: ${s.mqtt.topic_genset||'-'}`;
     if(s.genset){
       document.getElementById('modbusEn').checked=!!s.genset.enabled;
       document.getElementById('modbusProf').value=String(s.genset.profile_id!=null?s.genset.profile_id:1);
@@ -287,12 +212,10 @@ async function refresh(){
 }
 
 async function setRelay(i,on){
-  if(remoteMode&&mqttClient){mqttClient.publish(mqttCmdTopic,JSON.stringify({relay:i,on}));return;}
   await api('/api/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,on})});
   refresh();
 }
 async function allOff(){
-  if(remoteMode&&mqttClient){mqttClient.publish(mqttCmdTopic,JSON.stringify({relay:'all',on:false}));return;}
   await api('/api/relay/alloff',{method:'POST'});refresh();
 }
 let bleScanResults=[];
@@ -375,24 +298,6 @@ async function otaUpload(){
     document.getElementById('otaStatus').textContent=j.ok?'Επιτυχία — επανεκκίνηση...':'Αποτυχία';
     if(j.ok)setTimeout(()=>location.reload(),5000);
   }catch(e){document.getElementById('otaStatus').textContent='Σφάλμα: '+e;}
-}
-let mqttCmdTopic='';
-function ensureRemoteBridge(id){
-  if(!id||mqttBridgeReady)return;
-  const url=document.getElementById('wsBroker').value;
-  mqttCmdTopic=`home/${id}/cmd`;
-  mqttClient=mqtt.connect(url,{clientId:'bridge-'+Math.random().toString(16).slice(2),reconnectPeriod:5000});
-  mqttClient.on('connect',()=>{
-    mqttBridgeReady=true;
-    document.getElementById('remoteStatus').textContent='🟢 Remote ενεργό — διαθέσιμο από 4G αυτόματα';
-    mqttClient.subscribe(`home/${id}/status`);
-    mqttClient.subscribe(`home/${id}/bms`);
-    updateConnBadge({wifi_connected:true});
-  });
-  mqttClient.on('close',()=>{
-    mqttBridgeReady=false;
-    document.getElementById('remoteStatus').textContent='🟡 Αναμονή MQTT...';
-  });
 }
 refresh();setInterval(refresh,3000);
 </script>

@@ -109,11 +109,25 @@ inline bool performRemoteOta() {
                "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
 
   int contentLen = -1;
+  bool httpOk = false;
   while (client.connected() || client.available()) {
     String line = client.readStringUntil('\n');
     line.trim();
     if (line.length() == 0) break;
-    if (line.startsWith("Content-Length:")) contentLen = line.substring(15).toInt();
+    if (line.startsWith("HTTP/")) {
+      httpOk = (line.indexOf(" 200 ") >= 0);
+      continue;
+    }
+    String low = line;
+    low.toLowerCase();
+    if (low.startsWith("content-length:")) contentLen = line.substring(15).toInt();
+  }
+
+  if (!httpOk) {
+    Serial.println("Remote OTA: HTTP not 200");
+    client.stop();
+    otaInProgress() = false;
+    return false;
   }
 
   if (contentLen < 500000 || contentLen > 1966080) {

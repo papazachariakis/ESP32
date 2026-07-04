@@ -148,9 +148,9 @@ inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& 
     if (st.jkLen < 5) continue;
     if (st.jkBuf[0] != 0x55 || st.jkBuf[1] != 0xAA) { st.jkLen = 0; continue; }
 
-    if (st.jkLen >= 280) {
+    if (st.jkLen >= 300) {
       int tryLen = (int)st.jkLen;
-      if (tryLen > 336) tryLen = 336;
+      if (tryLen > (int)sizeof(st.jkBuf)) tryLen = (int)sizeof(st.jkBuf);
       for (; tryLen >= 280; tryLen--) {
         if (bmsCrcSum(st.jkBuf, tryLen - 1) != st.jkBuf[tryLen - 1]) continue;
         if (jkParseFrame(st.jkBuf, (size_t)tryLen, bms, st)) {
@@ -160,7 +160,6 @@ inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& 
         }
         break;
       }
-      st.jkLen = 0;
     }
     if (st.jkLen >= sizeof(st.jkBuf)) st.jkLen = 0;
   }

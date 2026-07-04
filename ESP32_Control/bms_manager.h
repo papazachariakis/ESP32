@@ -87,7 +87,10 @@ struct BmsManager {
     uint8_t buf[32];
     size_t n = jkBuildCmd(0x97, buf);
     writeBytes(buf, n);
-    delay(400);
+    delay(600);
+    n = jkBuildCmd(0x96, buf);
+    writeBytes(buf, n);
+    delay(200);
     n = jkBuildCmd(0x96, buf);
     writeBytes(buf, n);
   }

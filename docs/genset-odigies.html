@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8">
+  <title>Οδηγίες Cummins C22D5 / PS0600 — ESP32</title>
+  <style>
+    @page { margin: 18mm 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #1a1a1a;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1 { font-size: 20pt; margin: 0 0 6px; color: #0f172a; }
+    h2 { font-size: 14pt; margin: 22px 0 8px; color: #1e40af; border-bottom: 2px solid #dbeafe; padding-bottom: 4px; }
+    h3 { font-size: 12pt; margin: 14px 0 6px; color: #334155; }
+    p { margin: 8px 0; }
+    .subtitle { color: #64748b; font-size: 10pt; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 10.5pt; }
+    th, td { border: 1px solid #cbd5e1; padding: 7px 10px; text-align: left; }
+    th { background: #f1f5f9; font-weight: 600; }
+    .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 10px 12px; margin: 12px 0; }
+    .ok { background: #ecfdf5; border-left: 4px solid #10b981; padding: 10px 12px; margin: 12px 0; }
+    ul.checklist { list-style: none; padding: 0; margin: 10px 0; }
+    ul.checklist li { padding: 5px 0 5px 28px; position: relative; }
+    ul.checklist li::before { content: "☐"; position: absolute; left: 0; font-size: 14pt; color: #2563eb; }
+    ol { margin: 8px 0; padding-left: 22px; }
+    ol li { margin: 4px 0; }
+    code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 10pt; }
+    .diagram {
+      font-family: Consolas, monospace;
+      font-size: 9.5pt;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px;
+      border-radius: 8px;
+      white-space: pre;
+      line-height: 1.35;
+      margin: 12px 0;
+    }
+    footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9pt; color: #64748b; }
+  </style>
+</head>
+<body>
+
+<h1>Οδηγίες σύνδεσης γεννήτριας</h1>
+<p class="subtitle">Cummins C22D5 · PowerCommand PS0600 · ESP32 Control · Modbus RTU RS485</p>
+
+<div class="warn">
+  <strong>Σημαντικό:</strong> Η C22D5 έχει controller <strong>PS0600</strong> (όχι PCC1301). Το ESP32 πρέπει να ρυθμιστεί σε profile <strong>PS0600</strong> και το Modbus να είναι ενεργό στο TB15 της γεννήτριας.
+</div>
+
+<h2>1. Καλωδίωση RS485 (MAX485 → ESP32)</h2>
+<p>Σύνδεσε το module MAX485 στα screw terminals του ESP32 ως εξής:</p>
+
+<table>
+  <tr><th>Ακροδέκτης MAX485</th><th>ESP32</th></tr>
+  <tr><td>RO (Receiver Out)</td><td><strong>RX2 / GPIO16</strong></td></tr>
+  <tr><td>DI (Driver In)</td><td><strong>TX2 / GPIO17</strong></td></tr>
+  <tr><td>DE + RE (βραχυκυκλωμένα)</td><td><strong>D19 / GPIO19</strong></td></tr>
+  <tr><td>VCC</td><td><strong>3V3</strong></td></tr>
+  <tr><td>GND</td><td><strong>GND</strong></td></tr>
+</table>
+
+<div class="warn">
+  <strong>Μην χρησιμοποιήσεις D22 / D23</strong> — δεν είναι η σειριακή θύρα Serial2. Η σωστή σύνδεση είναι GPIO16, GPIO17, GPIO19.
+</div>
+
+<h2>2. Καλωδίωση MAX485 → Cummins TB15</h2>
+
+<table>
+  <tr><th>MAX485</th><th>Cummins TB15</th></tr>
+  <tr><td>A+</td><td><strong>Pin 3</strong></td></tr>
+  <tr><td>B−</td><td><strong>Pin 4</strong></td></tr>
+  <tr><td>GND</td><td><strong>Pin 1 (Common)</strong></td></tr>
+</table>
+
+<div class="diagram">MAX485                    ESP32                 Cummins TB15
+──────                    ─────                 ────────────
+RO  ───────────────────►  GPIO16 (RX2)
+DI  ◄───────────────────  GPIO17 (TX2)
+DE+RE ─────────────────►  GPIO19
+VCC ───────────────────►  3V3
+GND ───────────────────►  GND ───────────────►  Pin 1 Common
+A+  ─────────────────────────────────────────►  Pin 3
+B-  ─────────────────────────────────────────►  Pin 4</div>
+
+<h2>3. Ενεργοποίηση Modbus στον PS0600</h2>
+<p>Στον controller της γεννήτριας πρέπει να ενεργοποιηθεί το <strong>Modbus RTU</strong> στην πύλη <strong>TB15</strong>:</p>
+<ul>
+  <li>Μέσω <strong>Cummins service tool / laptop</strong>, ή</li>
+  <li>Από το <strong>LCD / menu</strong> του PS0600 (αν υπάρχει η επιλογή)</li>
+</ul>
+<p>Χωρίς ενεργό Modbus, το ESP32 θα εμφανίζει σφάλμα <code>modbus 40009</code> (καμία απάντηση από τη γεννήτρια).</p>
+
+<h3>Τυπικές ρυθμίσεις Modbus</h3>
+<table>
+  <tr><th>Παράμετρος</th><th>Τιμή</th></tr>
+  <tr><td>Baud rate</td><td>9600 (ή ό,τι έχει ρυθμιστεί στο PS0600)</td></tr>
+  <tr><td>Slave ID</td><td>1</td></tr>
+  <tr><td>Format</td><td>8 data bits, No parity, 1 stop bit (8N1)</td></tr>
+</table>
+
+<h2>4. Ρυθμίσεις στο ESP32 (Web UI)</h2>
+<ol>
+  <li>Σύνδεση στο ίδιο WiFi με το ESP32.</li>
+  <li>Άνοιγμα <strong>http://esp32.local</strong> ή <strong>http://&lt;IP-ESP32&gt;</strong>.</li>
+  <li>Tab <strong>Γεννήτρια</strong>.</li>
+  <li>Ρύθμιση:
+    <table>
+      <tr><th>Ρύθμιση</th><th>Τιμή</th></tr>
+      <tr><td>Controller</td><td><strong>PS0600 (C22D5)</strong></td></tr>
+      <tr><td>Ενεργό</td><td><strong>✓ Ναι (τσεκαρισμένο)</strong></td></tr>
+      <tr><td>Slave ID</td><td><strong>1</strong></td></tr>
+      <tr><td>Baud</td><td><strong>9600</strong></td></tr>
+    </table>
+  </li>
+  <li>Πάτημα <strong>Αποθήκευση Modbus</strong>.</li>
+</ol>
+
+<div class="warn">
+  Το Modbus είναι <strong>απενεργοποιημένο by default</strong>. Αν δεν τσεκάρεις «Ενεργό», δεν θα λειτουργήσει η επικοινωνία.
+</div>
+
+<h2>5. Έλεγχος ότι δουλεύει</h2>
+<p>Μετά από 10–30 δευτερόλεπτα θα πρέπει να βλέπεις:</p>
+<ul>
+  <li><strong>Modbus OK</strong> (όχι <code>modbus 40009</code>)</li>
+  <li>Κατάσταση γεννήτριας (Off / Λειτουργία / κ.λπ.)</li>
+  <li>Τάσεις, RPM, λάδι, νερό ψύξης, μπαταρία γεννήτριας</li>
+</ul>
+
+<div class="ok">
+  Στο GitHub Pages dashboard (MQTT) εμφανίζονται τα ίδια δεδομένα — μόνο αν το Modbus δουλεύει στο ESP32.
+</div>
+
+<h2>6. Έλεγχος / Start-Stop</h2>
+<table>
+  <tr><th>Τρόπος</th><th>Πού</th></tr>
+  <tr><td>Τοπικά</td><td>Tab Γεννήτρια → κουμπιά Εκκίνηση / Διακοπή / Reset</td></tr>
+  <tr><td>Απομακρυσμένα</td><td>GitHub Pages dashboard → tab Γεννήτρια (μέσω MQTT)</td></tr>
+</table>
+<p>Για PS0600 τα registers ελέγχου είναι <strong>400300</strong> (start/stop), <strong>400301</strong> (reset), <strong>400302</strong> (e-stop). Το firmware τα χειρίζεται αυτόματα.</p>
+
+<h2>7. Αντιμετώπιση προβλημάτων — σφάλμα modbus 40009</h2>
+<p>Δοκίμασε με τη σειρά:</p>
+<ol>
+  <li><strong>Αντιστροφή A+ ↔ B−</strong> (συχνό λάθος πόλωσης).</li>
+  <li><strong>Slave ID</strong> — δοκίμασε 1, 2 ή 247.</li>
+  <li><strong>Baud rate</strong> — δοκίμασε 19200 αν στο PS0600 είναι έτσι ρυθμισμένο.</li>
+  <li><strong>Κοινή γείωση</strong> — GND ESP32 ↔ TB15 pin 1.</li>
+  <li>Επιβεβαίωσε ότι το <strong>Modbus είναι ενεργό</strong> στο PS0600 (service tool).</li>
+  <li>Έλεγξε ξανά: RO→GPIO16, DI→GPIO17, DE+RE→GPIO19.</li>
+  <li>Έλεγξε τροφοδοσία MAX485 (3V3, όχι 5V αν το module δεν το υποστηρίζει).</li>
+</ol>
+
+<h2>Checklist πριν τη δοκιμή</h2>
+<ul class="checklist">
+  <li>RO → GPIO16, DI → GPIO17, DE+RE → GPIO19, 3V3, GND</li>
+  <li>A+ → TB15-3, B− → TB15-4, GND → TB15-1</li>
+  <li>Modbus ENABLED στο PS0600 (TB15)</li>
+  <li>Firmware ESP32 ενημερωμένο</li>
+  <li>Web UI: PS0600 + Ενεργό + Slave ID 1 + Baud 9600 → Αποθήκευση</li>
+  <li>Εμφανίζεται «Modbus OK» και δεδομένα γεννήτριας</li>
+</ul>
+
+<footer>
+  Έργο ESP32 Control · papazachariakis/ESP32 · Τελευταία ενημέρωση: Ιούλιος 2026
+</footer>
+
+</body>
+</html>

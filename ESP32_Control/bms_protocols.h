@@ -149,15 +149,18 @@ inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& 
     if (st.jkBuf[0] != 0x55 || st.jkBuf[1] != 0xAA) { st.jkLen = 0; continue; }
 
     if (st.jkLen >= 280) {
-      for (size_t n = st.jkLen; n >= 280; n--) {
-        if (bmsCrcSum(st.jkBuf, n - 1) != st.jkBuf[n - 1]) continue;
-        if (jkParseFrame(st.jkBuf, n, bms, st)) {
+      int tryLen = (int)st.jkLen;
+      if (tryLen > 336) tryLen = 336;
+      for (; tryLen >= 280; tryLen--) {
+        if (bmsCrcSum(st.jkBuf, tryLen - 1) != st.jkBuf[tryLen - 1]) continue;
+        if (jkParseFrame(st.jkBuf, (size_t)tryLen, bms, st)) {
           uint8_t frameType = st.jkBuf[4];
           st.jkLen = 0;
           return frameType == 0x02;
         }
         break;
       }
+      st.jkLen = 0;
     }
     if (st.jkLen >= sizeof(st.jkBuf)) st.jkLen = 0;
   }

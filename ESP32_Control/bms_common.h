@@ -216,69 +216,16 @@ inline void bmsFillJson(JsonObject& o, const BmsData& b) {
 
   JsonArray cells = o.createNestedArray("cells");
   for (int i = 0; i < 16; i++) cells.add(b.cellVoltages[i]);
-
-  JsonArray temps = o.createNestedArray("temps");
-  for (int i = 0; i < 8; i++) temps.add(b.temps[i]);
-
-  JsonArray bal = o.createNestedArray("cell_balancing");
-  for (int i = 0; i < 16; i++) bal.add(b.cellBalancing[i]);
 }
 
 inline String bmsToDisplay(const BmsData& b) {
-  if (!b.connected) return String(bmsTypeLabel(b.type)) + ": not connected";
-  if (!b.valid) return String(bmsTypeLabel(b.type)) + ": waiting for data...";
-
-  String s;
-  s += String(bmsTypeLabel(b.type)) + "\n";
-  if (b.name.length()) s += "Device: " + b.name + "\n";
-  if (b.deviceModel.length()) s += "Model: " + b.deviceModel + "\n";
-  if (b.swVersion.length()) s += "FW: " + b.swVersion + "\n";
-  s += "---\n";
-  s += "SOC: " + String(b.soc, 0) + "%  |  SOH: " + String(b.soh, 0) + "%\n";
-  s += "Voltage: " + String(b.voltage, 2) + " V  |  Current: " + String(b.current, 2) + " A\n";
-  s += "Power: " + String(b.power, 0) + " W";
-  if (b.chargePower > 0) s += "  (Charge: " + String(b.chargePower, 0) + " W)";
-  if (b.dischargePower > 0) s += "  (Discharge: " + String(b.dischargePower, 0) + " W)";
-  s += "\n";
-  s += "Status: ";
-  s += b.charging ? "CHARGING " : "";
-  s += b.discharging ? "DISCHARGING " : "";
-  s += b.balancing ? "BALANCING " : "";
-  s += b.limitingCurrent ? "LIMIT " : "";
-  if (!b.charging && !b.discharging && !b.balancing) s += "IDLE";
-  s += "\n";
-  s += "Temp avg: " + String(b.avgTemp, 1) + " C";
-  s += "  |  Ambient: " + String(b.ambientTemp, 1) + " C";
-  s += "  |  MOSFET: " + String(b.mosfetTemp, 1) + " C\n";
+  if (!b.connected) return "JK: not connected";
+  if (!b.valid) return "JK: waiting...";
+  String s = "JK BMS\n";
+  if (b.name.length()) s += b.name + "\n";
+  s += "SOC " + String(b.soc, 0) + "%  " + String(b.voltage, 2) + "V  " + String(b.current, 2) + "A\n";
   if (b.capacityAh > 0) {
-    s += "Capacity: " + String(b.remainingAh, 1) + " / " + String(b.capacityAh, 1) + " Ah";
-    s += "  |  Cycles: " + String(b.cycles) + "\n";
-  }
-  if (b.minCellV > 0) {
-    s += "Cells: min " + String(b.minCellV, 3) + "V (#" + String(b.minCellNum) + ")";
-    s += "  max " + String(b.maxCellV, 3) + "V (#" + String(b.maxCellNum) + ")";
-    s += "  delta " + String(b.deltaCellV, 3) + "V\n";
-  }
-  s += "--- Cell voltages ---\n";
-  for (int i = 0; i < 16; i++) {
-    if (b.cellVoltages[i] > 0.5f) {
-      s += "C" + String(i + 1) + ": " + String(b.cellVoltages[i], 3) + "V";
-      if (b.cellBalancing[i]) s += " [BAL]";
-      s += "  ";
-      if ((i + 1) % 4 == 0) s += "\n";
-    }
-  }
-  s += "\n--- Temperatures ---\n";
-  for (int i = 0; i < 8; i++) {
-    if (b.temps[i] != 0) s += "T" + String(i + 1) + ": " + String(b.temps[i], 1) + "C  ";
-  }
-  if (b.errorMask || b.alarmMask || b.voltageProtMask || b.currentProtMask || b.tempProtMask) {
-    s += "\n--- Alarms ---\n";
-    if (b.errorMask) s += "Errors: 0x" + String(b.errorMask, HEX) + "\n";
-    if (b.alarmMask) s += "Alarms: 0x" + String(b.alarmMask, HEX) + "\n";
-    if (b.voltageProtMask) s += "V-prot: 0x" + String(b.voltageProtMask, HEX) + "\n";
-    if (b.currentProtMask) s += "I-prot: 0x" + String(b.currentProtMask, HEX) + "\n";
-    if (b.tempProtMask) s += "T-prot: 0x" + String(b.tempProtMask, HEX) + "\n";
+    s += String(b.remainingAh, 1) + "/" + String(b.capacityAh, 1) + " Ah\n";
   }
   return s;
 }

@@ -20,7 +20,6 @@
 
 #include <WiFiManager.h>
 
-#include <ESPmDNS.h>
 #include <esp_mac.h>
 #include <Preferences.h>
 
@@ -135,7 +134,7 @@ void publishGensetMqtt() {
   if (!mqtt.connected() || !genMgr.enabled) return;
   StaticJsonDocument<2560> doc;
   JsonObject root = doc.to<JsonObject>();
-  genFillJson(root, genMgr.data, genMgr.profile);
+  genFillJson(root, genMgr.data);
   root["enabled"] = genMgr.enabled;
   char payload[2560];
   serializeJson(doc, payload);
@@ -164,7 +163,7 @@ void publishBmsMqtt() {
 
 String buildStatusJson() {
 
-  StaticJsonDocument<8192> doc;
+  StaticJsonDocument<6144> doc;
 
   doc["device_id"] = deviceId;
 
@@ -175,11 +174,6 @@ String buildStatusJson() {
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
 
   doc["rssi"] = WiFi.RSSI();
-
-  JsonArray wifiSaved = doc.createNestedArray("wifi_saved");
-  doc["wifi_saved_count"] = wifiStoreAddToJson(prefs, wifiSaved);
-
-
 
   JsonArray outputs = doc.createNestedArray("outputs");
 
@@ -205,13 +199,7 @@ String buildStatusJson() {
 
   ble["name"] = bmsMgr.name;
 
-  ble["data"] = bmsMgr.lastDisplay;
-
   ble["bms_type"] = bmsTypeId(bmsMgr.type);
-
-  ble["bms_label"] = bmsTypeLabel(bmsMgr.type);
-
-  ble["jk"] = bmsMgr.type == BmsType::Jk;
 
 
 
@@ -238,11 +226,10 @@ String buildStatusJson() {
   mq["topic_genset"] = topicGenset;
 
   JsonObject genset = doc.createNestedObject("genset");
-  genFillJson(genset, genMgr.data, genMgr.profile);
+  genFillJson(genset, genMgr.data);
   genset["enabled"] = genMgr.enabled;
   genset["slave_id"] = genMgr.slaveId;
   genset["baud"] = genMgr.baud;
-  genset["profile_id"] = genMgr.profile;
 
 
 
@@ -303,6 +290,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
 
+  if (doc.containsKey("ota")) {
+    const char* pw = doc["ota"];
+    if (remoteOtaPasswordOk(pw)) requestRemoteOta();
+  }
+
 }
 
 
@@ -315,7 +307,7 @@ bool mqttConnect() {
 
   mqtt.setCallback(mqttCallback);
 
-  mqtt.setBufferSize(4096);
+  mqtt.setBufferSize(3072);
 
 
 
@@ -596,15 +588,13 @@ void handleGenset() {
 
   JsonObject o = doc.to<JsonObject>();
 
-  genFillJson(o, genMgr.data, genMgr.profile);
+  genFillJson(o, genMgr.data);
 
   o["enabled"] = genMgr.enabled;
 
   o["slave_id"] = genMgr.slaveId;
 
   o["baud"] = genMgr.baud;
-
-  o["profile_id"] = genMgr.profile;
 
   String out;
 
@@ -683,8 +673,6 @@ void handleModbusSave() {
   genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
 
   genMgr.baud = doc["baud"] | 9600;
-
-  if (doc.containsKey("profile")) genMgr.profile = (uint8_t)(doc["profile"].as<int>());
 
   genMgr.save(prefs);
 
@@ -825,14 +813,6 @@ void setup() {
 
 
 
-  if (MDNS.begin("esp32")) {
-
-    Serial.println("mDNS: http://esp32.local");
-
-  }
-
-
-
   setupRoutes();
   setupArduinoOta();
   modbusSetPump(pumpNetwork);
@@ -841,18 +821,14 @@ void setup() {
 
 
   if (bmsMgr.mac.length() > 0) {
-
-    Serial.println("Reconnecting BMS BLE: " + bmsMgr.mac);
-
-    bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
-
+    Serial.println("BMS saved, reconnect from loop: " + bmsMgr.mac);
   }
 
 
 
   Serial.println("ESP32 Control Hub ready");
 
-  Serial.println("Open http://esp32.local or " + WiFi.localIP().toString());
+  Serial.println("Open http://" + WiFi.localIP().toString());
 
 }
 
@@ -860,6 +836,11 @@ void setup() {
 
 void loop() {
   pumpNetwork();
+
+  if (remoteOtaPending() && !otaInProgress()) {
+    remoteOtaPending() = false;
+    performRemoteOta();
+  }
 
   if (otaInProgress()) return;
 

@@ -2,6 +2,7 @@
 
 #include "bms_common.h"
 #include "bms_protocols.h"
+#include "ota.h"
 #include <BLEClient.h>
 #include <Preferences.h>
 
@@ -26,6 +27,7 @@ struct BmsManager {
   static BmsManager* gInstance;
 
   void reset() {
+    if (gInstance == this) gInstance = nullptr;
     if (client) {
       if (client->isConnected()) client->disconnect();
       delete client;
@@ -101,13 +103,16 @@ struct BmsManager {
   }
 
   bool connect(BmsType t, const String& devName, const String& devMac, Preferences& prefs) {
+    if (otaInProgress()) return false;
+    String saveName = devName.length() ? devName : name;
+    String saveMac = devMac.length() ? devMac : mac;
     reset();
-    if (t == BmsType::None) t = bmsDetectFromName(devName);
+    if (t == BmsType::None) t = bmsDetectFromName(saveName);
     if (t == BmsType::None) t = BmsType::Jk;
 
     type = t;
-    name = devName;
-    mac = devMac;
+    name = saveName;
+    mac = saveMac;
     bms.type = type;
     bms.name = name;
     bms.mac = mac;

@@ -369,12 +369,48 @@
       const stateEl = document.getElementById('genState');
       const box = document.getElementById('genStatusBox');
       const badge = document.getElementById('genBadge');
+      const isEntes = g && String(g.profile || '').includes('ENTES');
 
       if (!valid) {
-        stateEl.textContent = g && g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων γεννήτριας...';
+        stateEl.textContent = g && g.error ? 'Modbus: ' + g.error : (isEntes ? 'Αναμονή ENTES MPR-46S...' : 'Αναμονή δεδομένων γεννήτριας...');
         document.getElementById('genMode').textContent = '—';
         badge.textContent = 'Offline'; badge.className = 'badge off';
         box.className = 'gen-status off';
+        return;
+      }
+
+      if (isEntes) {
+        stateEl.textContent = 'ENTES MPR-46S';
+        document.getElementById('genMode').textContent = 'Ένδειξη δικτύου • ' + (g.profile || 'ENTES');
+        badge.textContent = 'Online'; badge.className = 'badge ok';
+        box.className = 'gen-status run';
+        document.getElementById('genChips').innerHTML = '<span class="chip ok">ΔΙΚΤΥΟ</span><span class="chip">' + f2(g.frequency, 1) + ' Hz</span>';
+        setLoadBar('loadL1', 'loadL1t', null);
+        setLoadBar('loadL2', 'loadL2t', null);
+        setLoadBar('loadL3', 'loadL3t', null);
+        document.getElementById('gVll').textContent = f0(g.volt_avg_ll);
+        document.getElementById('gHz').textContent = f2(g.frequency, 1);
+        document.getElementById('gKva').textContent = f2(g.kva_total, 2);
+        document.getElementById('gRpm').textContent = '—';
+        document.getElementById('gCurr').textContent = f2(g.curr_avg, 1);
+        document.getElementById('gBatt').textContent = '—';
+        document.getElementById('gOil').textContent = '—';
+        document.getElementById('gCool').textContent = '—';
+        const phases = [
+          { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kva: g.kva_l1 },
+          { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kva: g.kva_l2 },
+          { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kva: g.kva_l3 }
+        ];
+        document.getElementById('genPhases').innerHTML = phases.map(p => `
+        <div class="phase"><h3>Φάση ${p.n}</h3>
+          <div class="row"><span>L-N τάση</span><span>${f0(p.vn)} V</span></div>
+          <div class="row"><span>L-L τάση</span><span>${f0(p.vll)} V</span></div>
+          <div class="row"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
+          <div class="row"><span>kW</span><span>${f2(p.kva, 2)}</span></div>
+        </div>`).join('');
+        document.getElementById('genAlarms').textContent = 'Μετρητής δικτύου (δοκιμή σπιτιού)';
+        document.getElementById('genNfpaList').innerHTML = '<li class="muted">—</li>';
+        document.getElementById('genFaultList').innerHTML = '<li class="muted">—</li>';
         return;
       }
 

@@ -40,6 +40,12 @@
 #define CUMMINS_CMD_RESET         400301
 #define CUMMINS_CMD_ESTOP         400302
 
+#define MODBUS_PROFILE_PS0600 0
+#define MODBUS_PROFILE_ENTES  1
+
+#define ENTES_REG_MEAS_START 0
+#define ENTES_REG_MEAS_COUNT 36
+
 struct GenData {
   bool valid = false;
   unsigned long lastUpdate = 0;
@@ -122,9 +128,20 @@ inline const char* cumminsFaultTypeLabel(uint8_t t) {
   }
 }
 
-inline void genFillJson(JsonObject& o, const GenData& g) {
+inline uint32_t entesU32(const uint16_t* r, uint8_t pairIdx) {
+  return ((uint32_t)r[pairIdx * 2] << 16) | r[pairIdx * 2 + 1];
+}
+
+inline float entesFloat(const uint16_t* r, uint8_t pairIdx) {
+  uint32_t u = entesU32(r, pairIdx);
+  float f;
+  memcpy(&f, &u, sizeof(f));
+  return f;
+}
+
+inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["valid"] = g.valid;
-  o["profile"] = "PS0600";
+  o["profile"] = (profile == MODBUS_PROFILE_ENTES) ? "ENTES_MPR46S" : "PS0600";
   o["controller_type"] = g.controllerType;
   o["op_mode"] = g.opMode;
   o["op_mode_label"] = cumminsOpModeLabel(g.opMode);
@@ -169,6 +186,7 @@ struct GenManager {
   HardwareSerial* bus = nullptr;
   GenData data;
   bool enabled = true;
+  uint8_t profile = MODBUS_PROFILE_PS0600;
   uint8_t slaveId = 1;
   uint32_t baud = 9600;
   unsigned long lastPoll = 0;
@@ -177,12 +195,14 @@ struct GenManager {
 
   void load(Preferences& prefs) {
     enabled = prefs.getBool("modbus_en", false);
+    profile = (uint8_t)prefs.getUInt("modbus_prof", MODBUS_PROFILE_PS0600);
     slaveId = (uint8_t)prefs.getUInt("modbus_id", 1);
     baud = prefs.getUInt("modbus_baud", 9600);
   }
 
   void save(Preferences& prefs) {
     prefs.putBool("modbus_en", enabled);
+    prefs.putUInt("modbus_prof", profile);
     prefs.putUInt("modbus_id", slaveId);
     prefs.putUInt("modbus_baud", baud);
   }
@@ -203,6 +223,10 @@ struct GenManager {
     return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), count, out);
   }
 
+  bool readDirect(uint16_t startReg, uint16_t count, uint16_t* out) {
+    return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, startReg, count, out);
+  }
+
   bool writeHold(uint16_t reg40001, uint16_t value) {
     if (!bus) return false;
     return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value);
@@ -214,7 +238,7 @@ struct GenManager {
   bool cmdEstop(bool active) { return writeHold(CUMMINS_CMD_ESTOP, active ? 1 : 0); }
 
   bool runGensetCmd(const char* action) {
-    if (!enabled || !bus || !action) return false;
+    if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) return false;
     if (strcmp(action, "start") == 0) return cmdStart();
     if (strcmp(action, "stop") == 0) return cmdStop();
     if (strcmp(action, "reset") == 0) return cmdFaultReset();
@@ -225,8 +249,37 @@ struct GenManager {
 
   void pollReset() { pollStep = 0; }
 
+  bool pollEntesOnce() {
+    uint16_t r[ENTES_REG_MEAS_COUNT];
+    if (!readDirect(ENTES_REG_MEAS_START, ENTES_REG_MEAS_COUNT, r)) {
+      data.lastError = "modbus 0 - ENTES/RS485 RX2 TX2";
+      return false;
+    }
+    data.voltL1N = entesU32(r, 0) * 0.1f;
+    data.voltL2N = entesU32(r, 1) * 0.1f;
+    data.voltL3N = entesU32(r, 2) * 0.1f;
+    data.voltL1L2 = entesU32(r, 4) * 0.1f;
+    data.voltL2L3 = entesU32(r, 5) * 0.1f;
+    data.voltL3L1 = entesU32(r, 6) * 0.1f;
+    data.currL1 = entesU32(r, 7) * 0.001f;
+    data.currL2 = entesU32(r, 8) * 0.001f;
+    data.currL3 = entesU32(r, 9) * 0.001f;
+    data.currAvg = (data.currL1 + data.currL2 + data.currL3) / 3.0f;
+    data.voltAvgLL = (data.voltL1L2 + data.voltL2L3 + data.voltL3L1) / 3.0f;
+    data.frequency = entesU32(r, 12) * 0.01f;
+    data.kvaL1 = entesFloat(r, 13) / 1000.0f;
+    data.kvaL2 = entesFloat(r, 14) / 1000.0f;
+    data.kvaL3 = entesFloat(r, 15) / 1000.0f;
+    data.kvaTotal = entesFloat(r, 17) / 1000.0f;
+    data.valid = true;
+    data.lastUpdate = millis();
+    data.lastError = "";
+    return true;
+  }
+
   bool pollStepOnce() {
     if (!enabled || !bus) return false;
+    if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
 
     switch (pollStep) {
       case 0: {
@@ -372,6 +425,7 @@ struct GenManager {
   bool pollOnce() {
     pollReset();
     data.valid = false;
+    if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
     for (uint8_t i = 0; i < 20; i++) {
       if (pollStepOnce()) return true;
       if (pollStep == 0 && i < 19) return false;
@@ -381,6 +435,12 @@ struct GenManager {
 
   void poll() {
     if (!enabled) return;
+    if (profile == MODBUS_PROFILE_ENTES) {
+      if (millis() - lastPoll < pollIntervalMs) return;
+      lastPoll = millis();
+      pollEntesOnce();
+      return;
+    }
     if (pollStep == 0 && millis() - lastPoll < pollIntervalMs) return;
     if (pollStep == 0) {
       data.valid = false;

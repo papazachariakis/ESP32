@@ -134,7 +134,7 @@ void publishGensetMqtt() {
   if (!mqtt.connected() || !genMgr.enabled) return;
   StaticJsonDocument<2560> doc;
   JsonObject root = doc.to<JsonObject>();
-  genFillJson(root, genMgr.data);
+  genFillJson(root, genMgr.data, genMgr.profile);
   root["enabled"] = genMgr.enabled;
   char payload[2560];
   serializeJson(doc, payload);
@@ -226,7 +226,7 @@ String buildStatusJson() {
   mq["topic_genset"] = topicGenset;
 
   JsonObject genset = doc.createNestedObject("genset");
-  genFillJson(genset, genMgr.data);
+  genFillJson(genset, genMgr.data, genMgr.profile);
   genset["enabled"] = genMgr.enabled;
   genset["slave_id"] = genMgr.slaveId;
   genset["baud"] = genMgr.baud;
@@ -292,7 +292,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   if (doc.containsKey("ota")) {
     const char* pw = doc["ota"];
-    if (remoteOtaPasswordOk(pw)) requestRemoteOta();
+    if (remoteOtaPasswordOk(pw)) {
+      Serial.println("MQTT: remote OTA queued");
+      requestRemoteOta();
+    }
   }
 
 }
@@ -588,7 +591,7 @@ void handleGenset() {
 
   JsonObject o = doc.to<JsonObject>();
 
-  genFillJson(o, genMgr.data);
+  genFillJson(o, genMgr.data, genMgr.profile);
 
   o["enabled"] = genMgr.enabled;
 
@@ -673,6 +676,16 @@ void handleModbusSave() {
   genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
 
   genMgr.baud = doc["baud"] | 9600;
+
+  if (doc.containsKey("profile")) {
+    const char* p = doc["profile"];
+    if (p && (strcmp(p, "entes") == 0 || strcmp(p, "ENTES_MPR46S") == 0))
+      genMgr.profile = MODBUS_PROFILE_ENTES;
+    else if (p && (strcmp(p, "ps0600") == 0 || strcmp(p, "PS0600") == 0))
+      genMgr.profile = MODBUS_PROFILE_PS0600;
+    else
+      genMgr.profile = (uint8_t)(doc["profile"] | genMgr.profile);
+  }
 
   genMgr.save(prefs);
 
@@ -837,6 +850,10 @@ void setup() {
 void loop() {
   pumpNetwork();
 
+  if (WiFi.status() == WL_CONNECTED && mqtt.connected()) {
+    mqtt.loop();
+  }
+
   if (remoteOtaPending() && !otaInProgress()) {
     remoteOtaPending() = false;
     performRemoteOta();
@@ -862,7 +879,6 @@ void loop() {
       mqttConnect();
     }
   } else {
-    mqtt.loop();
     if (millis() - lastMqttPublish > MQTT_PUBLISH_INTERVAL_MS) {
       lastMqttPublish = millis();
       publishStatus();

@@ -110,7 +110,13 @@ inline bool performRemoteOta() {
 
   int contentLen = -1;
   bool httpOk = false;
-  while (client.connected() || client.available()) {
+  unsigned long hdrStart = millis();
+  while (millis() - hdrStart < 20000) {
+    if (!client.available()) {
+      if (!client.connected()) break;
+      delay(10);
+      continue;
+    }
     String line = client.readStringUntil('\n');
     line.trim();
     if (line.length() == 0) break;

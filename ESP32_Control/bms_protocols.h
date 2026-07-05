@@ -5,11 +5,17 @@
 #define JK_SERVICE_UUID "0000ffe0-0000-1000-8000-00805f9b34fb"
 #define JK_CHAR_UUID    "0000ffe1-0000-1000-8000-00805f9b34fb"
 
+// JK02 BLE cell-info / device-info frames are a fixed 300 bytes.
+#define JK_FRAME_LEN 300
+
 struct BmsProtoState {
-  uint8_t jkBuf[336];
+  uint8_t jkBuf[360];
   size_t jkLen = 0;
   int jkSwVer = 19;
   bool jk32S = false;
+  uint32_t cellFrames = 0;
+  uint32_t infoFrames = 0;
+  uint32_t crcErrors = 0;
 };
 
 inline int jkMajorVersion(const String& v) {
@@ -152,34 +158,48 @@ inline bool jkParseFrame(const uint8_t* f, size_t len, BmsData& bms, BmsProtoSta
   return false;
 }
 
-inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& bms) {
-  for (size_t i = 0; i < len; i++) {
-    uint8_t b = data[i];
-    if (st.jkLen == 0 && b != 0x55 && b != 0x41) continue;
-    if (st.jkLen == 0 && b == 0x41) {
-      if (i + 3 < len && data[i + 1] == 0x54 && data[i + 2] == 0x0D && data[i + 3] == 0x0A) {
-        i += 3;
-        continue;
-      }
-    }
-    if (st.jkLen < sizeof(st.jkBuf)) st.jkBuf[st.jkLen++] = b;
-    if (st.jkLen < 5) continue;
-    if (st.jkBuf[0] != 0x55 || st.jkBuf[1] != 0xAA) { st.jkLen = 0; continue; }
+inline void jkDrop(BmsProtoState& st, size_t n) {
+  if (n >= st.jkLen) { st.jkLen = 0; return; }
+  memmove(st.jkBuf, st.jkBuf + n, st.jkLen - n);
+  st.jkLen -= n;
+}
 
-    if (st.jkLen >= 300) {
-      int tryLen = (int)st.jkLen;
-      if (tryLen > (int)sizeof(st.jkBuf)) tryLen = (int)sizeof(st.jkBuf);
-      for (; tryLen >= 280; tryLen--) {
-        if (bmsCrcSum(st.jkBuf, tryLen - 1) != st.jkBuf[tryLen - 1]) continue;
-        if (jkParseFrame(st.jkBuf, (size_t)tryLen, bms, st)) {
-          uint8_t frameType = st.jkBuf[4];
-          st.jkLen = 0;
-          return frameType == 0x02;
+// Keep the buffer aligned so byte 0 is a plausible frame header (0x55 0xAA 0xEB 0x90).
+inline void jkResync(BmsProtoState& st) {
+  while (st.jkLen >= 1 && st.jkBuf[0] != 0x55) jkDrop(st, 1);
+  while (st.jkLen >= 2 && st.jkBuf[1] != 0xAA) {
+    jkDrop(st, 1);
+    while (st.jkLen >= 1 && st.jkBuf[0] != 0x55) jkDrop(st, 1);
+  }
+}
+
+// Robust reassembly: BLE delivers 300-byte frames as ~15 notifications that may
+// desync. Accumulate, resync to the header, validate CRC over the fixed frame
+// length, parse, then consume exactly one frame. Returns true if a cell-info
+// (0x02) frame was successfully parsed.
+inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& bms) {
+  bool gotCell = false;
+  for (size_t i = 0; i < len; i++) {
+    if (st.jkLen >= sizeof(st.jkBuf)) jkDrop(st, 1);
+    st.jkBuf[st.jkLen++] = data[i];
+    jkResync(st);
+
+    while (st.jkLen >= JK_FRAME_LEN &&
+           st.jkBuf[0] == 0x55 && st.jkBuf[1] == 0xAA &&
+           st.jkBuf[2] == 0xEB && st.jkBuf[3] == 0x90) {
+      if (bmsCrcSum(st.jkBuf, JK_FRAME_LEN - 1) == st.jkBuf[JK_FRAME_LEN - 1]) {
+        uint8_t frameType = st.jkBuf[4];
+        if (jkParseFrame(st.jkBuf, JK_FRAME_LEN, bms, st)) {
+          if (frameType == 0x02) { gotCell = true; st.cellFrames++; }
+          else if (frameType == 0x03) st.infoFrames++;
         }
-        break;
+        jkDrop(st, JK_FRAME_LEN);
+      } else {
+        st.crcErrors++;
+        jkDrop(st, 1);
+        jkResync(st);
       }
     }
-    if (st.jkLen >= sizeof(st.jkBuf)) st.jkLen = 0;
   }
-  return false;
+  return gotCell;
 }

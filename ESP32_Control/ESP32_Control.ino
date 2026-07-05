@@ -209,6 +209,10 @@ String buildStatusJson() {
 
   ble["bms_type"] = bmsTypeId(bmsMgr.type);
 
+  ble["cell_frames"] = bmsMgr.proto.cellFrames;
+  ble["info_frames"] = bmsMgr.proto.infoFrames;
+  ble["crc_errors"] = bmsMgr.proto.crcErrors;
+
 
 
   JsonObject bmsObj = doc.createNestedObject("bms");
@@ -300,6 +304,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       genMgr.pollOnce();
       publishGensetMqtt();
       publishStatus();
+    }
+  }
+
+  if (doc.containsKey("reboot")) {
+    const char* pw = doc["reboot"];
+    if (remoteOtaPasswordOk(pw)) {
+      Serial.println("MQTT: reboot requested");
+      publishStatus();
+      delay(300);
+      ESP.restart();
     }
   }
 

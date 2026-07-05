@@ -216,7 +216,7 @@
         <div class="stats">
           <div class="kpi"><div class="l">Τάση μέση L-L</div><div class="v"><span id="gVll">-</span><span class="u">V</span></div></div>
           <div class="kpi"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">-</span><span class="u">Hz</span></div></div>
-          <div class="kpi"><div class="l">kVA σύνολο</div><div class="v"><span id="gKva">-</span><span class="u">kVA</span></div></div>
+          <div class="kpi"><div class="l">Ισχύς (kW / kVA)</div><div class="v"><span id="gKva">-</span></div></div>
           <div class="kpi"><div class="l">RPM κινητήρα</div><div class="v"><span id="gRpm">-</span></div></div>
           <div class="kpi"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">-</span><span class="u">A</span></div></div>
           <div class="kpi"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">-</span><span class="u">V</span></div></div>
@@ -439,7 +439,7 @@
 
       document.getElementById('gVll').textContent = f0(g.volt_avg_ll);
       document.getElementById('gHz').textContent = f2(g.frequency, 1);
-      document.getElementById('gKva').textContent = f0(g.kva_total);
+      document.getElementById('gKva').textContent = (g.kw_total != null ? f0(g.kw_total) : f0(g.kva_total)) + ' / ' + f0(g.kva_total);
       document.getElementById('gRpm').textContent = f0(g.engine_rpm);
       document.getElementById('gCurr').textContent = f2(g.curr_avg, 1);
       document.getElementById('gBatt').textContent = f2(g.battery_v, 1);
@@ -455,19 +455,20 @@
 
       document.getElementById('gCtrl').textContent = g.controller_type ?? '-';
       document.getElementById('gRuns').textContent = g.total_runs ?? '-';
-      document.getElementById('gHours').textContent = Math.floor((Number(g.runtime_sec) || 0) / 3600) + ' h';
+      document.getElementById('gHours').textContent = (g.runtime_hours != null ? f2(g.runtime_hours, 1) : Math.floor((Number(g.runtime_sec) || 0) / 3600)) + ' h';
       document.getElementById('gFault').textContent = Number(g.active_fault) ? ('#' + g.active_fault + ' (' + (g.fault_type_label || '') + ')') : 'Κανένα';
 
       const phases = [
-        { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kva: g.kva_l1, load: g.load_l1_pct },
-        { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kva: g.kva_l2, load: g.load_l2_pct },
-        { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kva: g.kva_l3, load: g.load_l3_pct }
+        { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kw: g.kw_l1, kva: g.kva_l1, load: g.load_l1_pct },
+        { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kw: g.kw_l2, kva: g.kva_l2, load: g.load_l2_pct },
+        { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kw: g.kw_l3, kva: g.kva_l3, load: g.load_l3_pct }
       ];
       document.getElementById('genPhases').innerHTML = phases.map(p => `
         <div class="phase"><h3>Φάση ${p.n}</h3>
           <div class="row"><span>L-N τάση</span><span>${f0(p.vn)} V</span></div>
           <div class="row"><span>L-L τάση</span><span>${f0(p.vll)} V</span></div>
           <div class="row"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
+          <div class="row"><span>kW</span><span>${f0(p.kw)}</span></div>
           <div class="row"><span>kVA</span><span>${f0(p.kva)}</span></div>
           <div class="row"><span>Φόρτιση</span><span>${f2(p.load, 1)}%</span></div>
         </div>`).join('');

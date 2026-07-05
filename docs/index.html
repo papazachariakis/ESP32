@@ -79,6 +79,17 @@
     }
     .icon-btn:hover{border-color:var(--accent)}
 
+    /* Wiring */
+    .wiring-img{
+      width:100%;max-width:900px;margin:0 auto;display:block;
+      border-radius:var(--radius);border:1px solid var(--border);
+      background:#fff;
+    }
+    .wire-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:14px}
+    .wire-table th,.wire-table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+    .wire-table th{color:var(--muted);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+    .wire-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+
     /* Nav tabs */
     nav.tabs{
       display:flex;gap:4px;padding:8px clamp(14px,3vw,24px);
@@ -328,6 +339,7 @@
     <button data-view="bms" onclick="switchView('bms')">Μπαταρία</button>
     <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
     <button data-view="relays" onclick="switchView('relays')">Relays</button>
+    <button data-view="wiring" onclick="switchView('wiring')">Καλωδίωση</button>
   </nav>
 
   <main>
@@ -494,6 +506,51 @@
         <div class="card-title">Επαφές / Relays</div>
         <div id="relays"></div>
         <button class="btn sec" style="margin-top:14px" onclick="allOff()">Όλα OFF</button>
+      </div>
+    </div>
+
+    <!-- WIRING -->
+    <div id="view-wiring" class="view">
+      <div class="card">
+        <div class="card-title">ESP32 → XY-485 → PS0600 (Cummins C22D5)</div>
+        <p class="small muted" style="margin-bottom:14px">
+          Modbus RTU 8N1 • GPIO16=RX2, GPIO17=TX2 • DE/RE δεν χρησιμοποιείται (auto-direction XY-485)
+        </p>
+        <img class="wiring-img" src="esp32_xy485_ps0600_wiring.png" alt="Διάγραμμα καλωδίωσης ESP32 XY-485 PS0600" loading="lazy" />
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">ESP32 → XY-485</div>
+          <table class="wire-table">
+            <thead><tr><th>ESP32</th><th>XY-485</th><th>Χρώμα</th></tr></thead>
+            <tbody>
+              <tr><td>GPIO17 (TX2)</td><td>TXD</td><td><span class="wire-dot" style="background:#22c55e"></span>Πράσινο</td></tr>
+              <tr><td>GPIO16 (RX2)</td><td>RXD</td><td><span class="wire-dot" style="background:#3b82f6"></span>Μπλε</td></tr>
+              <tr><td>3V3</td><td>VCC</td><td><span class="wire-dot" style="background:#ef4444"></span>Κόκκινο</td></tr>
+              <tr><td>GND</td><td>GND</td><td><span class="wire-dot" style="background:#94a3b8"></span>Μαύρο</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">XY-485 → PS0600 TB15</div>
+          <table class="wire-table">
+            <thead><tr><th>XY-485</th><th>TB15</th><th>Σημείωση</th></tr></thead>
+            <tbody>
+              <tr><td>A (A+)</td><td>Pin 3 (A+)</td><td>Data +</td></tr>
+              <tr><td>B (B−)</td><td>Pin 4 (B−)</td><td>Data −</td></tr>
+              <tr><td>GND</td><td>Pin 1 (Common)</td><td>Προαιρετικό</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Troubleshooting</div>
+        <ul class="small muted" style="padding-left:18px;line-height:1.7">
+          <li>Αν βλέπεις <code>modbus 40009</code>: πρώτα <b>αντάλλαξε A↔B</b></li>
+          <li>Έλεγξε slave ID και baud (συνήθως 9600 ή 19200, 8N1) στο μενού PS0600</li>
+          <li>Για μακρύ καλώδιο (&gt;10m): termination 120Ω στα άκρα</li>
+          <li>Μην συνδέσεις DE/RE — το module είναι auto-direction</li>
+        </ul>
       </div>
     </div>
   </main>

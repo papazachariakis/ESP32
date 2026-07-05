@@ -17,6 +17,7 @@ static const char* RELAY_LABELS[RELAY_COUNT] = { "LED / D2", "Relay D4", "Relay 
 
 #define BLE_SCAN_SECONDS 8
 #define BLE_RECONNECT_MS 15000
+#define BLE_BOOT_DELAY_MS 1500
 
 // RS485 Modbus RTU (MAX485) — Cummins PS0600 (C22D5)
 #define MODBUS_RX_PIN 16

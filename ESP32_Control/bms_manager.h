@@ -26,7 +26,7 @@ struct BmsManager {
 
   static BmsManager* gInstance;
 
-  void reset() {
+  void releaseClient() {
     if (gInstance == this) gInstance = nullptr;
     if (client) {
       if (client->isConnected()) client->disconnect();
@@ -36,8 +36,14 @@ struct BmsManager {
     chrNotify = nullptr;
     chrWrite = nullptr;
     connected = false;
-    type = BmsType::None;
+    bms.connected = false;
+    bms.valid = false;
     proto = BmsProtoState();
+  }
+
+  void reset() {
+    releaseClient();
+    type = BmsType::None;
     bms = BmsData();
     mac = "";
     name = "";
@@ -124,14 +130,14 @@ struct BmsManager {
     client = BLEDevice::createClient();
     if (!client->connect(addr)) {
       Serial.println("BMS BLE connect failed");
-      reset();
+      releaseClient();
       return false;
     }
     delay(500);
 
     if (!getJkChars(client)) {
       Serial.println("BMS service/char not found");
-      reset();
+      releaseClient();
       return false;
     }
 

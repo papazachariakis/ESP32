@@ -753,8 +753,10 @@
       if (sec != null && sec > 10)
         hints.push(`Τελευταίο status πριν <b>${sec}s</b> — έλεγξε MQTT broker ή WiFi του ESP32.`);
 
-      if (!ble.mac)
-        hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://IP-ESP32</code>).');
+      if (!ble.saved && !ble.mac)
+        hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://' + (s.ip || 'IP-ESP32') + '</code>).');
+      else if (ble.saved && !ble.connected)
+        hints.push('BMS αποθηκευμένο στο NVS (<b>' + (ble.mac || '?') + '</b>) — auto-reconnect κάθε <b>15s</b>. Βεβαιώσου ότι το BMS είναι κοντά.');
       else if (!ble.connected)
         hints.push('BLE <b>αποσυνδεδεμένο</b> — το JK BMS πρέπει να είναι κοντά (&lt;10m). Retry κάθε <b>15s</b>.');
       else if (!bms.valid && (ble.cell_frames || 0) === 0)
@@ -814,7 +816,8 @@
 
       document.getElementById('diagBle').innerHTML = [
         diagRow('BLE σύνδεση', pill(ble.connected, 'Connected', 'Connecting', 'Disconnected')),
-        diagRow('MAC', ble.mac || '—'),
+        diagRow('MAC (saved)', ble.mac || '—'),
+        diagRow('NVS saved', pill(ble.saved, 'Yes', '—', 'No')),
         diagRow('Όνομα', ble.name || '—'),
         diagRow('Τύπος BMS', ble.bms_type || '—'),
         diagRow('Cell frames', ble.cell_frames ?? '—'),

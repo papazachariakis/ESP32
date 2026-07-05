@@ -21,5 +21,5 @@ static const char* RELAY_LABELS[RELAY_COUNT] = { "LED / D2", "Relay D4", "Relay 
 // RS485 Modbus RTU (MAX485) — Cummins PS0600 (C22D5)
 #define MODBUS_RX_PIN 16
 #define MODBUS_TX_PIN 17
-#define MODBUS_DE_PIN 19
+#define MODBUS_DE_PIN -1
 #define MODBUS_POLL_INTERVAL_MS 3000

@@ -70,7 +70,7 @@ inline bool modbusReadHolding(
   ser.flush();
   modbusSetTx(dePin, false);
   modbusPump();
-  delay(1);
+  delay(dePin < 0 ? 25 : 2);
 
   uint8_t hdr[3];
   if (!modbusReadBytes(ser, hdr, 3, timeoutMs)) return false;

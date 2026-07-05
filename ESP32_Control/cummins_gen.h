@@ -44,7 +44,7 @@
 #define MODBUS_PROFILE_ENTES  1
 
 #define ENTES_REG_MEAS_START 0
-#define ENTES_REG_MEAS_COUNT 36
+#define ENTES_REG_MEAS_COUNT 26
 
 struct GenData {
   bool valid = false;
@@ -208,8 +208,10 @@ struct GenManager {
   }
 
   void begin() {
-    pinMode(MODBUS_DE_PIN, OUTPUT);
-    modbusSetTx(MODBUS_DE_PIN, false);
+    if (MODBUS_DE_PIN >= 0) {
+      pinMode(MODBUS_DE_PIN, OUTPUT);
+      modbusSetTx(MODBUS_DE_PIN, false);
+    }
     bus = &Serial2;
     bus->begin(baud, SERIAL_8N1, MODBUS_RX_PIN, MODBUS_TX_PIN);
     bus->setTimeout(50);
@@ -224,7 +226,7 @@ struct GenManager {
   }
 
   bool readDirect(uint16_t startReg, uint16_t count, uint16_t* out) {
-    return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, startReg, count, out);
+    return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, startReg, count, out, 2000);
   }
 
   bool writeHold(uint16_t reg40001, uint16_t value) {
@@ -267,10 +269,13 @@ struct GenManager {
     data.currAvg = (data.currL1 + data.currL2 + data.currL3) / 3.0f;
     data.voltAvgLL = (data.voltL1L2 + data.voltL2L3 + data.voltL3L1) / 3.0f;
     data.frequency = entesU32(r, 12) * 0.01f;
-    data.kvaL1 = entesFloat(r, 13) / 1000.0f;
-    data.kvaL2 = entesFloat(r, 14) / 1000.0f;
-    data.kvaL3 = entesFloat(r, 15) / 1000.0f;
-    data.kvaTotal = entesFloat(r, 17) / 1000.0f;
+    uint16_t p[10];
+    if (readDirect(26, 10, p)) {
+      data.kvaL1 = entesFloat(p, 0) / 1000.0f;
+      data.kvaL2 = entesFloat(p, 1) / 1000.0f;
+      data.kvaL3 = entesFloat(p, 2) / 1000.0f;
+      data.kvaTotal = entesFloat(p, 4) / 1000.0f;
+    }
     data.valid = true;
     data.lastUpdate = millis();
     data.lastError = "";

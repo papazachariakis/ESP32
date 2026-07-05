@@ -24,6 +24,19 @@ inline bool jkModelIs32S(const String& model) {
   return false;
 }
 
+// JK FW 15+ (e.g. 19.07 on B2A8S20P) uses JK02_32S frame layout (+32 byte data offset).
+inline bool jkUseExtendedFrame(const BmsProtoState& st) {
+  return st.jk32S || st.jkSwVer >= 15;
+}
+
+inline int jkDataOff(const BmsProtoState& st) {
+  return jkUseExtendedFrame(st) ? 32 : 0;
+}
+
+inline int jkBaseOff(const BmsProtoState& st) {
+  return jkUseExtendedFrame(st) ? 16 : 0;
+}
+
 inline size_t jkBuildCmd(uint8_t cmd, uint8_t* out) {
   out[0] = 0xAA;
   out[1] = 0x55;
@@ -61,9 +74,9 @@ inline bool jkParseCellInfo(const uint8_t* f, size_t len, BmsData& bms, const Bm
   if (len < 200 || f[0] != 0x55 || f[1] != 0xAA || f[2] != 0xEB || f[3] != 0x90 || f[4] != 0x02) return false;
   if (bmsCrcSum(f, len - 1) != f[len - 1]) return false;
 
-  const int baseOff = st.jk32S ? 16 : 0;
-  const int dataOff = baseOff * 2;
-  const int maxCells = st.jk32S ? 32 : 24;
+  const int baseOff = jkBaseOff(st);
+  const int dataOff = jkDataOff(st);
+  const int maxCells = jkUseExtendedFrame(st) ? 32 : 24;
 
   for (int i = 0; i < maxCells && i < 16; i++) {
     uint16_t cv = bmsU16LE(f, 6 + i * 2);
@@ -94,19 +107,24 @@ inline bool jkParseCellInfo(const uint8_t* f, size_t len, BmsData& bms, const Bm
   };
   addTemp(bmsS16LE(f, 130 + dataOff));
   addTemp(bmsS16LE(f, 132 + dataOff));
-  bms.mosfetTemp = bmsS16LE(f, 134 + dataOff) / 10.0f;
-  if (st.jk32S) {
-    addTemp(bmsS16LE(f, 222 + dataOff));
-    addTemp(bmsS16LE(f, 224 + dataOff));
-    addTemp(bmsS16LE(f, 226 + dataOff));
+  if (jkUseExtendedFrame(st)) {
+    bms.mosfetTemp = bmsS16LE(f, 112 + dataOff) / 10.0f;
+    addTemp(bmsS16LE(f, 254));
+    addTemp(bmsS16LE(f, 256));
+    addTemp(bmsS16LE(f, 258));
+  } else {
+    bms.mosfetTemp = bmsS16LE(f, 134 + dataOff) / 10.0f;
   }
+
   if (tc > 0) {
     bms.avgTemp = tsum / tc;
     bms.tempSensorCount = tc;
     if (tc > 0) bms.ambientTemp = bms.temps[0];
   }
 
-  bms.errorMask = st.jk32S ? (uint16_t)(bmsU32LE(f, 134 + dataOff) & 0xFFFF) : bmsU16LE(f, 136 + dataOff);
+  bms.errorMask = jkUseExtendedFrame(st)
+    ? (uint16_t)(bmsU32LE(f, 134 + dataOff) & 0xFFFF)
+    : bmsU16LE(f, 136 + dataOff);
   bms.deltaCellV = bmsU16LE(f, 60 + baseOff) / 1000.0f;
 
   if (fabsf(bms.current) > 0.05f) {

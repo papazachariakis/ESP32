@@ -175,6 +175,14 @@ String buildStatusJson() {
 
   doc["rssi"] = WiFi.RSSI();
 
+  if (otaStatusField()) doc["ota_phase"] = otaStatusField();
+  if (lastOtaError().length()) doc["ota_error"] = lastOtaError();
+  if (mqttOtaActive()) {
+    char buf[48];
+    snprintf(buf, sizeof(buf), "%d/%d", mqttOtaReceived(), mqttOtaExpected());
+    doc["ota_mqtt_rx"] = buf;
+  }
+
   JsonArray outputs = doc.createNestedArray("outputs");
 
   for (int i = 0; i < RELAY_COUNT; i++) {
@@ -255,7 +263,12 @@ void publishStatus() {
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
-  StaticJsonDocument<256> doc;
+  if (length > 14 && memcmp(payload, "{\"ota_chunk\":", 13) == 0) {
+    mqttOtaFeedChunkJson((const char*)payload, length);
+    return;
+  }
+
+  StaticJsonDocument<384> doc;
 
   if (deserializeJson(doc, payload, length)) return;
 
@@ -295,6 +308,32 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (remoteOtaPasswordOk(pw)) {
       Serial.println("MQTT: remote OTA queued");
       requestRemoteOta();
+    }
+  }
+
+  if (doc.containsKey("ota_http") && doc.containsKey("url")) {
+    const char* pw = doc["ota_http"];
+    const char* url = doc["url"];
+    if (remoteOtaPasswordOk(pw) && url) {
+      Serial.println("MQTT: HTTP OTA queued");
+      requestHttpOta(url);
+    }
+  }
+
+  if (doc.containsKey("ota_mqtt")) {
+    const char* pw = doc["ota_mqtt"];
+    if (remoteOtaPasswordOk(pw)) {
+      int size = doc["size"] | 0;
+      Serial.printf("MQTT: chunk OTA begin %d\n", size);
+      mqttOtaBegin(size);
+    }
+  }
+
+  if (doc.containsKey("ota_end")) {
+    const char* pw = doc["ota_end"];
+    if (remoteOtaPasswordOk(pw)) {
+      Serial.println("MQTT: chunk OTA end");
+      mqttOtaFinish();
     }
   }
 
@@ -828,6 +867,13 @@ void setup() {
 
   setupRoutes();
   setupArduinoOta();
+  otaPrepHook() = []() {
+    if (bmsMgr.client && bmsMgr.client->isConnected()) {
+      bmsMgr.client->disconnect();
+      bmsMgr.connected = false;
+    }
+  };
+  otaStatusHook() = []() { publishStatus(); };
   modbusSetPump(pumpNetwork);
   mqttConnect();
 
@@ -859,7 +905,12 @@ void loop() {
     performRemoteOta();
   }
 
-  if (otaInProgress()) return;
+  if (httpOtaPending() && !otaInProgress()) {
+    httpOtaPending() = false;
+    performPendingHttpOta();
+  }
+
+  if (otaInProgress() && !mqttOtaActive()) return;
 
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWifiTry = 0;

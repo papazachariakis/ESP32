@@ -5,6 +5,7 @@
 #include <WebServer.h>
 #include <Update.h>
 #include <WiFiClientSecure.h>
+#include "mbedtls/base64.h"
 
 #ifndef OTA_PASSWORD
 #define OTA_PASSWORD "esp32ota"
@@ -18,6 +19,39 @@
 #define OTA_REMOTE_PATH "/papazachariakis/ESP32/master/docs/firmware.bin"
 #endif
 
+typedef void (*OtaHookFn)();
+
+inline OtaHookFn& otaPrepHook() {
+  static OtaHookFn fn = nullptr;
+  return fn;
+}
+
+inline OtaHookFn& otaStatusHook() {
+  static OtaHookFn fn = nullptr;
+  return fn;
+}
+
+inline void otaNotifyStatus() {
+  if (otaStatusHook()) otaStatusHook()();
+}
+
+inline String& lastOtaError() {
+  static String err;
+  return err;
+}
+
+inline String& otaPhase() {
+  static String phase;
+  return phase;
+}
+
+inline void otaSetError(const char* phase, const char* msg) {
+  otaPhase() = phase;
+  lastOtaError() = msg;
+  Serial.printf("OTA %s: %s\n", phase, msg);
+  otaNotifyStatus();
+}
+
 inline volatile bool& otaInProgress() {
   static volatile bool busy = false;
   return busy;
@@ -28,8 +62,45 @@ inline volatile bool& remoteOtaPending() {
   return pending;
 }
 
+inline volatile bool& httpOtaPending() {
+  static volatile bool pending = false;
+  return pending;
+}
+
+inline String& httpOtaUrl() {
+  static String url;
+  return url;
+}
+
+inline volatile bool& mqttOtaActive() {
+  static volatile bool active = false;
+  return active;
+}
+
+inline int& mqttOtaExpected() {
+  static int expected = 0;
+  return expected;
+}
+
+inline int& mqttOtaReceived() {
+  static int received = 0;
+  return received;
+}
+
 inline void requestRemoteOta() {
+  otaPhase() = "queued";
+  lastOtaError() = "";
   remoteOtaPending() = true;
+  otaNotifyStatus();
+}
+
+inline void requestHttpOta(const char* url) {
+  if (!url || !url[0]) return;
+  httpOtaUrl() = url;
+  otaPhase() = "http_queued";
+  lastOtaError() = "";
+  httpOtaPending() = true;
+  otaNotifyStatus();
 }
 
 inline bool remoteOtaPasswordOk(const char* pw) {
@@ -37,7 +108,7 @@ inline bool remoteOtaPasswordOk(const char* pw) {
 }
 
 inline void setupArduinoOta() {
-  Serial.println("OTA: web /api/ota + MQTT remote");
+  Serial.println("OTA: web /api/ota + MQTT remote/https/http/chunks");
 }
 
 inline void handleOtaUpload(WebServer& server) {
@@ -90,7 +161,7 @@ inline void registerOtaRoutes(WebServer& server) {
     [&server]() { handleOtaUpload(server); });
 }
 
-inline bool otaReadHttpHeaders(WiFiClientSecure& client, int& contentLen) {
+inline bool otaReadHttpHeaders(Client& client, int& contentLen) {
   contentLen = -1;
   bool httpOk = false;
   unsigned long hdrStart = millis();
@@ -119,43 +190,21 @@ inline bool otaReadHttpHeaders(WiFiClientSecure& client, int& contentLen) {
   return httpOk;
 }
 
-inline bool performRemoteOtaFromHost(const char* host, const char* path) {
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setTimeout(90000);
-
-  Serial.printf("Remote OTA: https://%s%s\n", host, path);
-  if (!client.connect(host, 443)) {
-    Serial.println("Remote OTA: connect failed");
-    return false;
-  }
-
-  client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
-               "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
-
-  int contentLen = -1;
-  if (!otaReadHttpHeaders(client, contentLen)) {
-    Serial.println("Remote OTA: HTTP not 200");
-    client.stop();
-    return false;
-  }
-
+inline bool otaDownloadBody(Client& client, int contentLen) {
   if (contentLen < 500000 || contentLen > 1966080) {
-    Serial.printf("Remote OTA: bad size %d\n", contentLen);
-    client.stop();
+    otaSetError("download", "bad firmware size");
     return false;
   }
-
   if (!Update.begin(contentLen)) {
     Update.printError(Serial);
-    client.stop();
+    otaSetError("download", "Update.begin failed");
     return false;
   }
 
   uint8_t buf[1024];
   int total = 0;
   unsigned long lastData = millis();
-  while (total < contentLen && millis() - lastData < 120000) {
+  while (total < contentLen && millis() - lastData < 180000) {
     int avail = client.available();
     if (avail <= 0) {
       if (!client.connected()) {
@@ -176,42 +225,245 @@ inline bool performRemoteOtaFromHost(const char* host, const char* path) {
     if (n <= 0) break;
     if (Update.write(buf, n) != (size_t)n) {
       Update.printError(Serial);
-      client.stop();
+      otaSetError("download", "write failed");
       return false;
     }
     total += n;
     yield();
   }
-  client.stop();
 
   if (total != contentLen || !Update.end(true)) {
     Update.printError(Serial);
-    Serial.printf("Remote OTA: wrote %d / %d\n", total, contentLen);
+    otaSetError("download", "incomplete image");
     return false;
   }
+  return true;
+}
 
-  Serial.printf("Remote OTA OK: %d bytes from %s\n", total, host);
+inline void otaPrepareFlash() {
+  WiFi.setSleep(false);
+  if (otaPrepHook()) otaPrepHook()();
+}
+
+inline bool performRemoteOtaFromHost(const char* host, const char* path, bool tls) {
+  int contentLen = -1;
+  if (tls) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(90000);
+    Serial.printf("Remote OTA: https://%s%s\n", host, path);
+    otaPhase() = "https_connect";
+    otaNotifyStatus();
+    if (!client.connect(host, 443)) {
+      otaSetError("https", "connect failed");
+      return false;
+    }
+    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
+                 "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
+    if (!otaReadHttpHeaders(client, contentLen)) {
+      otaSetError("https", "HTTP not 200");
+      client.stop();
+      return false;
+    }
+    otaPhase() = "https_download";
+    otaNotifyStatus();
+    if (!otaDownloadBody(client, contentLen)) {
+      client.stop();
+      return false;
+    }
+    client.stop();
+  } else {
+    WiFiClient client;
+    client.setTimeout(90000);
+    Serial.printf("Remote OTA: http://%s%s\n", host, path);
+    otaPhase() = "http_connect";
+    otaNotifyStatus();
+    if (!client.connect(host, 80)) {
+      otaSetError("http", "connect failed");
+      return false;
+    }
+    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
+                 "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
+    if (!otaReadHttpHeaders(client, contentLen)) {
+      otaSetError("http", "HTTP not 200");
+      client.stop();
+      return false;
+    }
+    otaPhase() = "http_download";
+    otaNotifyStatus();
+    if (!otaDownloadBody(client, contentLen)) {
+      client.stop();
+      return false;
+    }
+    client.stop();
+  }
+
+  Serial.printf("Remote OTA OK: %d bytes from %s\n", contentLen, host);
+  otaPhase() = "rebooting";
+  otaNotifyStatus();
   delay(500);
   ESP.restart();
   return true;
 }
 
-inline bool performRemoteOta() {
-  if (WiFi.status() != WL_CONNECTED) return false;
-  otaInProgress() = true;
-  WiFi.setSleep(false);
+inline bool otaParseHttpUrl(const char* url, String& host, String& path, uint16_t& port) {
+  if (!url || strncmp(url, "http://", 7) != 0) return false;
+  const char* p = url + 7;
+  const char* slash = strchr(p, '/');
+  String hostPort;
+  if (slash) {
+    hostPort = String(p, slash - p);
+    path = slash;
+  } else {
+    hostPort = p;
+    path = "/";
+  }
+  int colon = hostPort.indexOf(':');
+  if (colon >= 0) {
+    host = hostPort.substring(0, colon);
+    port = (uint16_t)hostPort.substring(colon + 1).toInt();
+    if (port == 0) port = 80;
+  } else {
+    host = hostPort;
+    port = 80;
+  }
+  return host.length() > 0;
+}
 
-  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH)) {
+inline bool performHttpOta(const char* url) {
+  String host, path;
+  uint16_t port = 80;
+  if (!otaParseHttpUrl(url, host, path, port)) {
+    otaSetError("http", "bad URL");
+    return false;
+  }
+  if (port != 80) {
+    otaSetError("http", "only port 80 supported");
+    return false;
+  }
+  return performRemoteOtaFromHost(host.c_str(), path.c_str(), false);
+}
+
+inline bool performRemoteOta() {
+  if (WiFi.status() != WL_CONNECTED) {
+    otaSetError("wifi", "not connected");
+    return false;
+  }
+  otaInProgress() = true;
+  otaPrepareFlash();
+
+  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH, true)) {
     otaInProgress() = false;
     return true;
   }
-
-  Serial.println("Remote OTA: retry via jsDelivr...");
-  if (performRemoteOtaFromHost("cdn.jsdelivr.net", "/gh/papazachariakis/ESP32@master/docs/firmware.bin")) {
+  if (performRemoteOtaFromHost("cdn.jsdelivr.net", "/gh/papazachariakis/ESP32@master/docs/firmware.bin", true)) {
     otaInProgress() = false;
     return true;
   }
 
   otaInProgress() = false;
   return false;
+}
+
+inline bool performPendingHttpOta() {
+  if (httpOtaUrl().isEmpty()) return false;
+  String url = httpOtaUrl();
+  httpOtaUrl() = "";
+  otaInProgress() = true;
+  otaPrepareFlash();
+  bool ok = performHttpOta(url.c_str());
+  otaInProgress() = false;
+  return ok;
+}
+
+inline bool mqttOtaBegin(int size) {
+  if (mqttOtaActive()) return false;
+  if (size < 500000 || size > 1966080) {
+    otaSetError("mqtt", "bad size");
+    return false;
+  }
+  otaPrepareFlash();
+  if (!Update.begin(size)) {
+    Update.printError(Serial);
+    otaSetError("mqtt", "Update.begin failed");
+    return false;
+  }
+  mqttOtaExpected() = size;
+  mqttOtaReceived() = 0;
+  mqttOtaActive() = true;
+  otaInProgress() = true;
+  otaPhase() = "mqtt_rx";
+  lastOtaError() = "";
+  otaNotifyStatus();
+  Serial.printf("MQTT OTA begin: %d bytes\n", size);
+  return true;
+}
+
+inline void mqttOtaAbort(const char* why) {
+  if (!mqttOtaActive()) return;
+  Update.abort();
+  mqttOtaActive() = false;
+  mqttOtaExpected() = 0;
+  mqttOtaReceived() = 0;
+  otaInProgress() = false;
+  otaSetError("mqtt", why);
+}
+
+inline bool mqttOtaFeedChunk(const uint8_t* data, size_t len) {
+  if (!mqttOtaActive() || len == 0) return false;
+  if (mqttOtaReceived() + (int)len > mqttOtaExpected()) {
+    mqttOtaAbort("overflow");
+    return false;
+  }
+  if (Update.write((uint8_t*)data, len) != len) {
+    mqttOtaAbort("write failed");
+    return false;
+  }
+  mqttOtaReceived() += (int)len;
+  return true;
+}
+
+inline bool mqttOtaFeedChunkJson(const char* payload, unsigned int length) {
+  const char* key = "\"ota_chunk\":\"";
+  const char* start = strstr(payload, key);
+  if (!start) return false;
+  start += strlen(key);
+  const char* end = strchr(start, '"');
+  if (!end || end <= start) return false;
+
+  size_t b64Len = (size_t)(end - start);
+  uint8_t buf[768];
+  size_t outLen = 0;
+  int rc = mbedtls_base64_decode(buf, sizeof(buf), &outLen, (const unsigned char*)start, b64Len);
+  if (rc != 0 || outLen == 0) {
+    mqttOtaAbort("base64 decode failed");
+    return false;
+  }
+  return mqttOtaFeedChunk(buf, outLen);
+}
+
+inline bool mqttOtaFinish() {
+  if (!mqttOtaActive()) return false;
+  if (mqttOtaReceived() != mqttOtaExpected()) {
+    mqttOtaAbort("size mismatch");
+    return false;
+  }
+  if (!Update.end(true)) {
+    Update.printError(Serial);
+    mqttOtaAbort("Update.end failed");
+    return false;
+  }
+  mqttOtaActive() = false;
+  otaInProgress() = false;
+  otaPhase() = "rebooting";
+  otaNotifyStatus();
+  Serial.printf("MQTT OTA OK: %d bytes\n", mqttOtaReceived());
+  delay(500);
+  ESP.restart();
+  return true;
+}
+
+inline const char* otaStatusField() {
+  if (otaPhase().isEmpty()) return nullptr;
+  return otaPhase().c_str();
 }

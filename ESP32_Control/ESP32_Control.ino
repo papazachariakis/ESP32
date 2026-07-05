@@ -221,6 +221,8 @@ String buildStatusJson() {
     ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
   if (bmsMgr.lastNotifyMs)
     ble["last_notify_ms"] = (long)(millis() - bmsMgr.lastNotifyMs);
+  if (bmsMgr.lastCellMs)
+    ble["last_cell_ms"] = (long)(millis() - bmsMgr.lastCellMs);
 
 
 

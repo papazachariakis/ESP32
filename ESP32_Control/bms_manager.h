@@ -24,9 +24,10 @@ struct BmsManager {
   bool connected = false;
   int bleRssi = -999;
   unsigned long lastPoll = 0;
-  unsigned long lastRssiRead = 0;
   unsigned long lastNotifyMs = 0;
+  unsigned long lastCellMs = 0;
   unsigned long lastKickMs = 0;
+  unsigned long connectedSinceMs = 0;
   uint16_t pollIntervalMs = BLE_POLL_MS;
 
   static void notifyThunk(BLERemoteCharacteristic* chr, uint8_t* data, size_t len, bool isNotify) {
@@ -50,6 +51,8 @@ struct BmsManager {
     bms = BmsData();
     lastDisplay = "";
     lastNotifyMs = 0;
+    lastCellMs = 0;
+    connectedSinceMs = 0;
   }
 
   void reset() { dropLink(); }
@@ -65,6 +68,10 @@ struct BmsManager {
     name = "";
   }
 
+  void registerNotify() {
+    if (chrNotify && chrNotify->canNotify()) chrNotify->registerForNotify(notifyThunk);
+  }
+
   bool getJkChars(BLEClient* c) {
     BLERemoteService* svc = nullptr;
     for (int i = 0; i < 20 && !svc; i++) {
@@ -75,40 +82,36 @@ struct BmsManager {
     chrNotify = svc->getCharacteristic(BLEUUID(JK_CHAR_UUID));
     if (!chrNotify) return false;
     chrWrite = chrNotify;
-    if (chrNotify->canNotify()) chrNotify->registerForNotify(notifyThunk);
+    registerNotify();
     return true;
   }
 
   bool writeBytes(const uint8_t* data, size_t len) {
     if (!chrWrite || !client || !client->isConnected()) return false;
-    chrWrite->writeValue((uint8_t*)data, len, false);
-    return true;
+    return chrWrite->writeValue((uint8_t*)data, len, false);
   }
 
   void onNotify(uint8_t* data, size_t len) {
     lastNotifyMs = millis();
-    bool parsed = jkFeed(proto, data, len, bms);
-    if (parsed || bms.valid) {
+    bool gotCell = jkFeed(proto, data, len, bms);
+    if (gotCell) lastCellMs = millis();
+    if (gotCell || bms.valid) {
       type = BmsType::Jk;
       bms.type = type;
       bms.connected = true;
       lastDisplay = bmsToDisplay(bms);
-    } else if (!bms.valid) {
-      String hex;
-      for (size_t i = 0; i < len && i < 48; i++) {
-        char b[4];
-        snprintf(b, sizeof(b), "%02X ", data[i]);
-        hex += b;
-      }
-      hex.trim();
-      lastDisplay = hex;
+    } else if (!bms.valid && len > 0) {
+      lastDisplay = "rx " + String((int)len) + "B";
     }
   }
 
   void sendPollCmd(uint8_t cmd) {
     uint8_t buf[32];
     size_t n = jkBuildCmd(cmd, buf);
-    writeBytes(buf, n);
+    if (!writeBytes(buf, n)) {
+      Serial.println("BMS write failed");
+      dropLink();
+    }
   }
 
   void sendInitialPolls() {
@@ -121,7 +124,7 @@ struct BmsManager {
   }
 
   void kickPolls() {
-    sendPollCmd(0x97);
+    registerNotify();
     sendPollCmd(0x96);
   }
 
@@ -132,7 +135,6 @@ struct BmsManager {
     sendPollCmd(0x96);
   }
 
-  // Call every loop iteration while BMS is configured.
   void maintain() {
     if (!connected || type != BmsType::Jk) return;
 
@@ -143,22 +145,30 @@ struct BmsManager {
     }
 
     unsigned long now = millis();
-    if (now - lastRssiRead > 20000) {
-      lastRssiRead = now;
-      bleRssi = client->getRssi();
+
+    if (connectedSinceMs && now - connectedSinceMs > BLE_SESSION_REFRESH_MS) {
+      Serial.println("BMS proactive session refresh");
+      dropLink();
+      return;
     }
 
     poll();
 
-    unsigned long notifyAge = lastNotifyMs ? now - lastNotifyMs : 0xFFFFFFFF;
-    if (notifyAge > BLE_NOTIFY_RESET_MS) {
-      Serial.printf("BMS no BLE data %lus, reconnect\n", notifyAge / 1000);
+    if (lastCellMs && now - lastCellMs > BLE_CELL_STALE_MS) {
+      Serial.printf("BMS no cell frame %lus\n", (now - lastCellMs) / 1000);
       dropLink();
       return;
     }
-    if (notifyAge > BLE_NOTIFY_KICK_MS && now - lastKickMs > 4000) {
+
+    unsigned long notifyAge = lastNotifyMs ? now - lastNotifyMs : 0xFFFFFFFF;
+    if (notifyAge > BLE_NOTIFY_RESET_MS) {
+      Serial.printf("BMS no notify %lus, reconnect\n", notifyAge / 1000);
+      dropLink();
+      return;
+    }
+    if (notifyAge > BLE_NOTIFY_KICK_MS && now - lastKickMs > 3000) {
       lastKickMs = now;
-      Serial.println("BMS stream slow, kick polls");
+      Serial.println("BMS kick");
       kickPolls();
     }
   }
@@ -197,9 +207,9 @@ struct BmsManager {
 
     gInstance = this;
     connected = true;
+    connectedSinceMs = millis();
     bms.connected = true;
     bleRssi = client->getRssi();
-    lastRssiRead = millis();
     lastNotifyMs = millis();
     prefs.putString("ble_mac", mac);
     prefs.putString("ble_name", name);
@@ -207,7 +217,7 @@ struct BmsManager {
 
     delay(200);
     sendInitialPolls();
-    Serial.printf("BMS connected [%s]: %s rssi=%d\n", bmsTypeId(type), name.c_str(), bleRssi);
+    Serial.printf("BMS connected [%s] rssi=%d\n", mac.c_str(), bleRssi);
     return true;
   }
 

@@ -237,6 +237,16 @@
     .gen-actions .stop{background:var(--bad);color:#fff}
     .gen-actions .sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
 
+    .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(min-width:600px){.cfg-grid{grid-template-columns:repeat(4,1fr)}}
+    .cfg-grid label{display:flex;flex-direction:column;gap:4px;font-size:.75rem;color:var(--muted)}
+    .cfg-grid select,.cfg-grid input[type=number]{
+      padding:9px 10px;border-radius:9px;border:1px solid var(--border);
+      background:var(--surface2);color:var(--text);font-family:inherit;font-size:.85rem;
+    }
+    .cfg-grid .cfg-en{flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:.85rem}
+    .cfg-grid .cfg-en input{width:auto}
+
   /* Relays */
     .toggle{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
     .toggle:last-child{border:0}
@@ -517,6 +527,31 @@
           <button class="sec" onclick="genCmd('estop_off')">E-Stop OFF</button>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title">Ρυθμίσεις Modbus (απομακρυσμένα)</div>
+        <p class="small muted" style="margin-bottom:10px">Πρέπει να ταιριάζουν με τον PS0600. Αποθηκεύονται στο ESP32 και επιβιώνουν reboot.</p>
+        <div class="cfg-grid">
+          <label>Profile
+            <select id="cfgProfile">
+              <option value="ps0600">PS0600 Genset</option>
+              <option value="entes">ENTES MPR-46S</option>
+            </select>
+          </label>
+          <label>Baud
+            <select id="cfgBaud">
+              <option>9600</option><option>19200</option><option>38400</option>
+              <option>57600</option><option>115200</option>
+            </select>
+          </label>
+          <label>Slave ID
+            <input type="number" id="cfgSlave" min="1" max="247" value="1" />
+          </label>
+          <label class="cfg-en">
+            <input type="checkbox" id="cfgEnabled" checked /> Ενεργό
+          </label>
+        </div>
+        <button class="btn sec" style="margin-top:12px" onclick="saveModbusCfg()">Αποθήκευση Modbus</button>
+      </div>
       <div class="grid-2">
         <div class="card">
           <div class="card-title">Φάσεις L1 / L2 / L3</div>
@@ -753,10 +788,8 @@
       if (sec != null && sec > 10)
         hints.push(`Τελευταίο status πριν <b>${sec}s</b> — έλεγξε MQTT broker ή WiFi του ESP32.`);
 
-      if (!ble.saved && !ble.mac)
-        hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://' + (s.ip || 'IP-ESP32') + '</code>).');
-      else if (ble.saved && !ble.connected)
-        hints.push('BMS αποθηκευμένο στο NVS (<b>' + (ble.mac || '?') + '</b>) — auto-reconnect κάθε <b>15s</b>. Βεβαιώσου ότι το BMS είναι κοντά.');
+      if (!ble.mac)
+        hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://IP-ESP32</code>).');
       else if (!ble.connected)
         hints.push('BLE <b>αποσυνδεδεμένο</b> — το JK BMS πρέπει να είναι κοντά (&lt;10m). Retry κάθε <b>15s</b>.');
       else if (!bms.valid && (ble.cell_frames || 0) === 0)
@@ -816,8 +849,7 @@
 
       document.getElementById('diagBle').innerHTML = [
         diagRow('BLE σύνδεση', pill(ble.connected, 'Connected', 'Connecting', 'Disconnected')),
-        diagRow('MAC (saved)', ble.mac || '—'),
-        diagRow('NVS saved', pill(ble.saved, 'Yes', '—', 'No')),
+        diagRow('MAC', ble.mac || '—'),
         diagRow('Όνομα', ble.name || '—'),
         diagRow('Τύπος BMS', ble.bms_type || '—'),
         diagRow('Cell frames', ble.cell_frames ?? '—'),
@@ -1041,6 +1073,8 @@
       const box = document.getElementById('genStatusBox');
       const isEntes = g && String(g.profile || '').includes('ENTES');
 
+      syncModbusCfg(g);
+
       if (!valid) {
         document.getElementById('genState').textContent = g && g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων...';
         document.getElementById('genMode').textContent = '—';
@@ -1171,6 +1205,36 @@
       if (!confirm('Εντολή γεννήτριας: ' + action + ';')) return;
       client.publish(cmdTopic, JSON.stringify({ genset: action }));
       toast('Εντολή στάλθηκε: ' + action);
+    }
+
+    function saveModbusCfg() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const cfg = {
+        enabled: document.getElementById('cfgEnabled').checked,
+        profile: document.getElementById('cfgProfile').value,
+        baud: +document.getElementById('cfgBaud').value,
+        slave_id: +document.getElementById('cfgSlave').value
+      };
+      client.publish(cmdTopic, JSON.stringify({ modbus_cfg: cfg }));
+      toast(`Modbus: baud ${cfg.baud}, ID ${cfg.slave_id} στάλθηκε`);
+    }
+
+    // Reflect device settings into the form, but never clobber a field the
+    // user is actively editing.
+    function syncModbusCfg(g) {
+      if (!g) return;
+      const active = document.activeElement;
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (!el || el === active) return;
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = val;
+      };
+      if (g.enabled != null) set('cfgEnabled', g.enabled);
+      if (g.baud != null) set('cfgBaud', String(g.baud));
+      if (g.slave_id != null) set('cfgSlave', g.slave_id);
+      const pr = String(g.profile || '').toLowerCase();
+      if (pr) set('cfgProfile', pr.includes('entes') ? 'entes' : 'ps0600');
     }
 
     function remoteOta() {

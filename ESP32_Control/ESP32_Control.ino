@@ -272,7 +272,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  StaticJsonDocument<384> doc;
+  StaticJsonDocument<512> doc;
 
   if (deserializeJson(doc, payload, length)) return;
 
@@ -305,6 +305,26 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       publishGensetMqtt();
       publishStatus();
     }
+  }
+
+  if (doc.containsKey("modbus_cfg")) {
+    JsonObject cfg = doc["modbus_cfg"];
+    if (cfg.containsKey("enabled")) genMgr.enabled = cfg["enabled"].as<bool>();
+    if (cfg.containsKey("slave_id")) genMgr.slaveId = (uint8_t)(cfg["slave_id"].as<int>());
+    if (cfg.containsKey("baud")) genMgr.baud = cfg["baud"].as<uint32_t>();
+    if (cfg.containsKey("profile")) {
+      const char* p = cfg["profile"];
+      if (p && (strcmp(p, "entes") == 0 || strcmp(p, "ENTES_MPR46S") == 0))
+        genMgr.profile = MODBUS_PROFILE_ENTES;
+      else if (p && (strcmp(p, "ps0600") == 0 || strcmp(p, "PS0600") == 0))
+        genMgr.profile = MODBUS_PROFILE_PS0600;
+    }
+    genMgr.save(prefs);
+    genMgr.applyBaud();
+    Serial.printf("MQTT: modbus cfg baud=%u id=%u\n", genMgr.baud, genMgr.slaveId);
+    if (genMgr.enabled) genMgr.pollOnce();
+    publishGensetMqtt();
+    publishStatus();
   }
 
   if (doc.containsKey("reboot")) {

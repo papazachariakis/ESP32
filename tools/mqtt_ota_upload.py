@@ -92,21 +92,27 @@ def main():
     client.publish(cmd, json.dumps({"ota_end": PASSWORD}), qos=1)
 
     rebooted = False
+    gap_before = None
     for i in range(90):
         time.sleep(2)
         phase = last_status.get("ota_phase")
         err = last_status.get("ota_error")
+        rx = last_status.get("ota_mqtt_rx")
         if err:
             print("ERROR:", err, "phase=", phase)
             client.loop_stop()
             return 1
+        if rx:
+            print(f"  device_rx={rx} phase={phase}")
         if phase == "rebooting":
-            print("Device rebooting...")
-        if i > 3 and phase not in ("mqtt_rx", "rebooting", "https_connect", "https_download"):
             rebooted = True
-        if rebooted and last_status.get("wifi_connected"):
+        if phase == "mqtt_rx" and i > 5 and not rx:
+            print("WARN: no chunk progress on device (old firmware?)")
+            client.loop_stop()
+            return 1
+        if rebooted and last_status.get("wifi_connected") and phase in (None, ""):
             print("SUCCESS: device back online after MQTT OTA")
-            print("ota_phase:", last_status.get("ota_phase"), "ip:", last_status.get("ip"))
+            print("ip:", last_status.get("ip"))
             client.loop_stop()
             return 0
 

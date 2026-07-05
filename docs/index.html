@@ -798,8 +798,11 @@
       const gen = s.genset || {};
 
       if (!connected) {
-        hints.push('Το dashboard δεν είναι συνδεδεμένο στο MQTT broker.');
+        hints.push('Το dashboard δεν είναι συνδεδεμένο στο MQTT broker — ⚙ Σύνδεση ή 🔍 Εύρεση συσκευών.');
         return hints;
+      }
+      if (connected && !lastUpdate) {
+        hints.push('MQTT συνδέθηκε αλλά <b>δεν έρχονται μηνύματα</b> — έλεγξε <b>mqtt.connected:true</b> στο <code>http://IP/api/status</code>.');
       }
 
       const sec = ageSec(lastUpdate);

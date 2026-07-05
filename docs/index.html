@@ -294,6 +294,40 @@
     }
     .status-bar span{display:flex;align-items:center;gap:4px}
     .status-bar b{color:var(--text);font-weight:600}
+    .status-bar .fresh-ok b{color:var(--ok)}
+    .status-bar .fresh-warn b{color:var(--warn)}
+    .status-bar .fresh-bad b{color:var(--bad)}
+
+    /* Diagnostics */
+    .diag-banner{
+      display:none;padding:12px 14px;border-radius:12px;margin-bottom:12px;
+      border:1px solid var(--warn);background:var(--warn-bg);font-size:.82rem;
+      line-height:1.5;color:#fde68a;
+    }
+    .diag-banner.show{display:block}
+    .diag-banner.bad{border-color:var(--bad);background:var(--bad-bg);color:#fca5a5}
+    .diag-banner ul{margin:6px 0 0 18px}
+    .diag-grid{display:grid;gap:12px}
+    @media(min-width:700px){.diag-grid.cols2{grid-template-columns:1fr 1fr}}
+    .diag-rows{display:flex;flex-direction:column;gap:0}
+    .diag-row{
+      display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+      padding:9px 0;border-bottom:1px solid var(--border);font-size:.82rem;
+    }
+    .diag-row:last-child{border-bottom:0}
+    .diag-row .lbl{color:var(--muted);flex-shrink:0}
+    .diag-row .val{text-align:right;font-weight:500;word-break:break-all}
+    .pill{
+      display:inline-block;padding:2px 8px;border-radius:999px;
+      font-size:.68rem;font-weight:600;text-transform:uppercase;
+    }
+    .pill.ok{background:var(--ok-bg);color:#86efac}
+    .pill.warn{background:var(--warn-bg);color:#fde047}
+    .pill.bad{background:var(--bad-bg);color:#fca5a5}
+    .pill.off{background:#1e293b;color:var(--muted)}
+    .hint-list{margin:0;padding-left:18px;font-size:.8rem;line-height:1.6;color:var(--muted)}
+    .hint-list li{margin:4px 0}
+    .hint-list b{color:var(--text)}
 
     /* Toast */
     .toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -340,6 +374,7 @@
     <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
     <button data-view="relays" onclick="switchView('relays')">Relays</button>
     <button data-view="wiring" onclick="switchView('wiring')">Καλωδίωση</button>
+    <button data-view="diag" onclick="switchView('diag')">Διαγνωστικά</button>
   </nav>
 
   <main>
@@ -347,8 +382,11 @@
       <span>📡 <b id="sbWifi">—</b></span>
       <span>🌐 <b id="sbIp">—</b></span>
       <span>📶 <b id="sbRssi">—</b></span>
-      <span>🕐 <b id="sbTime">—</b></span>
+      <span id="sbFresh" class="fresh-ok">🕐 <b id="sbTime">—</b></span>
+      <span>📨 <b id="sbMsgs">0</b></span>
     </div>
+
+    <div class="diag-banner" id="diagBanner"></div>
 
     <!-- OVERVIEW -->
     <div id="view-overview" class="view active">
@@ -553,6 +591,38 @@
         </ul>
       </div>
     </div>
+
+    <!-- DIAGNOSTICS -->
+    <div id="view-diag" class="view">
+      <div class="card">
+        <div class="card-title">Κατάσταση συστήματος</div>
+        <div class="diag-rows" id="diagSummary"></div>
+      </div>
+      <div class="diag-grid cols2">
+        <div class="card">
+          <div class="card-title"><span class="dot bms"></span>BLE / JK BMS</div>
+          <div class="diag-rows" id="diagBle"></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span class="dot gen"></span>Modbus / PS0600</div>
+          <div class="diag-rows" id="diagModbus"></div>
+        </div>
+      </div>
+      <div class="diag-grid cols2">
+        <div class="card">
+          <div class="card-title">MQTT & Δίκτυο</div>
+          <div class="diag-rows" id="diagMqtt"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ροή μηνυμάτων</div>
+          <div class="diag-rows" id="diagFlow"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Υποδείξεις / Troubleshooting</div>
+        <ul class="hint-list" id="diagHints"><li class="muted">Σύνδεση MQTT για diagnostics...</li></ul>
+      </div>
+    </div>
   </main>
 
   <!-- Settings drawer -->
@@ -584,6 +654,7 @@
     let outputs = [], connected = false, lastStatus = {}, lastUpdate = 0;
     const foundDevices = new Map();
     let faultBitsDb = null;
+    const msgStats = { status: 0, bms: 0, genset: 0, connectedAt: 0 };
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -635,7 +706,167 @@
     function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
     function f2(x, d = 2) { return Number.isFinite(+x) ? Number(x).toFixed(d) : '—'; }
     function f0(x) { return Number.isFinite(+x) ? Number(x).toFixed(0) : '—'; }
+    function f1(x) { return Number.isFinite(+x) ? Number(x).toFixed(1) : '—'; }
     function hex(x) { return '0x' + ((Number(x) >>> 0).toString(16).toUpperCase()); }
+
+    function pill(ok, okTxt, warnTxt, badTxt) {
+      if (ok === true) return `<span class="pill ok">${okTxt || 'OK'}</span>`;
+      if (ok === 'warn') return `<span class="pill warn">${warnTxt || 'WARN'}</span>`;
+      if (ok === false) return `<span class="pill bad">${badTxt || 'FAIL'}</span>`;
+      return `<span class="pill off">—</span>`;
+    }
+
+    function diagRow(label, value) {
+      return `<div class="diag-row"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
+    }
+
+    function ageSec(ts) {
+      if (!ts) return null;
+      return Math.round((Date.now() - ts) / 1000);
+    }
+
+    function updateFreshness() {
+      const sec = ageSec(lastUpdate);
+      const el = document.getElementById('sbTime');
+      const wrap = document.getElementById('sbFresh');
+      if (!lastUpdate) {
+        el.textContent = '—';
+        wrap.className = 'fresh-ok';
+        return;
+      }
+      el.textContent = sec < 3 ? 'τώρα' : 'πριν ' + sec + 's';
+      wrap.className = sec < 5 ? 'fresh-ok' : sec < 15 ? 'fresh-warn' : 'fresh-bad';
+    }
+
+    function buildDiagHints(s) {
+      const hints = [];
+      const ble = s.ble || {};
+      const bms = s.bms || {};
+      const gen = s.genset || {};
+
+      if (!connected) {
+        hints.push('Το dashboard δεν είναι συνδεδεμένο στο MQTT broker.');
+        return hints;
+      }
+
+      const sec = ageSec(lastUpdate);
+      if (sec != null && sec > 10)
+        hints.push(`Τελευταίο status πριν <b>${sec}s</b> — έλεγξε MQTT broker ή WiFi του ESP32.`);
+
+      if (!ble.mac)
+        hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://IP-ESP32</code>).');
+      else if (!ble.connected)
+        hints.push('BLE <b>αποσυνδεδεμένο</b> — το JK BMS πρέπει να είναι κοντά (&lt;10m). Retry κάθε <b>15s</b>.');
+      else if (!bms.valid && (ble.cell_frames || 0) === 0)
+        hints.push('BLE συνδέθηκε αλλά <b>0 cell frames</b> — περίμενε ή κάνε reboot BMS/ESP32.');
+      else if (!bms.valid && (ble.crc_errors || 0) > 0)
+        hints.push(`<b>${ble.crc_errors} CRC errors</b> — πιθανό framing desync. Ανέβασε νέο firmware ή reboot.`);
+      else if (!bms.valid && ble.connected)
+        hints.push('BLE OK, frames έρχονται — αναμονή valid BMS data (info_frames: ' + (ble.info_frames || 0) + ').');
+
+      if (gen.enabled === false)
+        hints.push('Modbus γεννήτριας <b>disabled</b> στο firmware/config.');
+      else if (!gen.valid && gen.error) {
+        if (String(gen.error).includes('40009'))
+          hints.push('Modbus <b>40009</b>: έλεγξε RS485 — πρώτα <b>αντάλλαξε A↔B</b>, μετά slave ID/baud. Δες καρτέλα <b>Καλωδίωση</b>.');
+        else
+          hints.push('Modbus σφάλμα: <b>' + gen.error + '</b>');
+      } else if (!gen.valid)
+        hints.push('Modbus poll σε εξέλιξη ή χωρίς απάντηση — έλεγξε baud (' + (gen.baud || '?') + ') και slave ID (' + (gen.slave_id || '?') + ').');
+
+      if (bms.valid && gen.valid)
+        hints.push('Όλα OK — BMS και γεννήτρια online.');
+
+      return hints;
+    }
+
+    function renderDiagBanner(s) {
+      const el = document.getElementById('diagBanner');
+      const hints = buildDiagHints(s).filter(h => !h.includes('Όλα OK'));
+      if (!hints.length) {
+        el.className = 'diag-banner';
+        el.innerHTML = '';
+        return;
+      }
+      el.className = 'diag-banner show' + (hints.some(h => h.includes('40009') || h.includes('αποσυνδεδεμένο')) ? ' bad' : '');
+      el.innerHTML = '<b>⚠ Προσοχή</b><ul>' + hints.slice(0, 3).map(h => '<li>' + h + '</li>').join('') + '</ul>';
+    }
+
+    function renderDiagnostics(s) {
+      if (!s || !s.device_id) return;
+      const ble = s.ble || {};
+      const bms = s.bms || {};
+      const gen = s.genset || {};
+      const mq = s.mqtt || {};
+      const sec = ageSec(lastUpdate);
+      const totalMsgs = msgStats.status + msgStats.bms + msgStats.genset;
+
+      document.getElementById('sbMsgs').textContent = totalMsgs;
+
+      document.getElementById('diagSummary').innerHTML = [
+        diagRow('Device ID', s.device_id || '—'),
+        diagRow('Dashboard MQTT', pill(connected, 'Online', 'Connecting', 'Offline')),
+        diagRow('BMS data', pill(bms.valid, 'Valid', 'Partial', 'No data')),
+        diagRow('Genset data', pill(gen.valid, 'Valid', 'Polling', 'No data')),
+        diagRow('Τελευταίο status', sec == null ? '—' : (sec < 3 ? 'τώρα' : 'πριν ' + sec + 's')),
+        diagRow('OTA', s.ota_phase ? (s.ota_phase + (s.ota_error ? ' — ' + s.ota_error : '')) : '—')
+      ].join('');
+
+      document.getElementById('diagBle').innerHTML = [
+        diagRow('BLE σύνδεση', pill(ble.connected, 'Connected', 'Connecting', 'Disconnected')),
+        diagRow('MAC', ble.mac || '—'),
+        diagRow('Όνομα', ble.name || '—'),
+        diagRow('Τύπος BMS', ble.bms_type || '—'),
+        diagRow('Cell frames', ble.cell_frames ?? '—'),
+        diagRow('Info frames', ble.info_frames ?? '—'),
+        diagRow('CRC errors', (ble.crc_errors || 0) > 0
+          ? `<span style="color:var(--bad)">${ble.crc_errors}</span>` : (ble.crc_errors ?? '0')),
+        diagRow('BMS valid', pill(bms.valid, 'Yes', 'Waiting', 'No')),
+        diagRow('SOC / V', bms.valid ? `${f0(bms.soc)}% • ${f2(bms.voltage, 2)}V` : '—')
+      ].join('');
+
+      document.getElementById('diagModbus').innerHTML = [
+        diagRow('Enabled', pill(gen.enabled !== false, 'Yes', '—', 'No')),
+        diagRow('Profile', gen.profile || '—'),
+        diagRow('Slave ID', gen.slave_id ?? '—'),
+        diagRow('Baud', gen.baud ?? '—'),
+        diagRow('Valid', pill(gen.valid, 'Yes', 'Polling', 'No')),
+        diagRow('Τελευταίο σφάλμα', gen.error
+          ? `<span style="color:var(--bad)">${gen.error}</span>` : pill(gen.valid, '—', '—', '—')),
+        diagRow('Controller', gen.controller_type || '—'),
+        diagRow('Pins firmware', 'RX=GPIO16 TX=GPIO17 DE=off')
+      ].join('');
+
+      document.getElementById('diagMqtt').innerHTML = [
+        diagRow('ESP32 MQTT', pill(mq.connected, 'Connected', '—', 'Disconnected')),
+        diagRow('Broker', mq.broker || '—'),
+        diagRow('Port', mq.port ?? '—'),
+        diagRow('WiFi SSID', s.wifi_ssid || '—'),
+        diagRow('IP', s.ip || '—'),
+        diagRow('RSSI', s.rssi != null ? s.rssi + ' dBm' : '—'),
+        diagRow('Topic status', mq.topic_status || '—'),
+        diagRow('Topic cmd', mq.topic_cmd || '—')
+      ].join('');
+
+      const sessSec = msgStats.connectedAt ? ageSec(msgStats.connectedAt) : null;
+      document.getElementById('diagFlow').innerHTML = [
+        diagRow('/status msgs', msgStats.status),
+        diagRow('/bms msgs', msgStats.bms),
+        diagRow('/genset msgs', msgStats.genset),
+        diagRow('Σύνολο', totalMsgs),
+        diagRow('Σύνδεση dashboard', sessSec == null ? '—' : sessSec + 's'),
+        diagRow('Publish ESP32', '~2s status, ~2s BMS, ~3s genset'),
+        diagRow('BLE retry ESP32', 'κάθε 15s'),
+        diagRow('Modbus poll ESP32', 'κάθε 3s')
+      ].join('');
+
+      const hints = buildDiagHints(s);
+      document.getElementById('diagHints').innerHTML = hints.length
+        ? hints.map(h => '<li>' + h + '</li>').join('')
+        : '<li class="muted">—</li>';
+
+      renderDiagBanner(s);
+    }
 
     function updateStatusBar(s) {
       if (!s) return;
@@ -698,7 +929,6 @@
       document.getElementById('ovKw').textContent = gValid ? f0(g.kw_total) : '—';
       document.getElementById('ovRpm').textContent = gValid ? f0(g.engine_rpm) : '—';
     }
-    function f1(x) { return Number.isFinite(+x) ? Number(x).toFixed(1) : '—'; }
 
     function assessHealth(b) {
       if (!b || !b.valid) return { level: 'warn', title: 'Αναμονή δεδομένων...', items: ['Σύνδεση BLE σε εξέλιξη ή αναμονή cell-info frames.'] };
@@ -921,11 +1151,14 @@
 
     function handleStatus(j) {
       lastStatus = j;
+      msgStats.status++;
       updateStatusBar(j);
+      updateFreshness();
       if (j.outputs) { outputs = j.outputs; renderRelays(); }
       if (j.bms) renderBms(j.bms);
       if (j.genset) renderGenset(j.genset);
       renderOverview(j.bms, j.genset);
+      renderDiagnostics(j);
       if (j.ota_phase) toast('OTA: ' + j.ota_phase, 2000);
       if (j.ota_error) toast('OTA σφάλμα: ' + j.ota_error, 5000);
     }
@@ -1037,18 +1270,29 @@
       client.on('connect', () => {
         setBadge('Online', 'ok');
         connected = true;
+        msgStats.status = 0; msgStats.bms = 0; msgStats.genset = 0;
+        msgStats.connectedAt = Date.now();
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
         toast('Συνδέθηκε: ' + id);
       });
-      client.on('close', () => { connected = false; setBadge('Offline', 'off'); });
+      client.on('close', () => { connected = false; setBadge('Offline', 'off'); renderDiagnostics(lastStatus); });
       client.on('message', (t, msg) => {
         try {
           const j = JSON.parse(msg.toString());
           if (t.endsWith('/status')) handleStatus(j);
-          if (t.endsWith('/bms') && j.valid) { renderBms(j); renderOverview(j, lastStatus.genset); }
-          if (t.endsWith('/genset')) { renderGenset(j); renderOverview(lastStatus.bms, j); }
+          if (t.endsWith('/bms')) {
+            msgStats.bms++;
+            if (j.valid) { renderBms(j); renderOverview(j, lastStatus.genset); }
+            else if (lastStatus.bms) renderOverview(lastStatus.bms, lastStatus.genset);
+          }
+          if (t.endsWith('/genset')) {
+            msgStats.genset++;
+            renderGenset(j);
+            renderOverview(lastStatus.bms, j);
+          }
+          if (lastStatus.device_id) renderDiagnostics(lastStatus);
         } catch (e) {}
       });
     }
@@ -1072,10 +1316,9 @@
     }
 
     setInterval(() => {
-      if (lastUpdate && Date.now() - lastUpdate > 15000) {
-        document.getElementById('sbTime').textContent = 'πριν ' + Math.round((Date.now() - lastUpdate) / 1000) + 's';
-      }
-    }, 5000);
+      updateFreshness();
+      if (lastStatus.device_id) renderDiagnostics(lastStatus);
+    }, 2000);
 
     if (savedId) connect();
   </script>

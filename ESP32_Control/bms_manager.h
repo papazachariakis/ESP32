@@ -26,7 +26,10 @@ struct BmsManager {
 
   static BmsManager* gInstance;
 
-  void releaseClient() {
+  // Tear down the BLE connection/state but KEEP the saved identity
+  // (mac/name/type) so the loop can keep retrying after a failed attempt
+  // or after a reboot. Use forgetIdentity()/disconnect() to clear it.
+  void reset() {
     if (gInstance == this) gInstance = nullptr;
     if (client) {
       if (client->isConnected()) client->disconnect();
@@ -36,18 +39,15 @@ struct BmsManager {
     chrNotify = nullptr;
     chrWrite = nullptr;
     connected = false;
-    bms.connected = false;
-    bms.valid = false;
     proto = BmsProtoState();
+    bms = BmsData();
+    lastDisplay = "";
   }
 
-  void reset() {
-    releaseClient();
+  void forgetIdentity() {
     type = BmsType::None;
-    bms = BmsData();
     mac = "";
     name = "";
-    lastDisplay = "";
   }
 
   bool getJkChars(BLEClient* c) {
@@ -130,14 +130,14 @@ struct BmsManager {
     client = BLEDevice::createClient();
     if (!client->connect(addr)) {
       Serial.println("BMS BLE connect failed");
-      releaseClient();
+      reset();
       return false;
     }
     delay(500);
 
     if (!getJkChars(client)) {
       Serial.println("BMS service/char not found");
-      releaseClient();
+      reset();
       return false;
     }
 
@@ -156,6 +156,7 @@ struct BmsManager {
 
   void disconnect(Preferences& prefs) {
     reset();
+    forgetIdentity();
     prefs.remove("ble_mac");
     prefs.remove("ble_name");
     prefs.remove("bms_type");

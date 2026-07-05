@@ -78,26 +78,7 @@ unsigned long lastBleReconnect = 0;
 
 void pumpNetwork() {
   server.handleClient();
-}
-
-void reloadBmsFromPrefs() {
-  if (bmsMgr.mac.length()) return;
-  bmsMgr.mac = prefs.getString("ble_mac", "");
-  bmsMgr.name = prefs.getString("ble_name", "");
-  bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
-  if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
-}
-
-void tryBmsAutoConnect(bool boot = false) {
-  if (otaInProgress() || bmsMgr.connected) return;
-  reloadBmsFromPrefs();
-  if (!bmsMgr.mac.length()) return;
-  if (!boot && millis() - lastBleReconnect < BLE_RECONNECT_MS) return;
-  lastBleReconnect = millis();
-  Serial.printf("BMS auto-connect %s: %s [%s]\n",
-                boot ? "boot" : "retry",
-                bmsMgr.mac.c_str(), bmsTypeId(bmsMgr.type));
-  bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+  // Web OTA upload handled in server routes
 }
 
 
@@ -222,14 +203,11 @@ String buildStatusJson() {
 
   ble["connected"] = bmsMgr.connected;
 
-  ble["mac"] = bmsMgr.mac.length() ? bmsMgr.mac : prefs.getString("ble_mac", "");
+  ble["mac"] = bmsMgr.mac;
 
-  ble["name"] = bmsMgr.name.length() ? bmsMgr.name : prefs.getString("ble_name", "");
+  ble["name"] = bmsMgr.name;
 
-  String savedType = prefs.getString("bms_type", "");
-  ble["bms_type"] = bmsMgr.type != BmsType::None ? bmsTypeId(bmsMgr.type)
-                    : (savedType.length() ? savedType : "unknown");
-  ble["saved"] = prefs.getString("ble_mac", "").length() > 0;
+  ble["bms_type"] = bmsTypeId(bmsMgr.type);
 
   ble["cell_frames"] = bmsMgr.proto.cellFrames;
   ble["info_frames"] = bmsMgr.proto.infoFrames;
@@ -916,10 +894,11 @@ void setup() {
 
 
   if (bmsMgr.mac.length() > 0) {
-    Serial.println("BMS saved in NVS: " + bmsMgr.mac);
-    delay(BLE_BOOT_DELAY_MS);
-    tryBmsAutoConnect(true);
-    if (bmsMgr.connected) publishStatus();
+    Serial.println("BMS saved, auto-reconnect from loop: " + bmsMgr.mac);
+    // Trigger the first reconnect attempt ~4s after boot instead of waiting
+    // the full BLE_RECONNECT_MS interval.
+    unsigned long headStart = (BLE_RECONNECT_MS > 4000) ? (BLE_RECONNECT_MS - 4000) : 0;
+    lastBleReconnect = millis() - headStart;
   }
 
 
@@ -977,7 +956,13 @@ void loop() {
 
 
 
-  tryBmsAutoConnect();
+  if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
+
+    lastBleReconnect = millis();
+
+    bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+
+  }
 
 
 

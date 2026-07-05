@@ -76,6 +76,8 @@ unsigned long lastMqttPublish = 0;
 
 unsigned long lastBleReconnect = 0;
 
+volatile bool gModbusScanPending = false;
+
 void pumpNetwork() {
   server.handleClient();
   // Web OTA upload handled in server routes
@@ -325,6 +327,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (genMgr.enabled) genMgr.pollOnce();
     publishGensetMqtt();
     publishStatus();
+  }
+
+  if (doc.containsKey("modbus_scan")) {
+    const char* pw = doc["modbus_scan"];
+    if (!pw || remoteOtaPasswordOk(pw) || doc["modbus_scan"].is<bool>()) {
+      Serial.println("MQTT: modbus scan requested");
+      gModbusScanPending = true;
+    }
   }
 
   if (doc.containsKey("reboot")) {
@@ -772,6 +782,25 @@ void handleModbusSave() {
 
 
 
+void handleModbusScan() {
+  bool found = genMgr.scanBus(1, 8);
+  if (found) {
+    genMgr.enabled = true;
+    genMgr.save(prefs);
+    genMgr.pollOnce();
+  }
+  StaticJsonDocument<192> doc;
+  doc["ok"] = found;
+  doc["result"] = genMgr.data.lastScan;
+  doc["baud"] = genMgr.baud;
+  doc["slave_id"] = genMgr.slaveId;
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+
+
 void handleBleDisconnect() {
 
   bmsMgr.disconnect(prefs);
@@ -847,6 +876,7 @@ void setupRoutes() {
   server.on("/api/genset", HTTP_GET, handleGenset);
   server.on("/api/genset/cmd", HTTP_POST, handleGensetCmd);
   server.on("/api/modbus", HTTP_POST, handleModbusSave);
+  server.on("/api/modbus/scan", HTTP_POST, handleModbusScan);
   registerOtaRoutes(server);
 
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
@@ -975,6 +1005,20 @@ void loop() {
   }
 
 
+
+  if (gModbusScanPending && !otaInProgress()) {
+    gModbusScanPending = false;
+    Serial.println("Running Modbus scan...");
+    bool found = genMgr.scanBus(1, 8);
+    if (found) {
+      genMgr.enabled = true;
+      genMgr.save(prefs);
+      genMgr.pollOnce();
+    }
+    Serial.println(genMgr.data.lastScan);
+    publishGensetMqtt();
+    publishStatus();
+  }
 
   if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
 

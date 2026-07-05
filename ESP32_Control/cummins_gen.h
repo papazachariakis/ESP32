@@ -92,6 +92,7 @@ struct GenData {
   uint32_t runTimeSec = 0;
   float runtimeHours = 0;
   String lastError;
+  String lastScan;
 };
 
 // PS0600 abnormal-state sentinels: unsigned 65531..65535, signed 32763..32767.
@@ -219,6 +220,7 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["runtime_sec"] = g.runTimeSec;
   o["runtime_hours"] = g.runtimeHours;
   if (g.lastError.length()) o["error"] = g.lastError;
+  if (g.lastScan.length()) o["scan_result"] = g.lastScan;
 }
 
 struct GenManager {
@@ -258,6 +260,34 @@ struct GenManager {
 
   void applyBaud() {
     if (bus) bus->begin(baud, SERIAL_8N1, MODBUS_RX_PIN, MODBUS_TX_PIN);
+  }
+
+  // Sweep common baud rates x slave IDs looking for a Modbus response on
+  // register 40009. Applies and returns the first working combo. Restores the
+  // previous settings if nothing responds.
+  bool scanBus(uint8_t idMin = 1, uint8_t idMax = 8) {
+    static const uint32_t kBauds[] = { 9600, 19200, 38400, 57600, 115200 };
+    uint32_t savedBaud = baud;
+    uint8_t savedId = slaveId;
+    uint16_t tmp[2];
+    data.lastScan = "";
+    for (uint8_t bi = 0; bi < 5; bi++) {
+      if (bus) bus->begin(kBauds[bi], SERIAL_8N1, MODBUS_RX_PIN, MODBUS_TX_PIN);
+      delay(80);
+      for (uint8_t id = idMin; id <= idMax; id++) {
+        if (modbusReadHolding(*bus, MODBUS_DE_PIN, id, 8, 1, tmp, 350)) {
+          baud = kBauds[bi];
+          slaveId = id;
+          data.lastScan = "FOUND baud=" + String(kBauds[bi]) + " slave=" + String(id);
+          return true;
+        }
+      }
+    }
+    baud = savedBaud;
+    slaveId = savedId;
+    applyBaud();
+    data.lastScan = "NONE - no response 9600-115200, id " + String(idMin) + "-" + String(idMax) + " (check A/B swap & PS0600 Modbus enabled)";
+    return false;
   }
 
   bool readBlock(uint16_t reg40001, uint16_t count, uint16_t* out) {

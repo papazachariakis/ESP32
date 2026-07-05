@@ -880,6 +880,7 @@
           ? `<span style="color:var(--bad)">${ble.crc_errors}</span>` : (ble.crc_errors ?? '0')),
         diagRow('BMS valid', pill(bms.valid, 'Yes', 'Waiting', 'No')),
         diagRow('Ηλικία δεδομένων', bleAgeText(ble.data_age_ms)),
+        diagRow('Τελευταίο notify', bleAgeText(ble.last_notify_ms)),
         diagRow('SOC / V', bms.valid ? `${f0(bms.soc)}% • ${f2(bms.voltage, 2)}V` : '—')
       ].join('');
 

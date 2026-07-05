@@ -76,8 +76,6 @@ unsigned long lastMqttPublish = 0;
 
 unsigned long lastBleReconnect = 0;
 
-unsigned long lastBmsKick = 0;
-
 volatile bool gModbusScanPending = false;
 
 volatile bool gModbusLoopbackPending = false;
@@ -221,6 +219,8 @@ String buildStatusJson() {
   if (bmsMgr.connected && bmsMgr.bleRssi > -200) ble["rssi"] = bmsMgr.bleRssi;
   ble["data_age_ms"] = (bmsMgr.connected && bmsMgr.bms.valid)
     ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
+  if (bmsMgr.lastNotifyMs)
+    ble["last_notify_ms"] = (long)(millis() - bmsMgr.lastNotifyMs);
 
 
 
@@ -1062,44 +1062,18 @@ void loop() {
   }
 
   if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
-
     lastBleReconnect = millis();
-
     bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
-
   }
-
-
 
   static unsigned long lastBmsMqtt = 0;
 
   if (bmsMgr.bms.valid && millis() - lastBmsMqtt > MQTT_BMS_PUBLISH_INTERVAL_MS) {
-
     lastBmsMqtt = millis();
-
     publishBmsMqtt();
-
   }
 
-
-
-  bmsMgr.poll();
-
-  // Watchdog: the JK BLE stream sometimes stalls after connecting (values
-  // freeze while still "connected"). Re-kick with a fresh poll; if still stale,
-  // force a full reconnect (identity is preserved).
-  if (bmsMgr.connected && bmsMgr.bms.valid) {
-    unsigned long age = millis() - bmsMgr.bms.lastUpdate;
-    if (age > 30000) {
-      Serial.println("BMS stream stale >30s, reconnecting");
-      bmsMgr.reset();
-      lastBleReconnect = millis() - (BLE_RECONNECT_MS > 3000 ? BLE_RECONNECT_MS - 3000 : 0);
-    } else if (age > 12000 && millis() - lastBmsKick > 8000) {
-      lastBmsKick = millis();
-      Serial.println("BMS stream slow, re-kicking poll");
-      bmsMgr.sendInitialPolls();
-    }
-  }
+  bmsMgr.maintain();
 
   genMgr.poll();
 

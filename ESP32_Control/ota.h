@@ -90,31 +90,15 @@ inline void registerOtaRoutes(WebServer& server) {
     [&server]() { handleOtaUpload(server); });
 }
 
-inline bool performRemoteOta() {
-  if (WiFi.status() != WL_CONNECTED) return false;
-  otaInProgress() = true;
-  Serial.println("Remote OTA: HTTPS download...");
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  client.setTimeout(60000);
-
-  if (!client.connect(OTA_REMOTE_HOST, 443)) {
-    Serial.println("Remote OTA: connect failed");
-    otaInProgress() = false;
-    return false;
-  }
-
-  client.print(String("GET ") + OTA_REMOTE_PATH + " HTTP/1.1\r\nHost: " + OTA_REMOTE_HOST +
-               "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
-
-  int contentLen = -1;
+inline bool otaReadHttpHeaders(WiFiClientSecure& client, int& contentLen) {
+  contentLen = -1;
   bool httpOk = false;
   unsigned long hdrStart = millis();
-  while (millis() - hdrStart < 20000) {
+  while (millis() - hdrStart < 30000) {
     if (!client.available()) {
       if (!client.connected()) break;
       delay(10);
+      yield();
       continue;
     }
     String line = client.readStringUntil('\n');
@@ -126,38 +110,65 @@ inline bool performRemoteOta() {
     }
     String low = line;
     low.toLowerCase();
-    if (low.startsWith("content-length:")) contentLen = line.substring(15).toInt();
+    if (low.startsWith("content-length:")) {
+      line = line.substring(15);
+      line.trim();
+      contentLen = line.toInt();
+    }
+  }
+  return httpOk;
+}
+
+inline bool performRemoteOtaFromHost(const char* host, const char* path) {
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(90000);
+
+  Serial.printf("Remote OTA: https://%s%s\n", host, path);
+  if (!client.connect(host, 443)) {
+    Serial.println("Remote OTA: connect failed");
+    return false;
   }
 
-  if (!httpOk) {
+  client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
+               "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
+
+  int contentLen = -1;
+  if (!otaReadHttpHeaders(client, contentLen)) {
     Serial.println("Remote OTA: HTTP not 200");
     client.stop();
-    otaInProgress() = false;
     return false;
   }
 
   if (contentLen < 500000 || contentLen > 1966080) {
     Serial.printf("Remote OTA: bad size %d\n", contentLen);
     client.stop();
-    otaInProgress() = false;
     return false;
   }
 
   if (!Update.begin(contentLen)) {
     Update.printError(Serial);
     client.stop();
-    otaInProgress() = false;
     return false;
   }
 
   uint8_t buf[1024];
   int total = 0;
-  while (total < contentLen && (client.connected() || client.available())) {
+  unsigned long lastData = millis();
+  while (total < contentLen && millis() - lastData < 120000) {
     int avail = client.available();
     if (avail <= 0) {
+      if (!client.connected()) {
+        if (total >= contentLen) break;
+        delay(10);
+        yield();
+        continue;
+      }
       delay(1);
+      yield();
       continue;
     }
+    lastData = millis();
     int chunk = avail;
     if (chunk > (int)sizeof(buf)) chunk = sizeof(buf);
     if (chunk > contentLen - total) chunk = contentLen - total;
@@ -166,22 +177,41 @@ inline bool performRemoteOta() {
     if (Update.write(buf, n) != (size_t)n) {
       Update.printError(Serial);
       client.stop();
-      otaInProgress() = false;
       return false;
     }
     total += n;
+    yield();
   }
   client.stop();
 
   if (total != contentLen || !Update.end(true)) {
     Update.printError(Serial);
-    otaInProgress() = false;
+    Serial.printf("Remote OTA: wrote %d / %d\n", total, contentLen);
     return false;
   }
 
-  Serial.printf("Remote OTA OK: %d bytes\n", total);
-  otaInProgress() = false;
+  Serial.printf("Remote OTA OK: %d bytes from %s\n", total, host);
   delay(500);
   ESP.restart();
   return true;
+}
+
+inline bool performRemoteOta() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  otaInProgress() = true;
+  WiFi.setSleep(false);
+
+  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH)) {
+    otaInProgress() = false;
+    return true;
+  }
+
+  Serial.println("Remote OTA: retry via jsDelivr...");
+  if (performRemoteOtaFromHost("cdn.jsdelivr.net", "/gh/papazachariakis/ESP32@master/docs/firmware.bin")) {
+    otaInProgress() = false;
+    return true;
+  }
+
+  otaInProgress() = false;
+  return false;
 }

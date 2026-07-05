@@ -546,6 +546,9 @@
           <label>Slave ID
             <input type="number" id="cfgSlave" min="1" max="247" value="1" />
           </label>
+          <label>Probe register
+            <input type="number" id="cfgProbe" min="1" value="40009" />
+          </label>
           <label class="cfg-en">
             <input type="checkbox" id="cfgEnabled" checked /> Ενεργό
           </label>
@@ -1217,7 +1220,8 @@
         enabled: document.getElementById('cfgEnabled').checked,
         profile: document.getElementById('cfgProfile').value,
         baud: +document.getElementById('cfgBaud').value,
-        slave_id: +document.getElementById('cfgSlave').value
+        slave_id: +document.getElementById('cfgSlave').value,
+        probe_reg: +document.getElementById('cfgProbe').value
       };
       client.publish(cmdTopic, JSON.stringify({ modbus_cfg: cfg }));
       toast(`Modbus: baud ${cfg.baud}, ID ${cfg.slave_id} στάλθηκε`);
@@ -1244,6 +1248,7 @@
       if (g.enabled != null) set('cfgEnabled', g.enabled);
       if (g.baud != null) set('cfgBaud', String(g.baud));
       if (g.slave_id != null) set('cfgSlave', g.slave_id);
+      if (g.probe_reg != null) set('cfgProbe', g.probe_reg);
       const pr = String(g.profile || '').toLowerCase();
       if (pr) set('cfgProfile', pr.includes('entes') ? 'entes' : 'ps0600');
       const sr = document.getElementById('scanResult');

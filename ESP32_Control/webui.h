@@ -84,6 +84,8 @@ pre{white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background
 <div><label>Slave ID</label><input type="number" id="msid" min="1" max="247" value="1"></div>
 <div><label>Ενεργό</label><select id="me"><option value="1">Ναι</option><option value="0">Όχι</option></select></div>
 </div>
+<label>Probe register (auto-scan) <small>π.χ. 40009</small></label>
+<input type="number" id="mreg" min="1" value="40009">
 <button onclick="saveM()">Αποθήκευση Modbus</button>
 <button class="sec" onclick="scanM()">&#128269; Auto-scan baud/slave</button>
 <div id="mMsg" class="msg"></div>
@@ -117,7 +119,7 @@ function j(u,o){return fetch(u,o).then(function(r){return r.json()})}
 function msg(id,txt,cls){var m=E(id);m.textContent=txt;m.className='msg show '+cls}
 function f(x,d){return (x!=null&&isFinite(x))?Number(x).toFixed(d):'—'}
 var editing=false;
-['mp','mbaud','msid','me'].forEach(function(id){
+['mp','mbaud','msid','me','mreg'].forEach(function(id){
   document.addEventListener('focusin',function(e){if(e.target.id===id)editing=true});
 });
 document.addEventListener('focusout',function(){setTimeout(function(){editing=false},400)});
@@ -153,6 +155,7 @@ function go(){
    var pr=(g.profile||'').toLowerCase();E('mp').value=pr.indexOf('entes')>=0?'entes':'ps0600';
    if(g.slave_id!=null)E('msid').value=g.slave_id;
    if(g.baud!=null)E('mbaud').value=String(g.baud);
+   if(g.probe_reg!=null)E('mreg').value=g.probe_reg;
   }
   var rl=s.outputs||[];
   E('relays').innerHTML=rl.length?rl.map(function(o,i){
@@ -161,7 +164,7 @@ function go(){
  }).catch(function(){E('dot').className='dot';E('hdr').textContent='offline'})
 }
 function saveM(){
- j('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:E('me').value==='1',profile:E('mp').value,slave_id:+E('msid').value,baud:+E('mbaud').value})})
+ j('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:E('me').value==='1',profile:E('mp').value,slave_id:+E('msid').value,baud:+E('mbaud').value,probe_reg:+E('mreg').value})})
  .then(function(){msg('mMsg','Αποθηκεύτηκε','ok');go()});
 }
 function scanM(){

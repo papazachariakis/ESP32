@@ -99,6 +99,50 @@ inline bool modbusReadHolding(
   return true;
 }
 
+// Lightweight presence probe. Sends a read-holding request for 1 register and
+// classifies the reply:
+//   0 = no/invalid response (wrong baud, wiring, or nobody there)
+//   1 = normal read reply (device present AND register readable)
+//   2 = Modbus exception reply (device present at this baud/slave, but this
+//       register/function was rejected -> baud & slave are CORRECT)
+inline int modbusProbeRegister(
+  HardwareSerial& ser, int dePin, uint8_t slave,
+  uint16_t startReg, uint32_t timeoutMs = 350) {
+  uint8_t req[8];
+  req[0] = slave;
+  req[1] = 0x03;
+  req[2] = (uint8_t)(startReg >> 8);
+  req[3] = (uint8_t)(startReg & 0xFF);
+  req[4] = 0x00;
+  req[5] = 0x01;
+  uint16_t crc = bmsCrcModbus(req, 6);
+  req[6] = (uint8_t)(crc & 0xFF);
+  req[7] = (uint8_t)(crc >> 8);
+
+  while (ser.available()) ser.read();
+  modbusSetTx(dePin, true);
+  ser.write(req, 8);
+  ser.flush();
+  modbusSetTx(dePin, false);
+  modbusPump();
+  delay(dePin < 0 ? 25 : 2);
+
+  uint8_t hdr[2];
+  if (!modbusReadBytes(ser, hdr, 2, timeoutMs)) return 0;
+  if (hdr[0] != slave) return 0;
+  if (hdr[1] == 0x03) {
+    uint8_t rest[132];
+    modbusReadBytes(ser, rest, 4, timeoutMs);  // drain byte-count + data + crc
+    return 1;
+  }
+  if (hdr[1] == 0x83) {
+    uint8_t rest[3];
+    modbusReadBytes(ser, rest, 3, timeoutMs);  // exception code + crc
+    return 2;
+  }
+  return 0;
+}
+
 inline bool modbusWriteSingle(
   HardwareSerial& ser, int dePin, uint8_t slave,
   uint16_t reg, uint16_t value,

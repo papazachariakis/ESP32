@@ -230,6 +230,7 @@ struct GenManager {
   uint8_t profile = MODBUS_PROFILE_PS0600;
   uint8_t slaveId = 1;
   uint32_t baud = 9600;
+  uint16_t probeReg = CUMMINS_REG_CONTROLLER;  // 4xxxx register used by auto-scan
   unsigned long lastPoll = 0;
   uint16_t pollIntervalMs = 3000;
   uint8_t pollStep = 0;
@@ -239,6 +240,7 @@ struct GenManager {
     profile = (uint8_t)prefs.getUInt("modbus_prof", MODBUS_PROFILE_PS0600);
     slaveId = (uint8_t)prefs.getUInt("modbus_id", 1);
     baud = prefs.getUInt("modbus_baud", 9600);
+    probeReg = (uint16_t)prefs.getUInt("modbus_probe", CUMMINS_REG_CONTROLLER);
   }
 
   void save(Preferences& prefs) {
@@ -246,6 +248,7 @@ struct GenManager {
     prefs.putUInt("modbus_prof", profile);
     prefs.putUInt("modbus_id", slaveId);
     prefs.putUInt("modbus_baud", baud);
+    prefs.putUInt("modbus_probe", probeReg);
   }
 
   void begin() {
@@ -269,19 +272,34 @@ struct GenManager {
     static const uint32_t kBauds[] = { 9600, 19200, 38400, 57600, 115200 };
     uint32_t savedBaud = baud;
     uint8_t savedId = slaveId;
-    uint16_t tmp[2];
+    uint16_t addr = modbusHoldAddr(probeReg);
     data.lastScan = "";
+    int bestKind = 0;  // 2 = exception (present), 1 = ok (present+readable)
+    uint32_t bestBaud = 0;
+    uint8_t bestId = 0;
     for (uint8_t bi = 0; bi < 5; bi++) {
       if (bus) bus->begin(kBauds[bi], SERIAL_8N1, MODBUS_RX_PIN, MODBUS_TX_PIN);
       delay(80);
       for (uint8_t id = idMin; id <= idMax; id++) {
-        if (modbusReadHolding(*bus, MODBUS_DE_PIN, id, 8, 1, tmp, 350)) {
+        int kind = modbusProbeRegister(*bus, MODBUS_DE_PIN, id, addr, 350);
+        if (kind == 1) {
           baud = kBauds[bi];
           slaveId = id;
-          data.lastScan = "FOUND baud=" + String(kBauds[bi]) + " slave=" + String(id);
+          data.lastScan = "FOUND baud=" + String(kBauds[bi]) + " slave=" + String(id) + " reg=" + String(probeReg);
           return true;
         }
+        if (kind == 2 && bestKind == 0) {
+          bestKind = 2;
+          bestBaud = kBauds[bi];
+          bestId = id;
+        }
       }
+    }
+    if (bestKind == 2) {
+      baud = bestBaud;
+      slaveId = bestId;
+      data.lastScan = "DEVICE at baud=" + String(bestBaud) + " slave=" + String(bestId) + " but reg " + String(probeReg) + " rejected - try another Probe register";
+      return true;
     }
     baud = savedBaud;
     slaveId = savedId;

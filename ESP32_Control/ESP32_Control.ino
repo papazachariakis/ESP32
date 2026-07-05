@@ -244,6 +244,7 @@ String buildStatusJson() {
   genset["enabled"] = genMgr.enabled;
   genset["slave_id"] = genMgr.slaveId;
   genset["baud"] = genMgr.baud;
+  genset["probe_reg"] = genMgr.probeReg;
 
 
 
@@ -314,6 +315,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (cfg.containsKey("enabled")) genMgr.enabled = cfg["enabled"].as<bool>();
     if (cfg.containsKey("slave_id")) genMgr.slaveId = (uint8_t)(cfg["slave_id"].as<int>());
     if (cfg.containsKey("baud")) genMgr.baud = cfg["baud"].as<uint32_t>();
+    if (cfg.containsKey("probe_reg")) genMgr.probeReg = (uint16_t)(cfg["probe_reg"].as<int>());
     if (cfg.containsKey("profile")) {
       const char* p = cfg["profile"];
       if (p && (strcmp(p, "entes") == 0 || strcmp(p, "ENTES_MPR46S") == 0))
@@ -682,6 +684,8 @@ void handleGenset() {
 
   o["baud"] = genMgr.baud;
 
+  o["probe_reg"] = genMgr.probeReg;
+
   String out;
 
   serializeJson(doc, out);
@@ -757,6 +761,8 @@ void handleModbusSave() {
   genMgr.enabled = doc["enabled"] | true;
 
   genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
+
+  if (doc.containsKey("probe_reg")) genMgr.probeReg = (uint16_t)(doc["probe_reg"].as<int>());
 
   genMgr.baud = doc["baud"] | 9600;
 

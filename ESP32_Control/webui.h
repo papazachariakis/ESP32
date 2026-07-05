@@ -88,6 +88,8 @@ pre{white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background
 <input type="number" id="mreg" min="1" value="40009">
 <button onclick="saveM()">Αποθήκευση Modbus</button>
 <button class="sec" onclick="scanM()">&#128269; Auto-scan baud/slave</button>
+<button class="sec" onclick="loopM()">&#128260; Loopback test (MAX485)</button>
+<small>Loopback: ένωσε TX2-RX2 (ή TXD-RXD στο module). Αν A/B βραχυκυκλωμένα και αποτύχει &rarr; το MAX485 κάηκε.</small>
 <div id="mMsg" class="msg"></div>
 </div>
 
@@ -174,6 +176,12 @@ function scanM(){
  j('/api/modbus/scan',{method:'POST'}).then(function(r){
   msg('mMsg',(r.ok?'✓ ':'✗ ')+(r.result||''),r.ok?'ok':'bad');go();
  }).catch(function(){msg('mMsg','Σφάλμα σάρωσης','bad')});
+}
+function loopM(){
+ msg('mMsg','Loopback test...','info');
+ j('/api/modbus/loopback',{method:'POST'}).then(function(r){
+  msg('mMsg',(r.ok?'✓ ':'✗ ')+(r.result||''),r.ok?'ok':'bad');
+ }).catch(function(){msg('mMsg','Σφάλμα loopback','bad')});
 }
 function setR(i,on){j('/api/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,on:on})}).then(go)}
 function bleScan(){E('ble').innerHTML='<small>scan...</small>';

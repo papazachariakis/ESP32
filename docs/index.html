@@ -556,8 +556,10 @@
         <div class="gen-actions" style="margin-top:12px">
           <button class="sec" onclick="saveModbusCfg()">Αποθήκευση Modbus</button>
           <button class="sec" onclick="scanModbus()">🔍 Auto-scan baud/slave</button>
+          <button class="sec" onclick="loopbackModbus()">🔄 Loopback test</button>
         </div>
-        <p class="small muted" id="scanResult" style="margin-top:10px"></p>
+        <p class="small muted" style="margin-top:8px">Probe register: δέξου 4xxxx (π.χ. 40009) ή γυμνή διεύθυνση (π.χ. 8, 9). Loopback: ένωσε TX2-RX2 ή TXD-RXD.</p>
+        <p class="small muted" id="scanResult" style="margin-top:6px"></p>
       </div>
       <div class="grid-2">
         <div class="card">
@@ -1244,6 +1246,13 @@
       document.getElementById('scanResult').textContent = 'Σάρωση σε εξέλιξη...';
     }
 
+    function loopbackModbus() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      client.publish(cmdTopic, JSON.stringify({ modbus_loopback: true }));
+      toast('Loopback test...');
+      document.getElementById('scanResult').textContent = 'Loopback test σε εξέλιξη...';
+    }
+
     // Reflect device settings into the form, but never clobber a field the
     // user is actively editing.
     function syncModbusCfg(g) {
@@ -1264,7 +1273,9 @@
       const sr = document.getElementById('scanResult');
       if (sr && g.scan_result) {
         sr.textContent = g.scan_result;
-        sr.style.color = g.scan_result.startsWith('FOUND') ? 'var(--ok)' : 'var(--warn)';
+        const good = g.scan_result.startsWith('FOUND') || g.scan_result.startsWith('LOOPBACK OK');
+        const bad = g.scan_result.startsWith('NONE') || g.scan_result.indexOf('dead') >= 0;
+        sr.style.color = good ? 'var(--ok)' : bad ? 'var(--bad)' : 'var(--warn)';
       }
     }
 

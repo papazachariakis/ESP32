@@ -80,6 +80,8 @@ unsigned long lastBmsKick = 0;
 
 volatile bool gModbusScanPending = false;
 
+volatile bool gModbusLoopbackPending = false;
+
 void pumpNetwork() {
   server.handleClient();
   // Web OTA upload handled in server routes
@@ -341,6 +343,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       Serial.println("MQTT: modbus scan requested");
       gModbusScanPending = true;
     }
+  }
+
+  if (doc.containsKey("modbus_loopback")) {
+    Serial.println("MQTT: modbus loopback requested");
+    gModbusLoopbackPending = true;
   }
 
   if (doc.containsKey("reboot")) {
@@ -811,6 +818,19 @@ void handleModbusScan() {
 
 
 
+void handleModbusLoopback() {
+  String r = genMgr.loopbackTest();
+  genMgr.applyBaud();
+  StaticJsonDocument<160> doc;
+  doc["ok"] = r.startsWith("LOOPBACK OK");
+  doc["result"] = r;
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+
+
 void handleBleDisconnect() {
 
   bmsMgr.disconnect(prefs);
@@ -887,6 +907,7 @@ void setupRoutes() {
   server.on("/api/genset/cmd", HTTP_POST, handleGensetCmd);
   server.on("/api/modbus", HTTP_POST, handleModbusSave);
   server.on("/api/modbus/scan", HTTP_POST, handleModbusScan);
+  server.on("/api/modbus/loopback", HTTP_POST, handleModbusLoopback);
   registerOtaRoutes(server);
 
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
@@ -1026,6 +1047,15 @@ void loop() {
       genMgr.pollOnce();
     }
     Serial.println(genMgr.data.lastScan);
+    publishGensetMqtt();
+    publishStatus();
+  }
+
+  if (gModbusLoopbackPending && !otaInProgress()) {
+    gModbusLoopbackPending = false;
+    genMgr.data.lastScan = genMgr.loopbackTest();
+    Serial.println(genMgr.data.lastScan);
+    genMgr.applyBaud();
     publishGensetMqtt();
     publishStatus();
   }

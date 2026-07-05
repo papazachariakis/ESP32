@@ -268,11 +268,44 @@ struct GenManager {
   // Sweep common baud rates x slave IDs looking for a Modbus response on
   // register 40009. Applies and returns the first working combo. Restores the
   // previous settings if nothing responds.
+  // Interpret probeReg either as a 4xxxx register number (>=40001, subtract the
+  // 40001 base) or as a bare wire address (e.g. 8, 9) when a small value is set.
+  uint16_t probeAddr() const {
+    return probeReg >= 40001 ? (uint16_t)(probeReg - 40001) : probeReg;
+  }
+
+  // TTL loopback self-test: jumper TX2<->RX2 (or the module's TXD<->RXD) and
+  // this confirms the ESP32 UART + wiring. If it fails with the module's A/B
+  // shorted, the MAX485 transceiver is likely dead.
+  String loopbackTest() {
+    if (!bus) return "no bus";
+    const uint8_t pattern[] = { 0xAA, 0x55, 0x01, 0x02, 0x7E, 0x81, 0xF0, 0x0F };
+    const size_t n = sizeof(pattern);
+    while (bus->available()) bus->read();
+    modbusSetTx(MODBUS_DE_PIN, true);
+    bus->write(pattern, n);
+    bus->flush();
+    modbusSetTx(MODBUS_DE_PIN, false);
+    uint8_t rx[16];
+    size_t got = 0;
+    uint32_t start = millis();
+    while (got < n && millis() - start < 300) {
+      modbusPump();
+      while (bus->available() && got < sizeof(rx)) { rx[got++] = (uint8_t)bus->read(); start = millis(); }
+      delay(1);
+    }
+    if (got == 0) return "LOOPBACK: 0 bytes - jumper TX2-RX2 missing, or MAX485 dead";
+    int match = 0;
+    for (size_t i = 0; i < got && i < n; i++) if (rx[i] == pattern[i]) match++;
+    if (match == (int)n) return "LOOPBACK OK: all " + String((int)n) + " bytes echoed - UART & wiring fine";
+    return "LOOPBACK partial: " + String(match) + "/" + String((int)n) + " matched (got " + String((int)got) + ") - check baud/noise";
+  }
+
   bool scanBus(uint8_t idMin = 1, uint8_t idMax = 8) {
     static const uint32_t kBauds[] = { 9600, 19200, 38400, 57600, 115200 };
     uint32_t savedBaud = baud;
     uint8_t savedId = slaveId;
-    uint16_t addr = modbusHoldAddr(probeReg);
+    uint16_t addr = probeAddr();
     data.lastScan = "";
     int bestKind = 0;  // 2 = exception (present), 1 = ok (present+readable)
     uint32_t bestBaud = 0;

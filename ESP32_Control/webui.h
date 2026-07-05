@@ -131,7 +131,9 @@ function go(){
   E('hdr').textContent=(s.wifi_ssid||'?')+' · '+(s.ip||'?')+' · '+(s.rssi!=null?s.rssi+'dBm':'');
   var b=s.bms||{},ble=s.ble||{};
   var bv=b.valid;
-  E('bmsChip').innerHTML=bv?'<span class="pill ok">ONLINE '+(b.device_model||'')+'</span>':(ble.connected?'<span class="pill off">BLE OK, αναμονή</span>':'<span class="pill bad">OFFLINE</span>');
+  var age=ble.data_age_ms;
+  var stale=bv&&age!=null&&age>15000;
+  E('bmsChip').innerHTML=bv?(stale?'<span class="pill bad">STALE '+Math.round(age/1000)+'s</span>':'<span class="pill ok">ONLINE '+(b.device_model||'')+'</span>'):(ble.connected?'<span class="pill off">BLE OK, αναμονή</span>':'<span class="pill bad">OFFLINE</span>');
   E('bSoc').textContent=bv?f(b.soc,0):'—';
   E('bV').textContent=bv?f(b.voltage,2):'—';
   E('bA').textContent=bv?f(b.current,2):'—';

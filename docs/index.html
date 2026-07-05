@@ -762,6 +762,13 @@
       return `<div class="diag-row"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
     }
 
+    function bleAgeText(ms) {
+      if (ms == null || ms < 0) return '—';
+      const s = Math.round(ms / 1000);
+      const color = s < 8 ? 'var(--ok)' : s < 20 ? 'var(--warn)' : 'var(--bad)';
+      return `<span style="color:${color}">${s < 2 ? 'τώρα' : s + 's πριν'}</span>`;
+    }
+
     function ageSec(ts) {
       if (!ts) return null;
       return Math.round((Date.now() - ts) / 1000);
@@ -805,6 +812,8 @@
         hints.push(`<b>${ble.crc_errors} CRC errors</b> — πιθανό framing desync. Ανέβασε νέο firmware ή reboot.`);
       else if (!bms.valid && ble.connected)
         hints.push('BLE OK, frames έρχονται — αναμονή valid BMS data (info_frames: ' + (ble.info_frames || 0) + ').');
+      else if (bms.valid && ble.data_age_ms != null && ble.data_age_ms > 15000)
+        hints.push(`BMS δεδομένα <b>stale ${Math.round(ble.data_age_ms/1000)}s</b> — το BLE stream κόλλησε. Το ESP32 κάνει αυτόματη επανεκκίνηση σύνδεσης.`);
 
       if (gen.enabled === false)
         hints.push('Modbus γεννήτριας <b>disabled</b> στο firmware/config.');
@@ -864,6 +873,7 @@
         diagRow('CRC errors', (ble.crc_errors || 0) > 0
           ? `<span style="color:var(--bad)">${ble.crc_errors}</span>` : (ble.crc_errors ?? '0')),
         diagRow('BMS valid', pill(bms.valid, 'Yes', 'Waiting', 'No')),
+        diagRow('Ηλικία δεδομένων', bleAgeText(ble.data_age_ms)),
         diagRow('SOC / V', bms.valid ? `${f0(bms.soc)}% • ${f2(bms.voltage, 2)}V` : '—')
       ].join('');
 

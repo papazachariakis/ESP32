@@ -76,6 +76,8 @@ unsigned long lastMqttPublish = 0;
 
 unsigned long lastBleReconnect = 0;
 
+unsigned long lastBmsKick = 0;
+
 volatile bool gModbusScanPending = false;
 
 void pumpNetwork() {
@@ -214,6 +216,8 @@ String buildStatusJson() {
   ble["cell_frames"] = bmsMgr.proto.cellFrames;
   ble["info_frames"] = bmsMgr.proto.infoFrames;
   ble["crc_errors"] = bmsMgr.proto.crcErrors;
+  ble["data_age_ms"] = (bmsMgr.connected && bmsMgr.bms.valid)
+    ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
 
 
 
@@ -1049,6 +1053,22 @@ void loop() {
 
 
   bmsMgr.poll();
+
+  // Watchdog: the JK BLE stream sometimes stalls after connecting (values
+  // freeze while still "connected"). Re-kick with a fresh poll; if still stale,
+  // force a full reconnect (identity is preserved).
+  if (bmsMgr.connected && bmsMgr.bms.valid) {
+    unsigned long age = millis() - bmsMgr.bms.lastUpdate;
+    if (age > 30000) {
+      Serial.println("BMS stream stale >30s, reconnecting");
+      bmsMgr.reset();
+      lastBleReconnect = millis() - (BLE_RECONNECT_MS > 3000 ? BLE_RECONNECT_MS - 3000 : 0);
+    } else if (age > 12000 && millis() - lastBmsKick > 8000) {
+      lastBmsKick = millis();
+      Serial.println("BMS stream slow, re-kicking poll");
+      bmsMgr.sendInitialPolls();
+    }
+  }
 
   genMgr.poll();
 

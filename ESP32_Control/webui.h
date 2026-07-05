@@ -130,12 +130,12 @@ function go(){
  j('/api/status').then(function(s){
   E('raw').textContent=JSON.stringify(s,null,2);
   E('dot').className='dot on';
-  E('hdr').textContent=(s.wifi_ssid||'?')+' · '+(s.ip||'?')+' · '+(s.rssi!=null?s.rssi+'dBm':'');
+  E('hdr').textContent=(s.wifi_ssid||'?')+' · '+(s.ip||'?')+' · WiFi '+(s.rssi!=null?s.rssi:'?')+'dBm'+(s.ble&&s.ble.rssi!=null?' · BLE '+s.ble.rssi+'dBm':'');
   var b=s.bms||{},ble=s.ble||{};
   var bv=b.valid;
   var age=ble.data_age_ms;
   var stale=bv&&age!=null&&age>15000;
-  E('bmsChip').innerHTML=bv?(stale?'<span class="pill bad">STALE '+Math.round(age/1000)+'s</span>':'<span class="pill ok">ONLINE '+(b.device_model||'')+'</span>'):(ble.connected?'<span class="pill off">BLE OK, αναμονή</span>':'<span class="pill bad">OFFLINE</span>');
+  E('bmsChip').innerHTML=bv?(stale?'<span class="pill bad">STALE '+Math.round(age/1000)+'s</span>':'<span class="pill ok">ONLINE '+(b.device_model||'')+(ble.rssi!=null?' '+ble.rssi+'dBm':'')+'</span>'):(ble.connected?'<span class="pill off">BLE'+(ble.rssi!=null?' '+ble.rssi+'dBm':'')+' αναμονή</span>':'<span class="pill bad">OFFLINE</span>');
   E('bSoc').textContent=bv?f(b.soc,0):'—';
   E('bV').textContent=bv?f(b.voltage,2):'—';
   E('bA').textContent=bv?f(b.current,2):'—';

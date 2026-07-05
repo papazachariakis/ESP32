@@ -391,7 +391,8 @@
     <div class="status-bar" id="statusBar">
       <span>📡 <b id="sbWifi">—</b></span>
       <span>🌐 <b id="sbIp">—</b></span>
-      <span>📶 <b id="sbRssi">—</b></span>
+      <span>📶 WiFi <b id="sbRssi">—</b></span>
+      <span>📲 BLE <b id="sbBleRssi">—</b></span>
       <span id="sbFresh" class="fresh-ok">🕐 <b id="sbTime">—</b></span>
       <span>📨 <b id="sbMsgs">0</b></span>
     </div>
@@ -867,6 +868,9 @@
 
       document.getElementById('diagBle').innerHTML = [
         diagRow('BLE σύνδεση', pill(ble.connected, 'Connected', 'Connecting', 'Disconnected')),
+        diagRow('BLE RSSI', ble.rssi != null
+          ? `<span style="color:${ble.rssi > -60 ? 'var(--ok)' : ble.rssi > -80 ? 'var(--warn)' : 'var(--bad)'}">${ble.rssi} dBm</span>`
+          : (ble.connected ? 'αναμονή…' : '—')),
         diagRow('MAC', ble.mac || '—'),
         diagRow('Όνομα', ble.name || '—'),
         diagRow('Τύπος BMS', ble.bms_type || '—'),
@@ -927,6 +931,12 @@
       document.getElementById('sbWifi').textContent = s.wifi_ssid || '—';
       document.getElementById('sbIp').textContent = s.ip || '—';
       document.getElementById('sbRssi').textContent = s.rssi != null ? s.rssi + ' dBm' : '—';
+      const bleR = s.ble && s.ble.rssi != null ? s.ble.rssi : null;
+      const bleEl = document.getElementById('sbBleRssi');
+      if (bleEl) {
+        bleEl.textContent = bleR != null ? bleR + ' dBm' : '—';
+        bleEl.style.color = bleR == null ? '' : bleR > -60 ? 'var(--ok)' : bleR > -80 ? 'var(--warn)' : 'var(--bad)';
+      }
       lastUpdate = Date.now();
       document.getElementById('sbTime').textContent = new Date().toLocaleTimeString('el-GR');
     }
@@ -955,8 +965,10 @@
 
       document.getElementById('heroSoc').textContent = bValid ? f0(b.soc) + '%' : '—%';
       document.getElementById('heroBmsDetail').textContent = bValid
-        ? `${f2(b.voltage, 1)}V • ${f2(b.current, 1)}A • ${f0(b.power)}W`
-        : (b && lastStatus.ble && lastStatus.ble.connected ? 'BLE OK, αναμονή frames...' : 'Δεν συνδέθηκε BMS');
+        ? `${f2(b.voltage, 1)}V • ${f2(b.current, 1)}A • ${f0(b.power)}W${lastStatus.ble && lastStatus.ble.rssi != null ? ' • ' + lastStatus.ble.rssi + ' dBm' : ''}`
+        : (b && lastStatus.ble && lastStatus.ble.connected
+          ? `BLE${lastStatus.ble.rssi != null ? ' ' + lastStatus.ble.rssi + ' dBm' : ''} — αναμονή frames...`
+          : 'Δεν συνδέθηκε BMS');
       const bChip = document.getElementById('heroBmsChip');
       bChip.textContent = bValid ? 'ONLINE' : (lastStatus.ble && lastStatus.ble.connected ? 'BLE' : 'OFFLINE');
       bChip.className = 'state-chip ' + (bValid ? 'run' : 'off');
@@ -1030,6 +1042,7 @@
       if (valid && b.device_model) meta.push(b.device_model);
       if (valid && b.sw_version) meta.push('FW ' + b.sw_version);
       if (valid && b.mac) meta.push(b.mac);
+      if (lastStatus.ble && lastStatus.ble.rssi != null) meta.push('BLE ' + lastStatus.ble.rssi + ' dBm');
       document.getElementById('bmsMeta').textContent = meta.join(' • ') || '—';
 
       const chips = [];

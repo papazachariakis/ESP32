@@ -218,6 +218,7 @@ String buildStatusJson() {
   ble["cell_frames"] = bmsMgr.proto.cellFrames;
   ble["info_frames"] = bmsMgr.proto.infoFrames;
   ble["crc_errors"] = bmsMgr.proto.crcErrors;
+  if (bmsMgr.connected && bmsMgr.bleRssi > -200) ble["rssi"] = bmsMgr.bleRssi;
   ble["data_age_ms"] = (bmsMgr.connected && bmsMgr.bms.valid)
     ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
 

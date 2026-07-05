@@ -17,7 +17,9 @@ struct BmsManager {
   String name;
   String lastDisplay;
   bool connected = false;
+  int bleRssi = -999;
   unsigned long lastPoll = 0;
+  unsigned long lastRssiRead = 0;
   uint16_t pollIntervalMs = 4000;
 
   static void notifyThunk(BLERemoteCharacteristic* chr, uint8_t* data, size_t len, bool isNotify) {
@@ -39,6 +41,7 @@ struct BmsManager {
     chrNotify = nullptr;
     chrWrite = nullptr;
     connected = false;
+    bleRssi = -999;
     proto = BmsProtoState();
     bms = BmsData();
     lastDisplay = "";
@@ -103,6 +106,10 @@ struct BmsManager {
 
   void poll() {
     if (!connected || type != BmsType::Jk) return;
+    if (client && client->isConnected() && millis() - lastRssiRead > 15000) {
+      lastRssiRead = millis();
+      bleRssi = client->getRssi();
+    }
     if (millis() - lastPoll < pollIntervalMs) return;
     lastPoll = millis();
 
@@ -144,6 +151,8 @@ struct BmsManager {
     gInstance = this;
     connected = true;
     bms.connected = true;
+    bleRssi = client->getRssi();
+    lastRssiRead = millis();
     prefs.putString("ble_mac", mac);
     prefs.putString("ble_name", name);
     prefs.putString("bms_type", bmsTypeId(type));

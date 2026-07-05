@@ -678,6 +678,7 @@
     <input id="deviceId" placeholder="000401000000" />
     <label>MQTT WebSocket</label>
     <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
+    <p class="small muted" style="margin:4px 0 8px">Τοπικά = HTTP στο ESP32. GitHub = MQTT cloud — ο ESP32 πρέπει <b>mqtt.connected:true</b> στο <code>/api/status</code>.</p>
     <button class="btn" onclick="connect();closeDrawer()">Σύνδεση</button>
     <button class="btn sec" onclick="scanDevices()">🔍 Εύρεση συσκευών</button>
     <button class="btn sec" onclick="disconnect()">Αποσύνδεση</button>
@@ -1379,33 +1380,62 @@
       const id = document.getElementById('deviceId').value.trim().toUpperCase();
       const url = document.getElementById('broker').value.trim();
       if (!id) { toast('Βάλε Device ID'); return; }
+      if (!url) { toast('Βάλε MQTT broker'); return; }
       localStorage.setItem(LS.id, id);
       localStorage.setItem(LS.broker, url);
       cmdTopic = `home/${id}/cmd`;
       document.getElementById('deviceLabel').textContent = id;
-      if (client) client.end();
+      if (client) { client.removeAllListeners(); client.end(true); }
       setBadge('Σύνδεση...', 'warn');
-      document.getElementById('statusLine').textContent = `home/${id}/status`;
+      document.getElementById('statusLine').textContent = 'Σύνδεση στο ' + url;
 
       client = mqtt.connect(url, {
         clientId: 'hub-' + Math.random().toString(16).slice(2),
-        reconnectPeriod: 5000
+        reconnectPeriod: 5000,
+        connectTimeout: 15000,
+        protocolVersion: 4
       });
       client.on('connect', () => {
-        setBadge('Online', 'ok');
+        setBadge('MQTT OK', 'ok');
         connected = true;
         msgStats.status = 0; msgStats.bms = 0; msgStats.genset = 0;
         msgStats.connectedAt = Date.now();
+        lastUpdate = 0;
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
-        toast('Συνδέθηκε: ' + id);
+        document.getElementById('statusLine').textContent = `home/${id}/status — αναμονή δεδομένων...`;
+        toast('MQTT συνδέθηκε — αναμονή ESP32...');
+        setTimeout(() => {
+          if (connected && !lastUpdate) {
+            toast('Δεν ήρθαν δεδομένα — έλεγξε mqtt.connected στο ESP32', 6000);
+            document.getElementById('statusLine').textContent = 'MQTT OK αλλά χωρίς μηνύματα από ESP32';
+          }
+        }, 12000);
+      });
+      client.on('error', (err) => {
+        setBadge('MQTT σφάλμα', 'off');
+        connected = false;
+        const msg = err && err.message ? err.message : String(err);
+        document.getElementById('statusLine').textContent = 'Σφάλμα: ' + msg;
+        toast('MQTT σφάλμα: ' + msg, 5000);
+      });
+      client.on('offline', () => {
+        connected = false;
+        setBadge('Offline', 'off');
       });
       client.on('close', () => { connected = false; setBadge('Offline', 'off'); renderDiagnostics(lastStatus); });
       client.on('message', (t, msg) => {
         try {
           const j = JSON.parse(msg.toString());
-          if (t.endsWith('/status')) handleStatus(j);
+          if (t.endsWith('/status')) {
+            handleStatus(j);
+            if (msgStats.status === 1) {
+              setBadge('Online', 'ok');
+              document.getElementById('statusLine').textContent = `home/${id}/status`;
+              toast('ESP32 online: ' + (j.ip || ''));
+            }
+          }
           if (t.endsWith('/bms')) {
             msgStats.bms++;
             if (j.valid) { renderBms(j); renderOverview(j, lastStatus.genset); }

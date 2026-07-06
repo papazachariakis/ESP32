@@ -410,7 +410,7 @@ struct GenManager {
       case 0: {
         uint16_t a[5];
         if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
-          data.lastError = "modbus 40009 - check RS485 wiring";
+          data.lastError = "modbus 40009 - check TX/RX crossover (TX2→RXD, RX2→TXD) and RS485";
           pollStep = 0;
           return false;
         }

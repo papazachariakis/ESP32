@@ -597,7 +597,8 @@
       <div class="card">
         <div class="card-title">ESP32 → XY-485 → PS0600 (Cummins C22D5)</div>
         <p class="small muted" style="margin-bottom:14px">
-          Modbus RTU 8N1 • GPIO16=RX2, GPIO17=TX2 • DE/RE δεν χρησιμοποιείται (auto-direction XY-485)
+          Modbus RTU 8N1 • GPIO16=RX2, GPIO17=TX2 • DE/RE δεν χρησιμοποιείται (auto-direction XY-485)<br>
+          <b>TX/RX σταυρωτά:</b> TX2→RXD, RX2→TXD (τα labels TXD/RXD είναι από την πλευρά του module)
         </p>
         <img class="wiring-img" src="esp32_xy485_ps0600_wiring.png" alt="Διάγραμμα καλωδίωσης ESP32 XY-485 PS0600" loading="lazy" />
       </div>
@@ -607,8 +608,8 @@
           <table class="wire-table">
             <thead><tr><th>ESP32</th><th>XY-485</th><th>Χρώμα</th></tr></thead>
             <tbody>
-              <tr><td>GPIO17 (TX2)</td><td>TXD</td><td><span class="wire-dot" style="background:#22c55e"></span>Πράσινο</td></tr>
-              <tr><td>GPIO16 (RX2)</td><td>RXD</td><td><span class="wire-dot" style="background:#3b82f6"></span>Μπλε</td></tr>
+              <tr><td>GPIO17 (TX2)</td><td>RXD</td><td><span class="wire-dot" style="background:#22c55e"></span>Πράσινο</td></tr>
+              <tr><td>GPIO16 (RX2)</td><td>TXD</td><td><span class="wire-dot" style="background:#3b82f6"></span>Μπλε</td></tr>
               <tr><td>3V3</td><td>VCC</td><td><span class="wire-dot" style="background:#ef4444"></span>Κόκκινο</td></tr>
               <tr><td>GND</td><td>GND</td><td><span class="wire-dot" style="background:#94a3b8"></span>Μαύρο</td></tr>
             </tbody>
@@ -629,7 +630,8 @@
       <div class="card">
         <div class="card-title">Troubleshooting</div>
         <ul class="small muted" style="padding-left:18px;line-height:1.7">
-          <li>Αν βλέπεις <code>modbus 40009</code>: πρώτα <b>αντάλλαξε A↔B</b></li>
+          <li>Αν βλέπεις <code>modbus 40009</code>: πρώτα <b>σταύρωσε TX/RX</b> (TX2→RXD, RX2→TXD) — όχι TX→TXD</li>
+          <li>Μετά, αν χρειάζεται: <b>αντάλλαξε A↔B</b></li>
           <li>Έλεγξε slave ID και baud (συνήθως 9600 ή 19200, 8N1) στο μενού PS0600</li>
           <li>Για μακρύ καλώδιο (&gt;10m): termination 120Ω στα άκρα</li>
           <li>Μην συνδέσεις DE/RE — το module είναι auto-direction</li>

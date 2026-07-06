@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="520" fill="#f8fafc"/>
+  <text x="550" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">ESP32 í XY-485 í PS0600 TB15 (Cummins C22D5)</text>
+
+  <!-- ESP32 -->
+  <rect x="40" y="70" width="180" height="280" rx="12" fill="#1e3a5f" stroke="#0f172a" stroke-width="2"/>
+  <text x="130" y="105" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">ESP32</text>
+  <text x="60" y="145" fill="#cbd5e1" font-size="14">GPIO17 (TX2)</text>
+  <text x="60" y="185" fill="#cbd5e1" font-size="14">GPIO16 (RX2)</text>
+  <text x="60" y="225" fill="#cbd5e1" font-size="14">3V3</text>
+  <text x="60" y="265" fill="#cbd5e1" font-size="14">GND</text>
+  <circle cx="210" cy="140" r="5" fill="#22c55e"/>
+  <circle cx="210" cy="180" r="5" fill="#3b82f6"/>
+  <circle cx="210" cy="220" r="5" fill="#ef4444"/>
+  <circle cx="210" cy="260" r="5" fill="#1e293b" stroke="#94a3b8"/>
+
+  <!-- XY-485 -->
+  <rect x="380" y="70" width="220" height="280" rx="12" fill="#dc2626" stroke="#991b1b" stroke-width="2"/>
+  <text x="490" y="105" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">XY-485</text>
+  <text x="490" y="125" text-anchor="middle" fill="#fecaca" font-size="12">(auto-direction)</text>
+  <text x="395" y="155" fill="#fff" font-size="13" font-weight="600">TTL</text>
+  <text x="395" y="180" fill="#fff" font-size="14">RXD ê</text>
+  <text x="395" y="210" fill="#fff" font-size="14">TXD í</text>
+  <text x="395" y="240" fill="#fff" font-size="14">VCC</text>
+  <text x="395" y="270" fill="#fff" font-size="14">GND</text>
+  <text x="540" y="155" fill="#fff" font-size="13" font-weight="600">RS485</text>
+  <text x="540" y="185" fill="#fff" font-size="14">A (A+)</text>
+  <text x="540" y="220" fill="#fff" font-size="14">B (B)</text>
+  <text x="540" y="255" fill="#fff" font-size="14">GND</text>
+  <circle cx="380" cy="175" r="5" fill="#22c55e"/>
+  <circle cx="380" cy="205" r="5" fill="#3b82f6"/>
+  <circle cx="380" cy="235" r="5" fill="#ef4444"/>
+  <circle cx="380" cy="265" r="5" fill="#1e293b" stroke="#94a3b8"/>
+  <circle cx="600" cy="180" r="5" fill="#eab308"/>
+  <circle cx="600" cy="215" r="5" fill="#f97316"/>
+  <circle cx="600" cy="250" r="5" fill="#1e293b" stroke="#94a3b8"/>
+
+  <!-- TB15 -->
+  <rect x="760" y="70" width="300" height="280" rx="12" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+  <text x="910" y="105" text-anchor="middle" fill="#0f172a" font-size="16" font-weight="700">PS0600 TB15</text>
+  <rect x="790" y="130" width="240" height="44" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="810" y="158" fill="#0f172a" font-size="14"><tspan font-weight="700">Pin 1</tspan>  Common (GND)</text>
+  <rect x="790" y="182" width="240" height="44" rx="6" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="810" y="210" fill="#64748b" font-size="14"><tspan font-weight="700">Pin 2</tspan>  NC</text>
+  <rect x="790" y="234" width="240" height="44" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="810" y="262" fill="#0f172a" font-size="14"><tspan font-weight="700">Pin 3</tspan>  A+</text>
+  <circle cx="1030" cy="256" r="5" fill="#eab308"/>
+  <rect x="790" y="286" width="240" height="44" rx="6" fill="#fff" stroke="#cbd5e1"/>
+  <text x="810" y="314" fill="#0f172a" font-size="14"><tspan font-weight="700">Pin 4</tspan>  B</text>
+  <circle cx="1030" cy="308" r="5" fill="#f97316"/>
+
+  <!-- TTL wires (crossed) -->
+  <path d="M210,140 C300,140 300,175 380,175" fill="none" stroke="#22c55e" stroke-width="4"/>
+  <text x="295" y="132" text-anchor="middle" fill="#15803d" font-size="12" font-weight="700">TX2 í RXD</text>
+  <path d="M380,205 C300,205 300,180 210,180" fill="none" stroke="#3b82f6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="295" y="198" text-anchor="middle" fill="#1d4ed8" font-size="12" font-weight="700">TXD í RX2</text>
+  <path d="M210,220 L380,235" fill="none" stroke="#ef4444" stroke-width="4"/>
+  <path d="M210,260 L380,265" fill="none" stroke="#334155" stroke-width="4"/>
+
+  <!-- RS485 wires (correct) -->
+  <path d="M600,180 C700,180 700,256 1030,256" fill="none" stroke="#eab308" stroke-width="5"/>
+  <text x="815" y="218" fill="#a16207" font-size="13" font-weight="700">A+ í Pin 3 (A+)</text>
+  <path d="M600,215 C700,215 700,308 1030,308" fill="none" stroke="#f97316" stroke-width="5"/>
+  <text x="815" y="300" fill="#c2410c" font-size="13" font-weight="700">B í Pin 4 (B)</text>
+  <path d="M600,250 C680,250 680,152 1030,152" fill="none" stroke="#64748b" stroke-width="3" stroke-dasharray="10,8"/>
+  <text x="820" y="168" fill="#475569" font-size="12" font-weight="600">GND í Pin 1 Common (¿¡ø±π¡µƒπ∫Ã)</text>
+
+  <!-- Notes -->
+  <rect x="40" y="380" width="1020" height="110" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="60" y="410" fill="#1e3a8a" font-size="14">" <tspan font-weight="700">TTL √ƒ±≈¡…ƒ¨:</tspan> TX2íRXD, RX2íTXD (Ã«π TXíTXD)</text>
+  <text x="60" y="438" fill="#1e3a8a" font-size="14">" <tspan font-weight="700">RS485:</tspan> A+íPin3, BíPin4, GNDíPin1  <tspan font-weight="700">º∑Ω</tspan> √≈Ω¥≠√µπ¬ A/B √ƒø GND</text>
+  <text x="60" y="466" fill="#1e3a8a" font-size="14">" DE/RE ¥µΩ «¡∑√πºø¿øπµØƒ±π (MODBUS_DE_PIN = -1) ∑ ëΩ ±∫Ãº± ƒØ¿øƒ±: ¥ø∫Øº±√µ swap AîB</text>
+</svg>

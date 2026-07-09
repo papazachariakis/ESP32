@@ -7,6 +7,7 @@
 enum class BmsType : uint8_t {
   None = 0,
   Jk,
+  Basen,
 };
 
 struct BmsData {
@@ -58,6 +59,7 @@ struct BmsData {
 inline const char* bmsTypeId(BmsType t) {
   switch (t) {
     case BmsType::Jk: return "jk";
+    case BmsType::Basen: return "basen";
     default: return "unknown";
   }
 }
@@ -65,18 +67,25 @@ inline const char* bmsTypeId(BmsType t) {
 inline const char* bmsTypeLabel(BmsType t) {
   switch (t) {
     case BmsType::Jk: return "JK / Jikong";
+    case BmsType::Basen: return "Basen Green / Tianpower";
     default: return "Unknown BMS";
   }
 }
 
 inline BmsType bmsTypeFromString(const String& s) {
   if (s == "jk" || s == "jikong") return BmsType::Jk;
+  if (s == "basen" || s == "tianpower" || s == "tp") return BmsType::Basen;
   return BmsType::None;
 }
 
 inline BmsType bmsDetectFromName(const String& name) {
-  if (name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0) return BmsType::Jk;
-  if (name.startsWith("JK_") || name.startsWith("JK-")) return BmsType::Jk;
+  String n = name;
+  n.toUpperCase();
+  if (n.indexOf("JK") >= 0) return BmsType::Jk;
+  if (n.startsWith("JK_") || n.startsWith("JK-")) return BmsType::Jk;
+  if (n.startsWith("TP_") || n.startsWith("TP-")) return BmsType::Basen;
+  if (n.indexOf("BSTBD") >= 0 || n.indexOf("TIANPOWER") >= 0) return BmsType::Basen;
+  if (n.indexOf("BASEN") >= 0) return BmsType::Basen;
   return BmsType::None;
 }
 
@@ -99,6 +108,10 @@ inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
 
   if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
     return BmsType::Jk;
+  }
+
+  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
+    return BmsType::Basen;
   }
 
   if ((bmsMfgMatch(d, 0x0B65) || bmsMfgMatch(d, 0x4B4A)) &&
@@ -219,9 +232,10 @@ inline void bmsFillJson(JsonObject& o, const BmsData& b) {
 }
 
 inline String bmsToDisplay(const BmsData& b) {
-  if (!b.connected) return "JK: not connected";
-  if (!b.valid) return "JK: waiting...";
-  String s = "JK BMS\n";
+  String tag = bmsTypeLabel(b.type);
+  if (!b.connected) return tag + ": not connected";
+  if (!b.valid) return tag + ": waiting...";
+  String s = tag + "\n";
   if (b.name.length()) s += b.name + "\n";
   s += "SOC " + String(b.soc, 0) + "%  " + String(b.voltage, 2) + "V  " + String(b.current, 2) + "A\n";
   if (b.capacityAh > 0) {

@@ -170,6 +170,8 @@ String buildStatusJson() {
   StaticJsonDocument<6144> doc;
 
   doc["device_id"] = deviceId;
+  doc["board"] = BOARD_ID;
+  doc["board_label"] = BOARD_LABEL;
 
   doc["ip"] = WiFi.localIP().toString();
 
@@ -254,6 +256,9 @@ String buildStatusJson() {
   genset["slave_id"] = genMgr.slaveId;
   genset["baud"] = genMgr.baud;
   genset["probe_reg"] = genMgr.probeReg;
+  genset["modbus_rx"] = MODBUS_RX_PIN;
+  genset["modbus_tx"] = MODBUS_TX_PIN;
+  genset["modbus_de"] = MODBUS_DE_PIN;
 
 
 
@@ -450,6 +455,8 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
+  if (bmsMgr.type == BmsType::None && bmsMgr.name.length())
+    bmsMgr.type = bmsDetectFromName(bmsMgr.name);
   if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
 
   genMgr.load(prefs);
@@ -553,6 +560,7 @@ void startBleScan() {
     o["bms_label"] = bmsTypeLabel(bt);
 
     o["jk"] = bt == BmsType::Jk;
+    o["basen"] = bt == BmsType::Basen;
 
   }
 
@@ -660,6 +668,8 @@ void handleBleConnect() {
   BmsType bt = BmsType::None;
   if (typeStr != "auto" && typeStr.length()) bt = bmsTypeFromString(typeStr);
   if (bt == BmsType::None) bt = bmsDetectFromName(name);
+  if (bt == BmsType::None && typeStr == "basen") bt = BmsType::Basen;
+  if (bt == BmsType::None && typeStr == "jk") bt = BmsType::Jk;
   if (bt == BmsType::None) bt = BmsType::Jk;
 
   if (bt == BmsType::None) {
@@ -988,6 +998,8 @@ void setup() {
 
 
   Serial.println("ESP32 Control Hub ready");
+  Serial.printf("Board: %s (%s)\n", BOARD_LABEL, BOARD_ID);
+  Serial.printf("Modbus RX=%d TX=%d DE=%d\n", MODBUS_RX_PIN, MODBUS_TX_PIN, MODBUS_DE_PIN);
 
   Serial.println("Open http://" + WiFi.localIP().toString());
 

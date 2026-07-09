@@ -16,6 +16,7 @@ struct BmsProtoState {
   uint32_t cellFrames = 0;
   uint32_t infoFrames = 0;
   uint32_t crcErrors = 0;
+  uint8_t basenPollIdx = 0;
 };
 
 inline int jkMajorVersion(const String& v) {
@@ -200,6 +201,151 @@ inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& 
         jkResync(st);
       }
     }
+  }
+  return gotCell;
+}
+
+// --- Basen Green / Tianpower BLE (service FF00, notify FF01, write FF02) ---
+#define BASEN_SERVICE_UUID "0000ff00-0000-1000-8000-00805f9b34fb"
+#define BASEN_NOTIFY_UUID  "0000ff01-0000-1000-8000-00805f9b34fb"
+#define BASEN_WRITE_UUID   "0000ff02-0000-1000-8000-00805f9b34fb"
+#define BASEN_FRAME_LEN 20
+
+static const uint8_t BASEN_POLL_CMDS[] = {
+  0x83, 0x84, 0x85, 0x87, 0x88, 0x89,
+};
+
+inline size_t basenBuildCmd(uint8_t frameType, uint8_t* out) {
+  out[0] = 0x55;
+  out[1] = 0x04;
+  out[2] = frameType;
+  out[3] = 0xAA;
+  return 4;
+}
+
+inline bool basenParseFrame(const uint8_t* f, size_t len, BmsData& bms, BmsProtoState& st, bool& gotCell) {
+  if (len != BASEN_FRAME_LEN || f[0] != 0x55 || f[1] != 0x14 || f[19] != 0xAA) return false;
+  gotCell = false;
+  uint8_t frameType = f[2];
+
+  switch (frameType) {
+    case 0x81: {
+      bms.swVersion = "";
+      for (int i = 3; i < 19; i++) {
+        if (f[i] == 0) break;
+        bms.swVersion += (char)f[i];
+      }
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      st.infoFrames++;
+      return true;
+    }
+    case 0x82: {
+      bms.deviceModel = "";
+      for (int i = 3; i < 19; i++) {
+        if (f[i] == 0) break;
+        bms.deviceModel += (char)f[i];
+      }
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      st.infoFrames++;
+      return true;
+    }
+    case 0x83: {
+      bms.soc = (float)bmsU16BE(f, 3);
+      bms.voltage = bmsU16BE(f, 5) * 0.01f;
+      bms.avgTemp = bmsS16BE(f, 7) * 0.1f;
+      bms.ambientTemp = bmsS16BE(f, 9) * 0.1f;
+      bms.mosfetTemp = bmsS16BE(f, 11) * 0.1f;
+      bms.current = bmsS16BE(f, 13) * 0.01f;
+      bms.soh = (float)bmsU16BE(f, 17);
+      bms.power = bms.voltage * bms.current;
+      bms.chargePower = bms.power > 0 ? bms.power : 0;
+      bms.dischargePower = bms.power < 0 ? -bms.power : 0;
+      if (fabsf(bms.current) > 0.05f) {
+        bms.charging = bms.current > 0;
+        bms.discharging = bms.current < 0;
+      }
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      st.cellFrames++;
+      gotCell = true;
+      return true;
+    }
+    case 0x84: {
+      bms.cellCount = f[3];
+      bms.tempSensorCount = f[4];
+      bms.capacityAh = bmsU16BE(f, 5) * 0.01f;
+      bms.remainingAh = bmsU16BE(f, 7) * 0.01f;
+      bms.cycles = (int)bmsU16BE(f, 9);
+      bms.voltageProtMask = bmsU16BE(f, 11);
+      bms.currentProtMask = bmsU16BE(f, 13);
+      bms.tempProtMask = bmsU16BE(f, 15);
+      bms.errorMask = bmsU16BE(f, 17);
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      return true;
+    }
+    case 0x85: {
+      uint16_t mos = bmsU16BE(f, 3);
+      bms.charging = (mos & (1 << 1)) != 0;
+      bms.discharging = (mos & (1 << 2)) != 0;
+      bms.limitingCurrent = (mos & (1 << 4)) != 0 || (mos & (1 << 5)) != 0;
+      bms.balancingMask = bmsU16BE(f, 13);
+      bms.balancing = bms.balancingMask != 0;
+      bms.alarmMask = ((uint32_t)bmsU16BE(f, 9) << 16) | bmsU16BE(f, 11);
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      return true;
+    }
+    case 0x87: {
+      int tc = 0;
+      float tsum = 0;
+      for (int i = 0; i < 8; i++) {
+        int16_t raw = bmsS16BE(f, 3 + i * 2);
+        if (raw == 0 && i > 1) continue;
+        float t = raw * 0.1f;
+        if (t < -50 || t > 150) continue;
+        if (tc < 8) bms.temps[tc++] = t;
+        tsum += t;
+      }
+      if (tc > 0) {
+        bms.tempSensorCount = tc;
+        bms.avgTemp = tsum / tc;
+      }
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      return true;
+    }
+    case 0x88:
+    case 0x89:
+    case 0x8A: {
+      uint8_t chunk = frameType - 0x88;
+      uint8_t offset = chunk * 8;
+      for (int i = 0; i < 8; i++) {
+        int idx = offset + i;
+        if (idx >= 16) break;
+        float cv = bmsU16BE(f, 3 + i * 2) * 0.001f;
+        if (cv > 0.5f && cv < 5.0f) bms.cellVoltages[idx] = cv;
+      }
+      bmsUpdateCellStats(bms);
+      bms.valid = true;
+      bms.lastUpdate = millis();
+      st.cellFrames++;
+      gotCell = true;
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+inline bool basenFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& bms) {
+  bool gotCell = false;
+  if (len < BASEN_FRAME_LEN) return false;
+  for (size_t i = 0; i + BASEN_FRAME_LEN <= len; i++) {
+    bool frameCell = false;
+    if (basenParseFrame(data + i, BASEN_FRAME_LEN, bms, st, frameCell) && frameCell) gotCell = true;
   }
   return gotCell;
 }

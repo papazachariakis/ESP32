@@ -86,6 +86,25 @@ struct BmsManager {
     return true;
   }
 
+  bool getBasenChars(BLEClient* c) {
+    BLERemoteService* svc = nullptr;
+    for (int i = 0; i < 20 && !svc; i++) {
+      svc = c->getService(BLEUUID(BASEN_SERVICE_UUID));
+      if (!svc) delay(200);
+    }
+    if (!svc) return false;
+    chrNotify = svc->getCharacteristic(BLEUUID(BASEN_NOTIFY_UUID));
+    chrWrite = svc->getCharacteristic(BLEUUID(BASEN_WRITE_UUID));
+    if (!chrNotify || !chrWrite) return false;
+    registerNotify();
+    return true;
+  }
+
+  bool getBleChars(BLEClient* c) {
+    if (type == BmsType::Basen) return getBasenChars(c);
+    return getJkChars(c);
+  }
+
   bool writeBytes(const uint8_t* data, size_t len) {
     if (!chrWrite || !client || !client->isConnected()) return false;
     return chrWrite->writeValue((uint8_t*)data, len, false);
@@ -93,16 +112,42 @@ struct BmsManager {
 
   void onNotify(uint8_t* data, size_t len) {
     lastNotifyMs = millis();
-    bool gotCell = jkFeed(proto, data, len, bms);
+    bool gotCell = false;
+    if (type == BmsType::Basen) {
+      gotCell = basenFeed(proto, data, len, bms);
+      if (gotCell || bms.valid) type = BmsType::Basen;
+    } else {
+      gotCell = jkFeed(proto, data, len, bms);
+      if (gotCell || bms.valid) type = BmsType::Jk;
+    }
     if (gotCell) lastCellMs = millis();
     if (gotCell || bms.valid) {
-      type = BmsType::Jk;
       bms.type = type;
       bms.connected = true;
       lastDisplay = bmsToDisplay(bms);
     } else if (!bms.valid && len > 0) {
       lastDisplay = "rx " + String((int)len) + "B";
     }
+  }
+
+  void sendBasenCmd(uint8_t frameType) {
+    uint8_t buf[8];
+    size_t n = basenBuildCmd(frameType, buf);
+    if (!writeBytes(buf, n)) {
+      Serial.println("BMS write failed");
+      dropLink();
+    }
+  }
+
+  void sendBasenPollCycle() {
+    const size_t nCmds = sizeof(BASEN_POLL_CMDS) / sizeof(BASEN_POLL_CMDS[0]);
+    for (size_t i = 0; i < nCmds; i++) {
+      uint8_t cmd = BASEN_POLL_CMDS[(proto.basenPollIdx + i) % nCmds];
+      sendBasenCmd(cmd);
+      delay(60);
+    }
+    proto.basenPollIdx = (proto.basenPollIdx + 1) % nCmds;
+    lastNotifyMs = millis();
   }
 
   void sendPollCmd(uint8_t cmd) {
@@ -115,6 +160,14 @@ struct BmsManager {
   }
 
   void sendInitialPolls() {
+    if (type == BmsType::Basen) {
+      sendBasenCmd(0x81);
+      delay(200);
+      sendBasenCmd(0x82);
+      delay(200);
+      sendBasenPollCycle();
+      return;
+    }
     sendPollCmd(0x97);
     delay(400);
     sendPollCmd(0x96);
@@ -125,18 +178,23 @@ struct BmsManager {
 
   void kickPolls() {
     registerNotify();
+    if (type == BmsType::Basen) {
+      sendBasenCmd(0x83);
+      return;
+    }
     sendPollCmd(0x96);
   }
 
   void poll() {
-    if (!connected || type != BmsType::Jk) return;
+    if (!connected || type == BmsType::None) return;
     if (millis() - lastPoll < pollIntervalMs) return;
     lastPoll = millis();
-    sendPollCmd(0x96);
+    if (type == BmsType::Basen) sendBasenPollCycle();
+    else sendPollCmd(0x96);
   }
 
   void maintain() {
-    if (!connected || type != BmsType::Jk) return;
+    if (!connected || type == BmsType::None) return;
 
     if (!client || !client->isConnected()) {
       Serial.println("BMS BLE link down");
@@ -199,7 +257,7 @@ struct BmsManager {
     }
     delay(400);
 
-    if (!getJkChars(client)) {
+    if (!getBleChars(client)) {
       Serial.println("BMS service/char not found");
       dropLink();
       return false;

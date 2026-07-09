@@ -48,7 +48,7 @@ pre{white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background
 <div class="sub"><span class="dot" id="dot"></span> <span id="hdr">Σύνδεση...</span></div>
 
 <div class="card">
-<h2>Μπαταρία (JK BMS)</h2>
+<h2>Μπαταρία (JK / Basen Green)</h2>
 <div id="bmsChip"><span class="pill off">—</span></div>
 <div class="grid" style="margin-top:10px">
 <div class="kpi"><div class="l">SOC</div><div class="v"><span id="bSoc">—</span><span class="u">%</span></div></div>
@@ -187,10 +187,10 @@ function setR(i,on){j('/api/relay',{method:'POST',headers:{'Content-Type':'appli
 function bleScan(){E('ble').innerHTML='<small>scan...</small>';
  j('/api/ble/scan').then(function(r){
   E('ble').innerHTML=(r.devices||[]).map(function(d){
-   return '<div class="dev" onclick="bleConn(\''+d.mac+'\',\''+(d.name||'')+'\')">'+(d.name||'(no name)')+' <small>'+d.mac+' '+(d.rssi||'')+'</small></div>'
+   return '<div class="dev" onclick="bleConn(\''+d.mac+'\',\''+(d.name||'')+'\',\''+(d.bms_type||'auto')+'\')">'+(d.name||'(no name)')+' <small>'+(d.bms_label||d.bms_type||'?')+' · '+d.mac+' '+(d.rssi||'')+'</small></div>'
   }).join('')||'<small>Καμία συσκευή</small>';
  })}
-function bleConn(mac,name){j('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:mac,name:name,type:'jk'})}).then(go)}
+function bleConn(mac,name,type){j('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:mac,name:name,type:type||'auto'})}).then(go)}
 function bleDisc(){if(confirm('Διαγραφή αποθηκευμένου BMS;'))j('/api/ble/disconnect',{method:'POST'}).then(go)}
 function ota(){var fl=E('bin').files[0];if(!fl){msg('oMsg','Διάλεξε .bin','bad');return}
  msg('oMsg','Ανέβασμα...','info');var fd=new FormData();fd.append('firmware',fl);

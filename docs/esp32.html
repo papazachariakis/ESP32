@@ -755,6 +755,16 @@
     <div id="deviceList" class="device-list"></div>
     <div class="small" id="statusLine" style="margin-top:10px">—</div>
     <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
+    <div class="card-title" style="margin-bottom:8px">WiFi (απομακρυσμένα)</div>
+    <p class="small muted" style="margin:0 0 8px">Τρέχον: <b id="wifiCurrentSsid">—</b> · <span id="wifiCurrentIp">—</span></p>
+    <button class="btn sec" onclick="wifiScanRemote()">📡 Σάρωση WiFi δικτύων</button>
+    <div id="wifiNetList" class="device-list" style="margin-top:10px;max-height:180px;overflow:auto"></div>
+    <div id="wifiConnectBox" style="display:none;margin-top:10px">
+      <label>Δίκτυο: <b id="wifiPickSsid">—</b></label>
+      <input id="wifiPickPass" type="password" placeholder="κωδικός WiFi" />
+      <button class="btn" style="margin-top:8px" onclick="wifiConnectRemote()">Σύνδεση & αποθήκευση</button>
+    </div>
+    <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
     <div class="card-title" style="margin-bottom:8px">Συσκευή</div>
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
@@ -772,6 +782,7 @@
     const foundDevices = new Map();
     let faultBitsDb = null;
     const msgStats = { status: 0, bms: 0, genset: 0, connectedAt: 0 };
+    let wifiPick = '';
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -1308,6 +1319,10 @@
       if (j.genset) renderGenset(j.genset);
       renderOverview(j.bms, j.genset);
       renderDiagnostics(j);
+      const wSsid = document.getElementById('wifiCurrentSsid');
+      const wIp = document.getElementById('wifiCurrentIp');
+      if (wSsid) wSsid.textContent = j.wifi_ssid || '—';
+      if (wIp) wIp.textContent = j.ip || '—';
       if (j.ota_phase) toast('OTA: ' + j.ota_phase, 2000);
       if (j.ota_error) toast('OTA σφάλμα: ' + j.ota_error, 5000);
     }
@@ -1388,6 +1403,53 @@
       client.publish(cmdTopic, JSON.stringify({ reboot: 'esp32ota' }));
       toast('Reboot εντολή στάλθηκε');
       closeDrawer();
+    }
+
+    function wifiScanRemote() {
+      if (!client || !cmdTopic) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      document.getElementById('wifiNetList').innerHTML = '<div class="small muted">Σάρωση από ESP32...</div>';
+      client.publish(cmdTopic, JSON.stringify({ wifi_scan: true }));
+      toast('Εντολή σάρωσης WiFi στάλθηκε');
+    }
+
+    function renderWifiScan(j) {
+      const el = document.getElementById('wifiNetList');
+      if (!el) return;
+      const saved = new Set((j.saved || []).map(s => String(s).toLowerCase()));
+      const nets = j.networks || [];
+      if (!nets.length) {
+        el.innerHTML = '<div class="small muted">Δεν βρέθηκαν δίκτυα</div>';
+        return;
+      }
+      el.innerHTML = nets.map(n => {
+        const ssid = String(n.ssid || '');
+        const esc = ssid.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const isSaved = saved.has(ssid.toLowerCase());
+        const lock = n.secure ? '🔒 ' : '';
+        return `<div class="device-item" onclick="pickWifi('${esc}', ${isSaved})">
+          <div><div class="id">${lock}${ssid}</div>
+            <div class="meta">${n.rssi ?? '?'} dBm${isSaved ? ' · αποθηκευμένο' : ''}</div>
+          </div><span class="chip ${isSaved ? 'ok' : ''}">${n.rssi ?? '?'} dBm</span>
+        </div>`;
+      }).join('');
+    }
+
+    function pickWifi(ssid, saved) {
+      wifiPick = ssid;
+      document.getElementById('wifiPickSsid').textContent = ssid;
+      document.getElementById('wifiConnectBox').style.display = 'block';
+      document.getElementById('wifiPickPass').value = '';
+      document.getElementById('wifiPickPass').placeholder = saved
+        ? 'άδειο = χρήση αποθηκευμένου κωδικού' : 'κωδικός WiFi';
+    }
+
+    function wifiConnectRemote() {
+      if (!client || !wifiPick) { toast('Διάλεξε δίκτυο'); return; }
+      const pass = document.getElementById('wifiPickPass').value;
+      if (!confirm(`Σύνδεση ESP32 στο WiFi "${wifiPick}";`)) return;
+      client.publish(cmdTopic, JSON.stringify({ wifi_connect: { ssid: wifiPick, pass } }));
+      toast('Εντολή σύνδεσης — περίμενε ~20 δευτ');
+      document.getElementById('wifiConnectBox').style.display = 'none';
     }
 
     function parseDeviceFromTopic(topic) {
@@ -1481,6 +1543,7 @@
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
+        client.subscribe(`home/${id}/wifi`);
         document.getElementById('statusLine').textContent = `home/${id}/status — αναμονή δεδομένων...`;
         toast('MQTT συνδέθηκε — αναμονή ESP32...');
         setTimeout(() => {
@@ -1522,6 +1585,11 @@
             msgStats.genset++;
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
+          }
+          if (t.endsWith('/wifi')) {
+            if (j.networks) renderWifiScan(j);
+            if (j.error) toast('WiFi σφάλμα: ' + j.error, 5000);
+            else if (j.ok) toast('WiFi OK: ' + (j.current || '') + ' · ' + (j.ip || ''), 5000);
           }
           if (lastStatus.device_id) renderDiagnostics(lastStatus);
         } catch (e) {}

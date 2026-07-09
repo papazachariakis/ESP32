@@ -21,6 +21,7 @@
 #include <WiFiManager.h>
 
 #include <esp_mac.h>
+#include <ESPmDNS.h>
 #include <Preferences.h>
 
 #include <PubSubClient.h>
@@ -64,7 +65,7 @@ String mqttBroker = MQTT_DEFAULT_BROKER;
 
 uint16_t mqttPort = MQTT_DEFAULT_PORT;
 
-String topicStatus, topicCmd, topicBms, topicGenset;
+String topicStatus, topicCmd, topicBms, topicGenset, topicWifi;
 
 String bleScanJson = "[]";
 
@@ -79,6 +80,14 @@ unsigned long lastBleReconnect = 0;
 volatile bool gModbusScanPending = false;
 
 volatile bool gModbusLoopbackPending = false;
+
+volatile bool gWifiScanPending = false;
+
+volatile bool gWifiConnectPending = false;
+
+String gWifiConnectSsid;
+
+String gWifiConnectPass;
 
 void pumpNetwork() {
   server.handleClient();
@@ -123,13 +132,20 @@ void allRelaysOff() {
 
 String getDeviceId() {
   uint8_t mac[6];
-  WiFi.macAddress(mac);
-  if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) {
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-  }
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char buf[13];
   snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   return String(buf);
+}
+
+inline void startMdns() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (MDNS.begin("esp32")) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("mDNS: http://esp32.local");
+  } else {
+    Serial.println("mDNS init failed");
+  }
 }
 
 
@@ -180,6 +196,9 @@ String buildStatusJson() {
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
 
   doc["rssi"] = WiFi.RSSI();
+
+  JsonArray savedWifi = doc.createNestedArray("wifi_saved");
+  wifiStoreAddToJson(prefs, savedWifi);
 
   if (otaStatusField()) doc["ota_phase"] = otaStatusField();
   if (lastOtaError().length()) doc["ota_error"] = lastOtaError();
@@ -278,6 +297,72 @@ void publishStatus() {
 
   mqtt.publish(topicStatus.c_str(), buildStatusJson().c_str());
 
+}
+
+void publishWifiScan() {
+  if (!mqtt.connected()) return;
+
+  int found = WiFi.scanNetworks(false, true);
+  StaticJsonDocument<2048> doc;
+  JsonArray nets = doc.createNestedArray("networks");
+  for (int i = 0; i < found; i++) {
+    String ssid = WiFi.SSID(i);
+    if (ssid.length() == 0) continue;
+    JsonObject o = nets.add<JsonObject>();
+    o["ssid"] = ssid;
+    o["rssi"] = WiFi.RSSI(i);
+    o["secure"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+  }
+  JsonArray saved = doc.createNestedArray("saved");
+  wifiStoreAddToJson(prefs, saved);
+  doc["connected"] = WiFi.status() == WL_CONNECTED;
+  doc["current"] = WiFi.SSID();
+  doc["ip"] = WiFi.localIP().toString();
+  String out;
+  serializeJson(doc, out);
+  mqtt.publish(topicWifi.c_str(), out.c_str(), false);
+  WiFi.scanDelete();
+}
+
+void publishWifiResult(bool ok, const char* errorMsg = nullptr) {
+  if (!mqtt.connected()) return;
+  StaticJsonDocument<256> doc;
+  doc["ok"] = ok;
+  if (ok) {
+    doc["current"] = WiFi.SSID();
+    doc["ip"] = WiFi.localIP().toString();
+    doc["rssi"] = WiFi.RSSI();
+  } else if (errorMsg) {
+    doc["error"] = errorMsg;
+    doc["ssid"] = gWifiConnectSsid;
+  }
+  String out;
+  serializeJson(doc, out);
+  mqtt.publish(topicWifi.c_str(), out.c_str(), false);
+}
+
+void runWifiConnectJob() {
+  String ssid = gWifiConnectSsid;
+  String pass = gWifiConnectPass;
+  gWifiConnectSsid = "";
+  gWifiConnectPass = "";
+  if (ssid.length() == 0) {
+    publishWifiResult(false, "missing ssid");
+    return;
+  }
+  bool ok = wifiStoreConnect(prefs, ssid, pass);
+  if (ok) {
+    startMdns();
+    mqtt.disconnect();
+    mqttConnect();
+    publishWifiResult(true);
+    publishStatus();
+  } else {
+    publishWifiResult(false, "connect failed");
+    wifiStoreTryConnect(prefs);
+    if (WiFi.status() == WL_CONNECTED) startMdns();
+    publishStatus();
+  }
 }
 
 
@@ -402,6 +487,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
 
+  if (doc.containsKey("wifi_scan")) {
+    Serial.println("MQTT: wifi scan requested");
+    gWifiScanPending = true;
+  }
+
+  if (doc.containsKey("wifi_connect")) {
+    JsonObject w = doc["wifi_connect"];
+    const char* ssid = w["ssid"];
+    if (ssid && ssid[0]) {
+      gWifiConnectSsid = ssid;
+      gWifiConnectPass = w["pass"] | "";
+      gWifiConnectPending = true;
+      Serial.printf("MQTT: wifi connect %s\n", ssid);
+    }
+  }
+
 }
 
 
@@ -478,12 +579,15 @@ void setupWiFi() {
 
   WiFi.mode(WIFI_STA);
 
+  wifiStoreSeedDefaults(prefs);
+
   bool forcePortal = prefs.getBool(WIFI_FORCE_PORTAL_KEY, false);
   if (forcePortal) prefs.putBool(WIFI_FORCE_PORTAL_KEY, false);
 
   if (!forcePortal && wifiStoreTryConnect(prefs)) {
     Serial.print("WiFi OK (saved list): ");
     Serial.println(WiFi.localIP());
+    startMdns();
     return;
   }
 
@@ -514,6 +618,7 @@ void setupWiFi() {
   Serial.print("WiFi OK: ");
 
   Serial.println(WiFi.localIP());
+  startMdns();
 
 }
 
@@ -961,6 +1066,8 @@ void setup() {
 
   topicGenset = "home/" + deviceId + "/genset";
 
+  topicWifi = "home/" + deviceId + "/wifi";
+
 
 
   BLEDevice::init("ESP32-Control");
@@ -999,6 +1106,7 @@ void setup() {
 
   Serial.println("ESP32 Control Hub ready");
   Serial.printf("Board: %s (%s)\n", BOARD_LABEL, BOARD_ID);
+  Serial.printf("Device ID: %s\n", deviceId.c_str());
   Serial.printf("Modbus RX=%d TX=%d DE=%d\n", MODBUS_RX_PIN, MODBUS_TX_PIN, MODBUS_DE_PIN);
 
   Serial.println("Open http://" + WiFi.localIP().toString());
@@ -1032,6 +1140,7 @@ void loop() {
       lastWifiTry = millis();
       if (wifiStoreTryConnect(prefs)) {
         Serial.println("WiFi reconnected via saved list");
+        startMdns();
         mqttConnect();
       }
     }
@@ -1073,6 +1182,17 @@ void loop() {
     genMgr.applyBaud();
     publishGensetMqtt();
     publishStatus();
+  }
+
+  if (gWifiScanPending && !otaInProgress()) {
+    gWifiScanPending = false;
+    Serial.println("Running WiFi scan...");
+    publishWifiScan();
+  }
+
+  if (gWifiConnectPending && !otaInProgress()) {
+    gWifiConnectPending = false;
+    runWifiConnectJob();
   }
 
   if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {

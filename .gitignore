@@ -1,0 +1,4 @@
+ESP32_Control/wifi_secrets.h
+ESP32_Control/build/
+build/
+*.pdf

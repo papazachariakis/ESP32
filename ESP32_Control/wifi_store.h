@@ -5,6 +5,13 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 
+#if __has_include("wifi_secrets.h")
+#include "wifi_secrets.h"
+#define WIFI_SEED_ENABLED 1
+#else
+#define WIFI_SEED_ENABLED 0
+#endif
+
 #ifndef WIFI_STORE_MAX
 #define WIFI_STORE_MAX 5
 #endif
@@ -74,6 +81,32 @@ inline size_t wifiStoreAddToJson(Preferences& prefs, JsonArray& outArr) {
   return n;
 }
 
+inline bool wifiStoreGetPass(Preferences& prefs, const String& ssid, String& outPass) {
+  StaticJsonDocument<1536> doc;
+  deserializeJson(doc, prefs.getString(WIFI_STORE_KEY, "[]"));
+  if (!doc.is<JsonArray>()) return false;
+  for (JsonObject item : doc.as<JsonArray>()) {
+    if (String(item["ssid"] | "") == ssid) {
+      outPass = item["pass"] | "";
+      return outPass.length() > 0;
+    }
+  }
+  return false;
+}
+
+inline bool wifiStoreConnect(Preferences& prefs, const String& ssid, String pass) {
+  if (ssid.length() == 0) return false;
+  if (pass.length() == 0 && !wifiStoreGetPass(prefs, ssid, pass)) return false;
+
+  wifiStoreUpsert(prefs, ssid, pass);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true);
+  delay(200);
+  Serial.printf("WiFi connect: %s\n", ssid.c_str());
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  return wifiWaitConnected(15000);
+}
+
 inline bool wifiStoreTryConnect(Preferences& prefs) {
   StaticJsonDocument<1536> doc;
   if (deserializeJson(doc, prefs.getString(WIFI_STORE_KEY, "[]"))) return false;
@@ -123,4 +156,13 @@ inline bool wifiStoreTryConnect(Preferences& prefs) {
 
 inline void wifiStoreClear(Preferences& prefs) {
   prefs.remove(WIFI_STORE_KEY);
+}
+
+inline void wifiStoreSeedDefaults(Preferences& prefs) {
+#if WIFI_SEED_ENABLED
+  for (size_t i = 0; i < WIFI_SEED_COUNT; i++) {
+    wifiStoreUpsert(prefs, WIFI_SEEDS[i].ssid, WIFI_SEEDS[i].pass);
+  }
+  Serial.printf("WiFi defaults seeded (%u networks)\n", (unsigned)WIFI_SEED_COUNT);
+#endif
 }

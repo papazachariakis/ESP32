@@ -66,7 +66,7 @@ String mqttBroker = MQTT_DEFAULT_BROKER;
 
 uint16_t mqttPort = MQTT_DEFAULT_PORT;
 
-String topicStatus, topicCmd, topicBms, topicGenset, topicWifi;
+String topicStatus, topicCmd, topicBms, topicGenset, topicWifi, topicBle;
 
 String bleScanJson = "[]";
 
@@ -86,9 +86,21 @@ volatile bool gWifiScanPending = false;
 
 volatile bool gWifiConnectPending = false;
 
+volatile bool gBleScanPending = false;
+
+volatile bool gBleConnectPending = false;
+
 String gWifiConnectSsid;
 
 String gWifiConnectPass;
+
+String gBleConnectMac;
+
+String gBleConnectName;
+
+String gBleConnectType;
+
+void startBleScan();
 
 void pumpNetwork() {
   server.handleClient();
@@ -240,7 +252,7 @@ String buildStatusJson() {
   ble["info_frames"] = bmsMgr.proto.infoFrames;
   ble["crc_errors"] = bmsMgr.proto.crcErrors;
   if (bmsMgr.connected && bmsMgr.bleRssi > -200) ble["rssi"] = bmsMgr.bleRssi;
-  ble["data_age_ms"] = (bmsMgr.connected && bmsMgr.bms.valid)
+  ble["data_age_ms"] = bmsMgr.bms.valid
     ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
   if (bmsMgr.lastNotifyMs)
     ble["last_notify_ms"] = (long)(millis() - bmsMgr.lastNotifyMs);
@@ -270,6 +282,10 @@ String buildStatusJson() {
   mq["topic_bms"] = topicBms;
 
   mq["topic_genset"] = topicGenset;
+
+  mq["topic_wifi"] = topicWifi;
+
+  mq["topic_ble"] = topicBle;
 
   JsonObject genset = doc.createNestedObject("genset");
   genFillJson(genset, genMgr.data, genMgr.profile);
@@ -341,6 +357,74 @@ void publishWifiResult(bool ok, const char* errorMsg = nullptr) {
   String out;
   serializeJson(doc, out);
   mqtt.publish(topicWifi.c_str(), out.c_str(), false);
+}
+
+void publishBleScan() {
+  if (!mqtt.connected()) return;
+
+  startBleScan();
+
+  StaticJsonDocument<6144> doc;
+  JsonArray devices = doc.createNestedArray("devices");
+  StaticJsonDocument<4096> arrDoc;
+  if (!deserializeJson(arrDoc, bleScanJson)) {
+    for (JsonObject o : arrDoc.as<JsonArray>()) devices.add(o);
+  }
+  doc["current_mac"] = bmsMgr.mac;
+  doc["current_name"] = bmsMgr.name;
+  doc["connected"] = bmsMgr.connected;
+  doc["bms_type"] = bmsTypeId(bmsMgr.type);
+  String out;
+  serializeJson(doc, out);
+  mqtt.publish(topicBle.c_str(), out.c_str(), false);
+}
+
+void publishBleResult(bool ok, const char* errorMsg = nullptr) {
+  if (!mqtt.connected()) return;
+  StaticJsonDocument<384> doc;
+  doc["ok"] = ok;
+  if (ok) {
+    doc["mac"] = bmsMgr.mac;
+    doc["name"] = bmsMgr.name;
+    doc["connected"] = bmsMgr.connected;
+    doc["bms_type"] = bmsTypeId(bmsMgr.type);
+  } else if (errorMsg) {
+    doc["error"] = errorMsg;
+  }
+  String out;
+  serializeJson(doc, out);
+  mqtt.publish(topicBle.c_str(), out.c_str(), false);
+}
+
+BmsType bleConnectResolveType(const String& typeStr, const String& name) {
+  BmsType bt = BmsType::None;
+  if (typeStr != "auto" && typeStr.length()) bt = bmsTypeFromString(typeStr);
+  if (bt == BmsType::None) bt = bmsDetectFromName(name);
+  if (bt == BmsType::None && typeStr == "basen") bt = BmsType::Basen;
+  if (bt == BmsType::None && typeStr == "jk") bt = BmsType::Jk;
+  if (bt == BmsType::None) bt = BmsType::Jk;
+  return bt;
+}
+
+void runBleConnectJob() {
+  String mac = gBleConnectMac;
+  String name = gBleConnectName;
+  String typeStr = gBleConnectType;
+  gBleConnectMac = "";
+  gBleConnectName = "";
+  gBleConnectType = "";
+  if (mac.length() < 11) {
+    publishBleResult(false, "invalid mac");
+    return;
+  }
+  BmsType bt = bleConnectResolveType(typeStr, name);
+  Serial.printf("MQTT BLE connect: %s [%s] %s\n", name.c_str(), bmsTypeId(bt), mac.c_str());
+  bool ok = bmsMgr.connect(bt, name, mac, prefs);
+  if (ok) {
+    publishBmsMqtt();
+    publishStatus();
+  }
+  publishBleResult(ok, ok ? nullptr : "connect_failed");
 }
 
 void runWifiConnectJob() {
@@ -505,6 +589,31 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
 
+  if (doc.containsKey("ble_scan")) {
+    Serial.println("MQTT: ble scan requested");
+    gBleScanPending = true;
+  }
+
+  if (doc.containsKey("ble_connect")) {
+    JsonObject b = doc["ble_connect"];
+    const char* mac = b["mac"];
+    if (mac && mac[0]) {
+      gBleConnectMac = mac;
+      gBleConnectName = b["name"] | "";
+      gBleConnectType = b["type"] | "auto";
+      gBleConnectPending = true;
+      Serial.printf("MQTT: ble connect %s\n", mac);
+    }
+  }
+
+  if (doc.containsKey("ble_disconnect")) {
+    Serial.println("MQTT: ble disconnect requested");
+    bmsMgr.disconnect(prefs);
+    publishBmsMqtt();
+    publishStatus();
+    publishBleResult(true);
+  }
+
   if (doc.containsKey("factory_reset")) {
     const char* pw = doc["factory_reset"];
     if (remoteOtaPasswordOk(pw)) {
@@ -537,7 +646,7 @@ bool mqttConnect() {
 
   mqtt.setCallback(mqttCallback);
 
-  mqtt.setBufferSize(3072);
+  mqtt.setBufferSize(8192);
 
 
 
@@ -792,13 +901,7 @@ void handleBleConnect() {
     return;
   }
 
-  BmsType bt = BmsType::None;
-  if (typeStr != "auto" && typeStr.length()) bt = bmsTypeFromString(typeStr);
-  if (bt == BmsType::None) bt = bmsDetectFromName(name);
-  if (bt == BmsType::None && typeStr == "basen") bt = BmsType::Basen;
-  if (bt == BmsType::None && typeStr == "jk") bt = BmsType::Jk;
-  if (bt == BmsType::None) bt = BmsType::Jk;
-
+  BmsType bt = bleConnectResolveType(typeStr, name);
   if (bt == BmsType::None) {
     server.send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_bms_type\"}");
     return;
@@ -1117,6 +1220,7 @@ void setup() {
   topicGenset = "home/" + deviceId + "/genset";
 
   topicWifi = "home/" + deviceId + "/wifi";
+  topicBle = "home/" + deviceId + "/ble";
 
 
 
@@ -1243,6 +1347,17 @@ void loop() {
   if (gWifiConnectPending && !otaInProgress()) {
     gWifiConnectPending = false;
     runWifiConnectJob();
+  }
+
+  if (gBleScanPending && !otaInProgress()) {
+    gBleScanPending = false;
+    Serial.println("Running BLE scan...");
+    publishBleScan();
+  }
+
+  if (gBleConnectPending && !otaInProgress()) {
+    gBleConnectPending = false;
+    runBleConnectJob();
   }
 
   if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {

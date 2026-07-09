@@ -17,7 +17,7 @@
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
 
-#define FIRMWARE_VERSION "3.0.0"
+#define FIRMWARE_VERSION "3.0.2"
 
 // Fresh install defaults (factory / first boot)
 #define MODBUS_DEFAULT_ENABLED true
@@ -32,10 +32,11 @@
 
 #define BLE_SCAN_SECONDS 8
 #define BLE_RECONNECT_MS 2000
-#define BLE_POLL_MS 3500
-#define BLE_NOTIFY_KICK_MS 5000
-#define BLE_NOTIFY_RESET_MS 10000
-#define BLE_CELL_STALE_MS 8000
-#define BLE_SESSION_REFRESH_MS 60000
+#define BLE_POLL_MS 5000
+#define BLE_NOTIFY_KICK_MS 8000
+#define BLE_NOTIFY_RESET_MS 30000
+#define BLE_CELL_STALE_MS 25000
+#define BLE_SESSION_REFRESH_MS 0
+#define BLE_WRITE_RETRY 2
 
 #define MODBUS_POLL_INTERVAL_MS 3000

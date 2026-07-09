@@ -36,7 +36,7 @@ struct BmsManager {
 
   static BmsManager* gInstance;
 
-  void dropLink() {
+  void dropLink(bool keepLastData = true) {
     if (gInstance == this) gInstance = nullptr;
     if (client) {
       if (client->isConnected()) client->disconnect();
@@ -48,14 +48,18 @@ struct BmsManager {
     connected = false;
     bleRssi = -999;
     proto = BmsProtoState();
-    bms = BmsData();
+    if (keepLastData) {
+      bms.connected = false;
+    } else {
+      bms = BmsData();
+    }
     lastDisplay = "";
     lastNotifyMs = 0;
     lastCellMs = 0;
     connectedSinceMs = 0;
   }
 
-  void reset() { dropLink(); }
+  void reset() { dropLink(false); }
 
   void handleDisconnect() {
     Serial.println("BMS BLE disconnected (callback)");
@@ -107,7 +111,11 @@ struct BmsManager {
 
   bool writeBytes(const uint8_t* data, size_t len) {
     if (!chrWrite || !client || !client->isConnected()) return false;
-    return chrWrite->writeValue((uint8_t*)data, len, false);
+    for (int attempt = 0; attempt < BLE_WRITE_RETRY; attempt++) {
+      if (chrWrite->writeValue((uint8_t*)data, len, false)) return true;
+      delay(40);
+    }
+    return false;
   }
 
   void onNotify(uint8_t* data, size_t len) {
@@ -116,11 +124,12 @@ struct BmsManager {
     if (type == BmsType::Basen) {
       gotCell = basenFeed(proto, data, len, bms);
       if (gotCell || bms.valid) type = BmsType::Basen;
+      if (bms.valid) lastCellMs = millis();
     } else {
       gotCell = jkFeed(proto, data, len, bms);
       if (gotCell || bms.valid) type = BmsType::Jk;
+      if (gotCell) lastCellMs = millis();
     }
-    if (gotCell) lastCellMs = millis();
     if (gotCell || bms.valid) {
       bms.type = type;
       bms.connected = true;
@@ -134,8 +143,7 @@ struct BmsManager {
     uint8_t buf[8];
     size_t n = basenBuildCmd(frameType, buf);
     if (!writeBytes(buf, n)) {
-      Serial.println("BMS write failed");
-      dropLink();
+      Serial.printf("BMS write failed (0x%02X)\n", frameType);
     }
   }
 
@@ -144,7 +152,7 @@ struct BmsManager {
     for (size_t i = 0; i < nCmds; i++) {
       uint8_t cmd = BASEN_POLL_CMDS[(proto.basenPollIdx + i) % nCmds];
       sendBasenCmd(cmd);
-      delay(60);
+      delay(80);
     }
     proto.basenPollIdx = (proto.basenPollIdx + 1) % nCmds;
     lastNotifyMs = millis();
@@ -154,8 +162,7 @@ struct BmsManager {
     uint8_t buf[32];
     size_t n = jkBuildCmd(cmd, buf);
     if (!writeBytes(buf, n)) {
-      Serial.println("BMS write failed");
-      dropLink();
+      Serial.printf("BMS JK write failed (0x%02X)\n", cmd);
     }
   }
 
@@ -208,7 +215,8 @@ struct BmsManager {
 
     unsigned long now = millis();
 
-    if (connectedSinceMs && now - connectedSinceMs > BLE_SESSION_REFRESH_MS) {
+    if (connectedSinceMs && BLE_SESSION_REFRESH_MS > 0 &&
+        now - connectedSinceMs > BLE_SESSION_REFRESH_MS) {
       Serial.println("BMS proactive session refresh");
       dropLink();
       return;
@@ -217,7 +225,7 @@ struct BmsManager {
     poll();
 
     if (lastCellMs && now - lastCellMs > BLE_CELL_STALE_MS) {
-      Serial.printf("BMS no cell frame %lus\n", (now - lastCellMs) / 1000);
+      Serial.printf("BMS stale %lus — reconnect\n", (now - lastCellMs) / 1000);
       dropLink();
       return;
     }
@@ -285,7 +293,7 @@ struct BmsManager {
   }
 
   void disconnect(Preferences& prefs) {
-    dropLink();
+    dropLink(false);
     forgetIdentity();
     prefs.remove("ble_mac");
     prefs.remove("ble_name");

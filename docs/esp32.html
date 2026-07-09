@@ -765,6 +765,18 @@
       <button class="btn" style="margin-top:8px" onclick="wifiConnectRemote()">Σύνδεση & αποθήκευση</button>
     </div>
     <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
+    <div class="card-title" style="margin-bottom:8px">BMS / BLE (απομακρυσμένα)</div>
+    <p class="small muted" style="margin:0 0 8px">Τρέχον: <b id="bleCurrentName">—</b> · <span id="bleCurrentMac">—</span> · <span id="bleCurrentState">—</span></p>
+    <button class="btn sec" onclick="bleScanRemote()">📡 Σάρωση BLE BMS</button>
+    <div id="bleDevList" class="device-list" style="margin-top:10px;max-height:180px;overflow:auto"></div>
+    <div id="bleConnectBox" style="display:none;margin-top:10px">
+      <label>BMS: <b id="blePickName">—</b></label>
+      <p class="small muted" id="blePickMeta" style="margin:4px 0 8px">—</p>
+      <button class="btn" onclick="bleConnectRemote()">Σύνδεση BMS</button>
+    </div>
+    <button class="btn danger" style="margin-top:8px" onclick="bleDisconnectRemote()">Αποσύνδεση BMS</button>
+    <p class="small muted" style="margin-top:6px">Βρίσκει JK / Basen / Tianpower BMS κοντά στο ESP32 (~8s σάρωση).</p>
+    <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
     <div class="card-title" style="margin-bottom:8px">Συσκευή</div>
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
@@ -784,6 +796,7 @@
     let faultBitsDb = null;
     const msgStats = { status: 0, bms: 0, genset: 0, connectedAt: 0 };
     let wifiPick = '';
+    let blePick = null;
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -1328,6 +1341,14 @@
       const wIp = document.getElementById('wifiCurrentIp');
       if (wSsid) wSsid.textContent = j.wifi_ssid || '—';
       if (wIp) wIp.textContent = j.ip || '—';
+      const bleName = document.getElementById('bleCurrentName');
+      const bleMac = document.getElementById('bleCurrentMac');
+      const bleState = document.getElementById('bleCurrentState');
+      if (bleName && j.ble) {
+        bleName.textContent = j.ble.name || '—';
+        bleMac.textContent = j.ble.mac || '—';
+        bleState.textContent = j.ble.connected ? 'συνδεδεμένο' : (j.ble.mac ? 'αποσυνδεδεμένο' : '—');
+      }
       if (j.ota_phase) toast('OTA: ' + j.ota_phase, 2000);
       if (j.ota_error) toast('OTA σφάλμα: ' + j.ota_error, 5000);
     }
@@ -1467,6 +1488,63 @@
       document.getElementById('wifiConnectBox').style.display = 'none';
     }
 
+    function bleScanRemote() {
+      if (!client || !cmdTopic) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      document.getElementById('bleDevList').innerHTML = '<div class="small muted">Σάρωση BLE από ESP32... (~8s)</div>';
+      document.getElementById('bleConnectBox').style.display = 'none';
+      blePick = null;
+      client.publish(cmdTopic, JSON.stringify({ ble_scan: true }));
+      toast('Εντολή σάρωσης BLE στάλθηκε');
+    }
+
+    function renderBleScan(j) {
+      const el = document.getElementById('bleDevList');
+      if (!el) return;
+      const devs = j.devices || [];
+      if (!devs.length) {
+        el.innerHTML = '<div class="small muted">Δεν βρέθηκε BMS — βεβαιώσου ότι είναι ενεργό κοντά στο ESP32.</div>';
+        return;
+      }
+      el.innerHTML = devs.map(d => {
+        const name = String(d.name || d.mac || '?');
+        const mac = String(d.mac || '');
+        const type = String(d.bms_type || d.bms_label || 'auto');
+        const escName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const escMac = mac.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const escType = type.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const label = d.bms_label || type;
+        return `<div class="device-item" onclick="pickBle('${escMac}','${escName}','${escType}')">
+          <div><div class="id">${name}</div>
+            <div class="meta">${mac} · ${label}</div>
+          </div><span class="chip">${d.rssi ?? '?'} dBm</span>
+        </div>`;
+      }).join('');
+    }
+
+    function pickBle(mac, name, type) {
+      blePick = { mac, name, type };
+      document.getElementById('blePickName').textContent = name || mac;
+      document.getElementById('blePickMeta').textContent = `${mac} · ${type}`;
+      document.getElementById('bleConnectBox').style.display = 'block';
+    }
+
+    function bleConnectRemote() {
+      if (!client || !blePick) { toast('Διάλεξε BMS από τη λίστα'); return; }
+      if (!confirm(`Σύνδεση ESP32 στο BMS "${blePick.name || blePick.mac}";`)) return;
+      client.publish(cmdTopic, JSON.stringify({
+        ble_connect: { mac: blePick.mac, name: blePick.name, type: blePick.type || 'auto' }
+      }));
+      toast('Εντολή σύνδεσης BMS — περίμενε ~10 δευτ');
+      document.getElementById('bleConnectBox').style.display = 'none';
+    }
+
+    function bleDisconnectRemote() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Αποσύνδεση BMS από το ESP32;')) return;
+      client.publish(cmdTopic, JSON.stringify({ ble_disconnect: true }));
+      toast('Εντολή αποσύνδεσης BMS στάλθηκε');
+    }
+
     function parseDeviceFromTopic(topic) {
       const m = topic.match(/^home\/([^/]+)\/status$/i);
       return m ? m[1].toUpperCase() : '';
@@ -1559,6 +1637,7 @@
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
         client.subscribe(`home/${id}/wifi`);
+        client.subscribe(`home/${id}/ble`);
         document.getElementById('statusLine').textContent = `home/${id}/status — αναμονή δεδομένων...`;
         toast('MQTT συνδέθηκε — αναμονή ESP32...');
         setTimeout(() => {
@@ -1605,6 +1684,11 @@
             if (j.networks) renderWifiScan(j);
             if (j.error) toast('WiFi σφάλμα: ' + j.error, 5000);
             else if (j.ok) toast('WiFi OK: ' + (j.current || '') + ' · ' + (j.ip || ''), 5000);
+          }
+          if (t.endsWith('/ble')) {
+            if (j.devices) renderBleScan(j);
+            if (j.error) toast('BLE σφάλμα: ' + j.error, 5000);
+            else if (j.ok) toast('BLE OK: ' + (j.name || j.mac || ''), 5000);
           }
           if (lastStatus.device_id) renderDiagnostics(lastStatus);
         } catch (e) {}

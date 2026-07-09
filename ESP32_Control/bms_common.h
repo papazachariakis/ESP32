@@ -164,22 +164,24 @@ inline uint16_t bmsCrcModbus(const uint8_t* data, size_t len) {
 }
 
 inline void bmsUpdateCellStats(BmsData& bms) {
+  int limit = bms.cellCount > 0 ? bms.cellCount : 16;
+  if (limit > 16) limit = 16;
   float minV = 1000, maxV = 0, sum = 0;
-  int count = 0, minN = 0, maxN = 0;
-  for (int i = 0; i < 16; i++) {
+  int active = 0, minN = 0, maxN = 0;
+  for (int i = 0; i < limit; i++) {
     float v = bms.cellVoltages[i];
     if (v <= 0.5f) continue;
-    count++;
+    active++;
     sum += v;
     if (v < minV) { minV = v; minN = i + 1; }
     if (v > maxV) { maxV = v; maxN = i + 1; }
   }
-  if (count > 0) {
-    bms.cellCount = count;
+  if (active > 0) {
+    if (bms.cellCount <= 0) bms.cellCount = active;
     bms.minCellV = minV;
     bms.maxCellV = maxV;
     bms.deltaCellV = maxV - minV;
-    bms.avgCellV = sum / count;
+    bms.avgCellV = sum / active;
     bms.minCellNum = minN;
     bms.maxCellNum = maxN;
   }
@@ -228,7 +230,17 @@ inline void bmsFillJson(JsonObject& o, const BmsData& b) {
   o["balancing_mask"] = b.balancingMask;
 
   JsonArray cells = o.createNestedArray("cells");
-  for (int i = 0; i < 16; i++) cells.add(b.cellVoltages[i]);
+  int cellSlots = b.cellCount > 0 ? b.cellCount : 16;
+  if (cellSlots > 16) cellSlots = 16;
+  for (int i = 0; i < cellSlots; i++) cells.add(b.cellVoltages[i]);
+
+  JsonArray cellBal = o.createNestedArray("cell_balancing");
+  for (int i = 0; i < cellSlots; i++) cellBal.add(b.cellBalancing[i]);
+
+  JsonArray temps = o.createNestedArray("temps");
+  int tempSlots = b.tempSensorCount > 0 ? b.tempSensorCount : 8;
+  if (tempSlots > 8) tempSlots = 8;
+  for (int i = 0; i < tempSlots; i++) temps.add(b.temps[i]);
 }
 
 inline String bmsToDisplay(const BmsData& b) {

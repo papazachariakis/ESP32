@@ -212,7 +212,7 @@ inline bool jkFeed(BmsProtoState& st, const uint8_t* data, size_t len, BmsData& 
 #define BASEN_FRAME_LEN 20
 
 static const uint8_t BASEN_POLL_CMDS[] = {
-  0x83, 0x84, 0x85, 0x87, 0x88, 0x89,
+  0x83, 0x84, 0x85, 0x87, 0x88, 0x89, 0x8A,
 };
 
 inline size_t basenBuildCmd(uint8_t frameType, uint8_t* out) {
@@ -273,7 +273,8 @@ inline bool basenParseFrame(const uint8_t* f, size_t len, BmsData& bms, BmsProto
       return true;
     }
     case 0x84: {
-      bms.cellCount = f[3];
+      uint8_t nCells = f[3];
+      bms.cellCount = (nCells > 0 && nCells <= 16) ? nCells : 16;
       bms.tempSensorCount = f[4];
       bms.capacityAh = bmsU16BE(f, 5) * 0.01f;
       bms.remainingAh = bmsU16BE(f, 7) * 0.01f;
@@ -293,6 +294,9 @@ inline bool basenParseFrame(const uint8_t* f, size_t len, BmsData& bms, BmsProto
       bms.limitingCurrent = (mos & (1 << 4)) != 0 || (mos & (1 << 5)) != 0;
       bms.balancingMask = bmsU16BE(f, 13);
       bms.balancing = bms.balancingMask != 0;
+      for (int i = 0; i < 16; i++) {
+        bms.cellBalancing[i] = (bms.balancingMask & (1u << i)) != 0;
+      }
       bms.alarmMask = ((uint32_t)bmsU16BE(f, 9) << 16) | bmsU16BE(f, 11);
       bms.valid = true;
       bms.lastUpdate = millis();

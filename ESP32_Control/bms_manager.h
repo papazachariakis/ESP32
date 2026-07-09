@@ -180,6 +180,10 @@ struct BmsManager {
     registerNotify();
     if (type == BmsType::Basen) {
       sendBasenCmd(0x83);
+      delay(60);
+      sendBasenCmd(0x88);
+      delay(60);
+      sendBasenCmd(0x89);
       return;
     }
     sendPollCmd(0x96);
@@ -245,6 +249,7 @@ struct BmsManager {
     bms.type = type;
     bms.name = name;
     bms.mac = mac;
+    if (type == BmsType::Basen && bms.cellCount <= 0) bms.cellCount = 16;
 
     BLEAddress addr(mac.c_str());
     client = BLEDevice::createClient();

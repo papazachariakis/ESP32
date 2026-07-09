@@ -474,7 +474,7 @@
       </div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">Κελιά (1–16)</div>
+          <div class="card-title" id="cellsTitle">Κελιά</div>
           <div class="small muted" id="cellStats">—</div>
           <div style="height:10px"></div>
           <div class="cells" id="cells"></div>
@@ -1146,7 +1146,10 @@
       document.getElementById('chips').innerHTML = chips.map(c =>
         `<span class="chip ${c.cls}">${c.t}</span>`).join('') || '<span class="chip">—</span>';
 
-      const cells = valid && Array.isArray(b.cells) ? b.cells.slice(0, 16) : [];
+      const cellCount = valid ? (Number(b.cell_count) > 0 ? Math.min(16, Number(b.cell_count)) : 16) : 0;
+      document.getElementById('cellsTitle').textContent = cellCount
+        ? `Κελιά (1–${cellCount})` : 'Κελιά';
+      const cells = valid && Array.isArray(b.cells) ? b.cells.slice(0, cellCount || 16) : [];
       const minV = valid ? Number(b.min_cell_v) : NaN;
       const maxV = valid ? Number(b.max_cell_v) : NaN;
       document.getElementById('cellStats').textContent = valid && minV > 0
@@ -1155,9 +1158,10 @@
       document.getElementById('cells').innerHTML = cells.length
         ? cells.map((v, i) => {
             const vv = Number(v);
+            const bal = Array.isArray(b.cell_balancing) && b.cell_balancing[i];
             const bg = cellColor(vv, minV, maxV);
             return `<div class="cell" style="border-color:${bg}">
-              <div class="n">C${i + 1}</div>
+              <div class="n">C${i + 1}${bal ? ' BAL' : ''}</div>
               <div class="cv" style="background:${vv > 0.5 ? bg : 'transparent'};color:${vv > 0.5 ? '#0b1220' : '#94a3b8'}">${vv > 0.5 ? f2(vv, 3) : '—'}</div>
             </div>`;
           }).join('')

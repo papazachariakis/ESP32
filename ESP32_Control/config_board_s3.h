@@ -13,3 +13,6 @@ static const char* RELAY_LABELS[RELAY_COUNT] = { "GPIO1", "GPIO2" };
 #define MODBUS_RX_PIN 18
 #define MODBUS_TX_PIN 17
 #define MODBUS_DE_PIN 21
+
+// S3 OTA binary on GitHub Pages
+#define OTA_REMOTE_PATH "/papazachariakis/ESP32/master/docs/firmware-s3.bin"

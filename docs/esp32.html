@@ -768,6 +768,7 @@
     <div class="card-title" style="margin-bottom:8px">Συσκευή</div>
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
+    <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
     <p class="small muted" style="margin-top:8px">OTA κωδικός: esp32ota • ~2 λεπτά reboot</p>
   </aside>
 
@@ -1406,6 +1407,16 @@
       if (!confirm('Επανεκκίνηση ESP32;')) return;
       client.publish(cmdTopic, JSON.stringify({ reboot: 'esp32ota' }));
       toast('Reboot εντολή στάλθηκε');
+      closeDrawer();
+    }
+
+    function remoteFactoryReset() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const pw = prompt('Κωδικός εργοστασιακής επαναφοράς:', 'esp32ota');
+      if (!pw) return;
+      if (!confirm('ΕΡΓΟΣΤΑΣΙΑΚΗ ΕΠΑΝΑΦΟΡΑ;\n\nΔιαγράφει WiFi, BMS, Modbus ρυθμίσεις.\nΤο ESP32 κάνει reboot καθαρό.')) return;
+      client.publish(cmdTopic, JSON.stringify({ factory_reset: pw }));
+      toast('Factory reset — περίμενε reboot ~30 δευτ');
       closeDrawer();
     }
 

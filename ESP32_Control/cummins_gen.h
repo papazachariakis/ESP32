@@ -236,10 +236,10 @@ struct GenManager {
   uint8_t pollStep = 0;
 
   void load(Preferences& prefs) {
-    enabled = prefs.getBool("modbus_en", false);
-    profile = (uint8_t)prefs.getUInt("modbus_prof", MODBUS_PROFILE_PS0600);
-    slaveId = (uint8_t)prefs.getUInt("modbus_id", 1);
-    baud = prefs.getUInt("modbus_baud", 9600);
+    enabled = prefs.getBool("modbus_en", MODBUS_DEFAULT_ENABLED);
+    profile = (uint8_t)prefs.getUInt("modbus_prof", MODBUS_DEFAULT_PROFILE);
+    slaveId = (uint8_t)prefs.getUInt("modbus_id", MODBUS_DEFAULT_SLAVE_ID);
+    baud = prefs.getUInt("modbus_baud", MODBUS_DEFAULT_BAUD);
     probeReg = (uint16_t)prefs.getUInt("modbus_probe", CUMMINS_REG_CONTROLLER);
   }
 

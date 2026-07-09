@@ -41,6 +41,7 @@
 #include "webui.h"
 #include "bms_manager.h"
 #include "wifi_store.h"
+#include "hub_reset.h"
 #include "ota.h"
 #include "cummins_gen.h"
 
@@ -186,6 +187,7 @@ String buildStatusJson() {
   StaticJsonDocument<6144> doc;
 
   doc["device_id"] = deviceId;
+  doc["firmware"] = FIRMWARE_VERSION;
   doc["board"] = BOARD_ID;
   doc["board_label"] = BOARD_LABEL;
 
@@ -500,6 +502,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       gWifiConnectPass = w["pass"] | "";
       gWifiConnectPending = true;
       Serial.printf("MQTT: wifi connect %s\n", ssid);
+    }
+  }
+
+  if (doc.containsKey("factory_reset")) {
+    const char* pw = doc["factory_reset"];
+    if (remoteOtaPasswordOk(pw)) {
+      Serial.println("MQTT: factory reset requested");
+      publishStatus();
+      delay(300);
+      performFactoryReset(prefs);
     }
   }
 
@@ -975,6 +987,19 @@ void handleWifiReset() {
 
 }
 
+void handleFactoryReset() {
+  StaticJsonDocument<128> doc;
+  if (server.hasArg("plain")) deserializeJson(doc, server.arg("plain"));
+  const char* pw = doc["password"] | doc["factory_reset"] | "";
+  if (!remoteOtaPasswordOk(pw)) {
+    server.send(403, "application/json", "{\"ok\":false,\"error\":\"bad password\"}");
+    return;
+  }
+  server.send(200, "application/json", "{\"ok\":true,\"action\":\"factory_reset\"}");
+  delay(300);
+  performFactoryReset(prefs);
+}
+
 
 
 void handleMqttSave() {
@@ -1019,6 +1044,7 @@ void setupRoutes() {
   server.on("/api/ble/disconnect", HTTP_POST, handleBleDisconnect);
 
   server.on("/api/wifi/reset", HTTP_POST, handleWifiReset);
+  server.on("/api/factory/reset", HTTP_POST, handleFactoryReset);
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
   server.on("/api/genset", HTTP_GET, handleGenset);

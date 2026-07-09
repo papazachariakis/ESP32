@@ -16,6 +16,14 @@
 #define WIFI_STORE_MAX 5
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 
+#define FIRMWARE_VERSION "3.0.0"
+
+// Fresh install defaults (factory / first boot)
+#define MODBUS_DEFAULT_ENABLED true
+#define MODBUS_DEFAULT_PROFILE 0
+#define MODBUS_DEFAULT_SLAVE_ID 1
+#define MODBUS_DEFAULT_BAUD 9600
+
 #define MQTT_DEFAULT_BROKER "broker.hivemq.com"
 #define MQTT_DEFAULT_PORT 1883
 #define MQTT_PUBLISH_INTERVAL_MS 2000

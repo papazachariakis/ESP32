@@ -160,6 +160,7 @@ inline void wifiStoreClear(Preferences& prefs) {
 
 inline void wifiStoreSeedDefaults(Preferences& prefs) {
 #if WIFI_SEED_ENABLED
+  if (prefs.getBool(WIFI_NO_SEED_KEY, false)) return;
   for (size_t i = 0; i < WIFI_SEED_COUNT; i++) {
     wifiStoreUpsert(prefs, WIFI_SEEDS[i].ssid, WIFI_SEEDS[i].pass);
   }

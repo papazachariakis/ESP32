@@ -15,6 +15,7 @@
 #define WIFI_PORTAL_TIMEOUT_SEC 180
 #define WIFI_STORE_MAX 5
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
+#define WIFI_NO_SEED_KEY "wifi_no_seed"
 
 #define FIRMWARE_VERSION "3.0.0"
 

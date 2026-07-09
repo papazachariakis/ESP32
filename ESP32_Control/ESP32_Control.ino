@@ -515,6 +515,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
   }
 
+  if (doc.containsKey("wifi_clear")) {
+    const char* pw = doc["wifi_clear"];
+    if (remoteOtaPasswordOk(pw)) {
+      Serial.println("MQTT: wifi clear requested");
+      publishStatus();
+      delay(300);
+      performWifiClear(prefs);
+    }
+  }
+
 }
 
 
@@ -987,6 +997,19 @@ void handleWifiReset() {
 
 }
 
+void handleWifiClear() {
+  StaticJsonDocument<128> doc;
+  if (server.hasArg("plain")) deserializeJson(doc, server.arg("plain"));
+  const char* pw = doc["password"] | doc["wifi_clear"] | "";
+  if (!remoteOtaPasswordOk(pw)) {
+    server.send(403, "application/json", "{\"ok\":false,\"error\":\"bad password\"}");
+    return;
+  }
+  server.send(200, "application/json", "{\"ok\":true,\"action\":\"wifi_clear\"}");
+  delay(300);
+  performWifiClear(prefs);
+}
+
 void handleFactoryReset() {
   StaticJsonDocument<128> doc;
   if (server.hasArg("plain")) deserializeJson(doc, server.arg("plain"));
@@ -1044,6 +1067,7 @@ void setupRoutes() {
   server.on("/api/ble/disconnect", HTTP_POST, handleBleDisconnect);
 
   server.on("/api/wifi/reset", HTTP_POST, handleWifiReset);
+  server.on("/api/wifi/clear", HTTP_POST, handleWifiClear);
   server.on("/api/factory/reset", HTTP_POST, handleFactoryReset);
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);

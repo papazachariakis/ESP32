@@ -14,6 +14,7 @@ inline void performFactoryReset(Preferences& prefs) {
     digitalWrite(RELAY_PINS[i], LOW);
   }
   wifiStoreClear(prefs);
+  prefs.remove(WIFI_NO_SEED_KEY);
   prefs.remove("ble_mac");
   prefs.remove("ble_name");
   prefs.remove("bms_type");
@@ -29,6 +30,18 @@ inline void performFactoryReset(Preferences& prefs) {
   }
   prefs.putBool(WIFI_FORCE_PORTAL_KEY, false);
 
+  WiFiManager wm;
+  wm.resetSettings();
+  WiFi.disconnect(true);
+  delay(300);
+  ESP.restart();
+}
+
+inline void performWifiClear(Preferences& prefs) {
+  Serial.println("WiFi CLEAR: removing saved networks...");
+  wifiStoreClear(prefs);
+  prefs.putBool(WIFI_NO_SEED_KEY, true);
+  prefs.putBool(WIFI_FORCE_PORTAL_KEY, true);
   WiFiManager wm;
   wm.resetSettings();
   WiFi.disconnect(true);

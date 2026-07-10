@@ -1294,6 +1294,7 @@ void setup() {
   setupWiFi();
 
   genMgr.begin();
+  if (genMgr.enabled) genMgr.pollOnce();
 
 
 
@@ -1441,12 +1442,10 @@ void loop() {
 
   static unsigned long lastGenMqtt = 0;
 
-  if (genMgr.enabled && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS) {
-
+  if (genMgr.enabled && (genMgr.takePublishPending()
+      || millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS)) {
     lastGenMqtt = millis();
-
     publishGensetMqtt();
-
   }
 
 }

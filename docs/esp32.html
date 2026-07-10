@@ -1106,7 +1106,7 @@
         diagRow('Σύνδεση dashboard', sessSec == null ? '—' : sessSec + 's'),
         diagRow('Publish ESP32', '~2s status, ~2s BMS, ~3s genset'),
         diagRow('BLE retry ESP32', 'κάθε 15s'),
-        diagRow('Modbus poll ESP32', 'κάθε 3s')
+        diagRow('Modbus poll ESP32', 'κάθε ~0.8s, βήματα ανά loop'),
       ].join('');
 
       const hints = buildDiagHints(s);

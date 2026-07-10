@@ -181,7 +181,7 @@ inline uint16_t modbusHoldAddr(uint16_t reg40001) {
   return (uint16_t)(reg40001 - 40001);
 }
 
-inline void modbusBusGap(uint16_t ms = 20) {
+inline void modbusBusGap(uint16_t ms = 10) {
   modbusPump();
   delay(ms);
 }

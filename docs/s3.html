@@ -66,6 +66,14 @@
     }
     .wifi-chip.show{display:inline-flex}
     .wifi-chip b{color:#dbeafe;font-weight:600}
+    .fw-chip{
+      display:none;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;
+      font-size:.72rem;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.3);
+      color:var(--muted);font-weight:600;
+    }
+    .fw-chip.show{display:inline-flex}
+    .fw-chip.ok{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35);color:#86efac}
+    .fw-chip.warn{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35);color:#fde047}
     .conn-dot{
       width:8px;height:8px;border-radius:50%;background:var(--muted);
       box-shadow:0 0 0 3px rgba(148,163,184,.2);
@@ -431,6 +439,7 @@
     </div>
     <div class="topbar-right">
       <span class="wifi-chip" id="topWifi" title="WiFi δίκτυο ESP32">📡 <b>—</b></span>
+      <span class="fw-chip" id="topFw" title="Firmware ESP32">FW <b>—</b></span>
       <div class="conn-dot" id="connDot"></div>
       <span class="badge off" id="badge">Offline</span>
       <button class="icon-btn" onclick="openDrawer()" title="Ρυθμίσεις">⚙</button>
@@ -452,6 +461,7 @@
       <span>🌐 <b id="sbIp">—</b></span>
       <span>📶 WiFi <b id="sbRssi">—</b></span>
       <span>📲 BLE <b id="sbBleRssi">—</b></span>
+      <span>🔧 FW <b id="sbFirmware">—</b></span>
       <span id="sbFresh" class="fresh-ok">🕐 <b id="sbTime">—</b></span>
       <span>📨 <b id="sbMsgs">0</b></span>
     </div>
@@ -771,7 +781,7 @@
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">OTA: firmware-s3.bin · esp32ota · USB upload-s3.ps1 • ~2 λεπτά reboot</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.9</span></b> · esp32ota · ~2 λεπτά reboot</p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -796,6 +806,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
+    const EXPECTED_FIRMWARE = '3.0.9';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -810,6 +821,7 @@
     const msgStats = { status: 0, bms: 0, genset: 0, connectedAt: 0 };
     let wifiPick = '';
     let blePick = null;
+    let lastSeenFirmware = '';
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -1058,12 +1070,42 @@
       return s.wifi_connected ? '' : '';
     }
 
+    function updateFirmwareDisplay(s) {
+      const fw = (s && s.firmware) ? String(s.firmware) : '';
+      const el = document.getElementById('sbFirmware');
+      const top = document.getElementById('topFw');
+      const otaCur = document.getElementById('otaCurrentFw');
+      const otaExp = document.getElementById('otaExpectedFw');
+      if (otaExp) otaExp.textContent = EXPECTED_FIRMWARE;
+      const label = fw ? ('v' + fw) : '—';
+      if (el) {
+        el.textContent = label;
+        el.style.color = !fw ? '' : (fw === EXPECTED_FIRMWARE ? 'var(--ok)' : 'var(--warn)');
+      }
+      if (top) {
+        top.classList.toggle('show', !!fw);
+        top.classList.toggle('ok', fw === EXPECTED_FIRMWARE);
+        top.classList.toggle('warn', !!fw && fw !== EXPECTED_FIRMWARE);
+        const b = top.querySelector('b');
+        if (b) b.textContent = label;
+        top.title = fw
+          ? (fw === EXPECTED_FIRMWARE ? 'Firmware ενημερωμένο' : `Firmware v${fw} — διαθέσιμο v${EXPECTED_FIRMWARE}`)
+          : 'Firmware ESP32';
+      }
+      if (otaCur) otaCur.textContent = fw ? ('v' + fw) : '—';
+      if (fw && lastSeenFirmware && fw !== lastSeenFirmware) {
+        toast(`Firmware άλλαξε: v${lastSeenFirmware} → v${fw}`, 6000);
+      }
+      if (fw) lastSeenFirmware = fw;
+    }
+
     function updateStatusBar(s) {
       if (!s) return;
       const ssid = wifiSsidDisplay(s);
       document.getElementById('sbWifi').textContent = ssid || (s.wifi_connected ? '(συνδεδεμένο)' : '—');
       document.getElementById('sbIp').textContent = s.ip || '—';
       document.getElementById('sbRssi').textContent = s.rssi != null ? s.rssi + ' dBm' : '—';
+      updateFirmwareDisplay(s);
       const topWifi = document.getElementById('topWifi');
       if (topWifi) {
         const show = ssid || s.wifi_connected;
@@ -1477,9 +1519,9 @@
       const fw = s.ota_firmware_file || OTA_FIRMWARE_FILE;
       const pw = prompt('Κωδικός OTA:', 'esp32ota');
       if (!pw) return;
-      if (!confirm(`Απομακρυσμένη OTA: ${fw}\nΜόνο για ${BOARD_LABEL}.\nReboot ~2 λεπτά.`)) return;
+      if (!confirm(`Απομακρυσμένη OTA: ${fw}\nΈκδοση στόχος: v${EXPECTED_FIRMWARE}\nΜόνο για ${BOARD_LABEL}.\nReboot ~2 λεπτά.`)) return;
       client.publish(cmdTopic, JSON.stringify({ ota: pw }));
-      toast(`OTA ${fw} — περίμενε ~2 λεπτά`);
+      toast(`OTA v${EXPECTED_FIRMWARE} — περίμενε ~2 λεπτά`, 5000);
       closeDrawer();
     }
 
@@ -1627,7 +1669,7 @@
       el.innerHTML = items.map(d => `
           <div class="device-item" onclick="selectDevice('${d.id}')">
             <div><div class="id">${d.id}</div>
-              <div class="meta">${d.board_label || BOARD_LABEL} · ${d.ip || '?'} · ${d.ssid || '?'} · ${d.rssi ?? '?'} dBm</div>
+              <div class="meta">${d.board_label || BOARD_LABEL} · FW ${d.firmware ? 'v' + d.firmware : '?'} · ${d.ip || '?'} · ${d.ssid || '?'} · ${d.rssi ?? '?'} dBm</div>
             </div><span class="chip ok">online</span>
           </div>`).join('')
         + (others ? `<div class="small muted" style="margin-top:8px">${others} άλλη/ες συσκευή/ές (άλλη πλακέτα) — άνοιξε το σωστό dashboard.</div>` : '');

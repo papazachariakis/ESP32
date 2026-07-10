@@ -367,6 +367,50 @@
     .grid-2{display:grid;gap:12px}
     @media(min-width:768px){.grid-2{grid-template-columns:1fr 1fr}}
     .hidden{display:none!important}
+
+    /* Charts */
+    .chart-hint{color:#60a5fa;font-weight:400;font-size:.72rem;margin-left:6px}
+    .chartable{cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .12s}
+    .kpi.chartable{
+      border-color:rgba(59,130,246,.5)!important;
+      box-shadow:inset 4px 0 0 #3b82f6;
+    }
+    .kpi.chartable .l::after{content:' 📈';font-size:.62rem;opacity:.9}
+    .kpi.chartable:hover{
+      background:rgba(59,130,246,.16)!important;
+      border-color:#60a5fa!important;
+      box-shadow:inset 4px 0 0 #93c5fd,0 0 14px rgba(59,130,246,.28);
+    }
+    .soc-ring.chartable{box-shadow:0 0 0 3px rgba(59,130,246,.55);border-radius:50%}
+    .soc-ring.chartable:hover{box-shadow:0 0 0 4px #3b82f6,0 0 22px rgba(59,130,246,.35)}
+    .temp.chartable{
+      border:1px solid rgba(59,130,246,.55)!important;
+      background:rgba(59,130,246,.08);
+    }
+    .cell.chartable{outline:2px solid rgba(59,130,246,.5);outline-offset:-1px}
+    .cell.chartable:hover,.temp.chartable:hover{transform:scale(1.03)}
+    .phase .row.chartable{border-radius:6px;padding-left:4px;padding-right:4px;margin:0 -4px;box-shadow:inset 3px 0 0 #3b82f6}
+    .phase .row.chartable:hover{background:rgba(59,130,246,.12)}
+    .load-row.chartable{border-radius:8px;padding:4px 6px;margin-left:-6px;margin-right:-6px;box-shadow:inset 3px 0 0 #3b82f6}
+    .load-row.chartable:hover{background:rgba(59,130,246,.1)}
+    .chart-overlay{
+      position:fixed;inset:0;z-index:400;background:rgba(2,6,23,.72);
+      display:flex;align-items:center;justify-content:center;padding:16px;
+      opacity:0;pointer-events:none;transition:opacity .2s;
+    }
+    .chart-overlay.open{opacity:1;pointer-events:auto}
+    .chart-modal{
+      width:min(920px,100%);background:var(--surface);border:1px solid var(--border);
+      border-radius:16px;box-shadow:var(--shadow);padding:18px 18px 14px;
+    }
+    .chart-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .chart-head h3{margin:0;font-size:1.05rem}
+  #chartClose{background:transparent;border:0;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px 8px;border-radius:8px}
+  #chartClose:hover{background:var(--surface2);color:var(--text)}
+    .chart-stats{display:flex;flex-wrap:wrap;gap:12px 18px;font-size:.82rem;margin-bottom:12px;color:var(--muted)}
+    .chart-stats b{color:var(--text)}
+    #chartCanvas{width:100%;height:300px;border-radius:10px;display:block}
+    .chart-foot{margin-top:8px;text-align:center}
   </style>
 </head>
 <body>
@@ -425,14 +469,14 @@
       <div class="card">
         <div class="card-title">Γρήγορη επισκόπηση</div>
         <div class="stats" id="overviewStats">
-          <div class="kpi"><div class="l">Τάση μπαταρίας</div><div class="v"><span id="ovV">—</span><span class="u">V</span></div></div>
-          <div class="kpi"><div class="l">Ρεύμα</div><div class="v"><span id="ovA">—</span><span class="u">A</span></div></div>
-          <div class="kpi"><div class="l">Ισχύς</div><div class="v"><span id="ovW">—</span><span class="u">W</span></div></div>
-          <div class="kpi"><div class="l">Γεννήτρια Hz</div><div class="v"><span id="ovHz">—</span><span class="u">Hz</span></div></div>
-          <div class="kpi"><div class="l">Γεννήτρια kW</div><div class="v"><span id="ovKw">—</span></div></div>
-          <div class="kpi"><div class="l">RPM</div><div class="v" id="ovRpm">—</div></div>
-          <div class="kpi"><div class="l">Ah διαθέσιμα</div><div class="v"><span id="ovAh">—</span><span class="u">Ah</span></div></div>
-          <div class="kpi"><div class="l">Θερμοκρασία</div><div class="v"><span id="ovTemp">—</span><span class="u">°C</span></div></div>
+          <div class="kpi chartable" data-chart-key="bms.voltage" data-chart-label="Τάση μπαταρίας" data-chart-unit="V" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Τάση μπαταρίας</div><div class="v"><span id="ovV">—</span><span class="u">V</span></div></div>
+          <div class="kpi chartable" data-chart-key="bms.current" data-chart-label="Ρεύμα μπαταρίας" data-chart-unit="A" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα</div><div class="v"><span id="ovA">—</span><span class="u">A</span></div></div>
+          <div class="kpi chartable" data-chart-key="bms.power" data-chart-label="Ισχύς μπαταρίας" data-chart-unit="W" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Ισχύς</div><div class="v"><span id="ovW">—</span><span class="u">W</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα γεννήτριας" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Γεννήτρια Hz</div><div class="v"><span id="ovHz">—</span><span class="u">Hz</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.kw_total" data-chart-label="kW γεννήτριας" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Γεννήτρια kW</div><div class="v" id="ovKw">—</div></div>
+          <div class="kpi chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM κινητήρα" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">RPM</div><div class="v" id="ovRpm">—</div></div>
+          <div class="kpi chartable" data-chart-key="bms.remaining_ah" data-chart-label="Διαθέσιμα Ah" data-chart-unit="Ah" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ah διαθέσιμα</div><div class="v"><span id="ovAh">—</span><span class="u">Ah</span></div></div>
+          <div class="kpi chartable" data-chart-key="bms.avg_temp" data-chart-label="Θερμοκρασία πακέτου" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Θερμοκρασία</div><div class="v"><span id="ovTemp">—</span><span class="u">°C</span></div></div>
         </div>
       </div>
     </div>
@@ -441,7 +485,7 @@
     <div id="view-bms" class="view">
       <div class="card">
         <div class="soc-wrap">
-          <div class="soc-ring">
+          <div class="soc-ring chartable" data-chart-key="bms.soc" data-chart-label="SOC" data-chart-unit="%" data-chart-dec="0" title="Κλικ για διάγραμμα">
             <svg width="120" height="120" viewBox="0 0 120 120">
               <circle cx="60" cy="60" r="52" fill="none" stroke="#243044" stroke-width="10"/>
               <circle id="socArc" cx="60" cy="60" r="52" fill="none" stroke="#22c55e" stroke-width="10"
@@ -465,28 +509,28 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-title">Σύνοψη</div>
+          <div class="card-title">Σύνοψη <span class="chart-hint">κλικ τιμή → γράφημα</span></div>
           <div class="stats">
-            <div class="kpi"><div class="l">Τάση</div><div class="v"><span id="voltage">—</span><span class="u">V</span></div></div>
-            <div class="kpi"><div class="l">Ρεύμα</div><div class="v"><span id="current">—</span><span class="u">A</span></div></div>
-            <div class="kpi"><div class="l">Ισχύς</div><div class="v"><span id="power">—</span><span class="u">W</span></div></div>
-            <div class="kpi"><div class="l">SOH</div><div class="v"><span id="soh">—</span><span class="u">%</span></div></div>
-            <div class="kpi"><div class="l">Διαθέσιμα</div><div class="v"><span id="remAh">—</span><span class="u">Ah</span></div></div>
-            <div class="kpi"><div class="l">Χωρητικότητα</div><div class="v"><span id="capAh">—</span><span class="u">Ah</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.voltage" data-chart-label="Τάση μπαταρίας" data-chart-unit="V" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Τάση</div><div class="v"><span id="voltage">—</span><span class="u">V</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.current" data-chart-label="Ρεύμα μπαταρίας" data-chart-unit="A" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα</div><div class="v"><span id="current">—</span><span class="u">A</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.power" data-chart-label="Ισχύς μπαταρίας" data-chart-unit="W" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Ισχύς</div><div class="v"><span id="power">—</span><span class="u">W</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.soh" data-chart-label="SOH" data-chart-unit="%" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">SOH</div><div class="v"><span id="soh">—</span><span class="u">%</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.remaining_ah" data-chart-label="Διαθέσιμα Ah" data-chart-unit="Ah" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Διαθέσιμα</div><div class="v"><span id="remAh">—</span><span class="u">Ah</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.capacity_ah" data-chart-label="Χωρητικότητα" data-chart-unit="Ah" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Χωρητικότητα</div><div class="v"><span id="capAh">—</span><span class="u">Ah</span></div></div>
             <div class="kpi"><div class="l">Κύκλοι</div><div class="v" id="cycles">—</div></div>
-            <div class="kpi"><div class="l">Διαφορά κελιών</div><div class="v"><span id="dv">—</span><span class="u">V</span></div></div>
+            <div class="kpi chartable" data-chart-key="bms.delta_cell_v" data-chart-label="Διαφορά κελιών" data-chart-unit="V" data-chart-dec="3" title="Κλικ για διάγραμμα"><div class="l">Διαφορά κελιών</div><div class="v"><span id="dv">—</span><span class="u">V</span></div></div>
           </div>
         </div>
       </div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-title" id="cellsTitle">Κελιά</div>
+          <div class="card-title" id="cellsTitle">Κελιά <span class="chart-hint">κλικ κελί → γράφημα</span></div>
           <div class="small muted" id="cellStats">—</div>
           <div style="height:10px"></div>
           <div class="cells" id="cells"></div>
         </div>
         <div class="card">
-          <div class="card-title">Θερμοκρασίες</div>
+          <div class="card-title">Θερμοκρασίες <span class="chart-hint">κλικ → γράφημα</span></div>
           <div class="small muted" style="margin-bottom:6px">BMS (πακέτο / περιβάλλον / MOSFET)</div>
           <div class="temps" id="tempCore"></div>
           <div class="small muted" style="margin:10px 0 6px">Αισθητήρες NTC</div>
@@ -517,14 +561,14 @@
       <div class="card">
         <div class="card-title">Σύνοψη</div>
         <div class="stats">
-          <div class="kpi"><div class="l">Τάση L-L</div><div class="v"><span id="gVll">—</span><span class="u">V</span></div></div>
-          <div class="kpi"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">—</span><span class="u">Hz</span></div></div>
-          <div class="kpi"><div class="l">kW / kVA</div><div class="v" id="gKva">—</div></div>
-          <div class="kpi"><div class="l">RPM</div><div class="v" id="gRpm">—</div></div>
-          <div class="kpi"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">—</span><span class="u">A</span></div></div>
-          <div class="kpi"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">—</span><span class="u">V</span></div></div>
-          <div class="kpi"><div class="l">Λάδι</div><div class="v"><span id="gOil">—</span><span class="u">kPa</span></div></div>
-          <div class="kpi"><div class="l">Ψύξη</div><div class="v"><span id="gCool">—</span><span class="u">°C</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.volt_avg_ll" data-chart-label="Τάση L-L" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Τάση L-L</div><div class="v"><span id="gVll">—</span><span class="u">V</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">—</span><span class="u">Hz</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.kva_total" data-chart-label="kVA" data-chart-unit="kVA" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">kW / kVA</div><div class="v" id="gKva">—</div></div>
+          <div class="kpi chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">RPM</div><div class="v" id="gRpm">—</div></div>
+          <div class="kpi chartable" data-chart-key="gen.curr_avg" data-chart-label="Ρεύμα μέσο" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">—</span><span class="u">A</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.battery_v" data-chart-label="Μπαταρία γεννήτριας" data-chart-unit="V" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">—</span><span class="u">V</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.oil_kpa" data-chart-label="Πίεση λαδιού" data-chart-unit="kPa" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Λάδι</div><div class="v"><span id="gOil">—</span><span class="u">kPa</span></div></div>
+          <div class="kpi chartable" data-chart-key="gen.coolant_c" data-chart-label="Ψυκτικό" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ψύξη</div><div class="v"><span id="gCool">—</span><span class="u">°C</span></div></div>
         </div>
       </div>
       <div class="card">
@@ -581,8 +625,8 @@
           <div class="card-title">Λειτουργία & Σφάλματα</div>
           <div class="stats">
             <div class="kpi"><div class="l">Controller</div><div class="v" style="font-size:.9rem" id="gCtrl">—</div></div>
-            <div class="kpi"><div class="l">Εκκινήσεις</div><div class="v" id="gRuns">—</div></div>
-            <div class="kpi"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">—</div></div>
+            <div class="kpi chartable" data-chart-key="gen.total_runs" data-chart-label="Εκκινήσεις" data-chart-unit="" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Εκκινήσεις</div><div class="v" id="gRuns">—</div></div>
+            <div class="kpi chartable" data-chart-key="gen.runtime_hours" data-chart-label="Ώρες λειτουργίας" data-chart-unit="h" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">—</div></div>
             <div class="kpi"><div class="l">Σφάλμα</div><div class="v" style="font-size:.85rem" id="gFault">—</div></div>
           </div>
           <div style="height:12px"></div>
@@ -724,7 +768,20 @@
 
   <div class="toast-wrap" id="toasts"></div>
 
+  <div id="chartOverlay" class="chart-overlay" aria-hidden="true">
+    <div class="chart-modal" role="dialog" aria-labelledby="chartTitle">
+      <div class="chart-head">
+        <h3 id="chartTitle">Διάγραμμα</h3>
+        <button type="button" id="chartClose" aria-label="Κλείσιμο">✕</button>
+      </div>
+      <div class="chart-stats" id="chartStats"></div>
+      <canvas id="chartCanvas" width="800" height="300"></canvas>
+      <div class="chart-foot muted small" id="chartFoot">Ιστορικό session</div>
+    </div>
+  </div>
+
   <script src="bms-decode.js"></script>
+  <script src="charts.js"></script>
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const LS = { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
@@ -1127,7 +1184,7 @@
             const vv = Number(v);
             const bal = Array.isArray(b.cell_balancing) && b.cell_balancing[i];
             const bg = cellColor(vv, minV, maxV);
-            return `<div class="cell" style="border-color:${bg}">
+            return `<div class="cell chartable" data-chart-key="bms.cell.${i}" data-chart-label="Κελί C${i + 1}" data-chart-unit="V" data-chart-dec="3" title="Κλικ για διάγραμμα" style="border-color:${bg}">
               <div class="n">C${i + 1}${bal ? ' BAL' : ''}</div>
               <div class="cv" style="background:${vv > 0.5 ? bg : 'transparent'};color:${vv > 0.5 ? '#0b1220' : '#94a3b8'}">${vv > 0.5 ? f2(vv, 3) : '—'}</div>
             </div>`;
@@ -1139,7 +1196,7 @@
         ? BmsDecode.renderCoreTempsHtml(b, f2) : '—';
       document.getElementById('temps').innerHTML = temps.some(t => Number(t) !== 0)
         ? temps.map((t, i) => Number(t) !== 0
-          ? `<div class="temp"><div class="n">T${i + 1}</div><div class="tv">${f2(t, 1)}°C</div></div>` : '').join('')
+          ? `<div class="temp chartable" data-chart-key="bms.temp.${i}" data-chart-label="Θερμοκρασία T${i + 1}" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="n">T${i + 1}</div><div class="tv">${f2(t, 1)}°C</div></div>` : '').join('')
         : '<div class="small muted">—</div>';
 
       document.getElementById('alarms').innerHTML = valid && window.BmsDecode
@@ -1151,6 +1208,7 @@
       box.className = 'health ' + h.level;
       document.getElementById('healthTitle').textContent = h.title;
       document.getElementById('healthList').innerHTML = h.items.map(i => `<li>${i}</li>`).join('');
+      if (window.ChartHub) ChartHub.recordBms(b);
     }
 
     function setLoadBar(id, txtId, pct) {
@@ -1197,6 +1255,7 @@
         ];
         document.getElementById('genPhases').innerHTML = phases.map(p => phaseHtml(p, false)).join('');
         document.getElementById('genAlarms').textContent = 'Μετρητής δικτύου (δοκιμή)';
+        if (window.ChartHub) ChartHub.recordGenset(g);
         return;
       }
 
@@ -1255,16 +1314,18 @@
       document.getElementById('genNfpaList').innerHTML = nfpa.length
         ? nfpa.map(x => `<li>${x}</li>`).join('')
         : '<li class="muted">Κανένα ενεργό bit</li>';
+      if (window.ChartHub) ChartHub.recordGenset(g);
     }
 
     function phaseHtml(p, showKw) {
+      const ph = p.n.toLowerCase();
       return `<div class="phase"><h3>Φάση ${p.n}</h3>
-        <div class="row"><span>L-N</span><span>${f0(p.vn)} V</span></div>
+        <div class="row chartable" data-chart-key="gen.${ph}_v" data-chart-label="${p.n} τάση L-N" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><span>L-N</span><span>${f0(p.vn)} V</span></div>
         <div class="row"><span>L-L</span><span>${f0(p.vll)} V</span></div>
-        <div class="row"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
-        ${showKw ? `<div class="row"><span>kW</span><span>${f0(p.kw)}</span></div>` : ''}
+        <div class="row chartable" data-chart-key="gen.${ph}_a" data-chart-label="${p.n} ρεύμα" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
+        ${showKw ? `<div class="row chartable" data-chart-key="gen.${ph}_kw" data-chart-label="${p.n} kW" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>kW</span><span>${f0(p.kw)}</span></div>` : ''}
         <div class="row"><span>kVA</span><span>${f0(p.kva)}</span></div>
-        ${p.load != null ? `<div class="row"><span>Φόρτιση</span><span>${f2(p.load, 1)}%</span></div>` : ''}
+        ${p.load != null ? `<div class="row chartable" data-chart-key="gen.load_${ph}_pct" data-chart-label="Φόρτιση ${p.n}" data-chart-unit="%" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>Φόρτιση</span><span>${f2(p.load, 1)}%</span></div>` : ''}
       </div>`;
     }
 
@@ -1694,6 +1755,7 @@
     }, 2000);
 
     if (savedId) connect();
+    if (window.ChartHub) ChartHub.init();
   </script>
 </body>
 </html>

@@ -113,15 +113,15 @@
   function renderCoreTempsHtml(b, f2) {
     if (!b || !b.valid) return '<div class="small muted">—</div>';
     const rows = [];
-    const add = (label, val) => {
+    const add = (label, key, val) => {
       const n = Number(val);
       if (Number.isFinite(n) && n > -50 && n < 150) {
-        rows.push(`<div class="temp"><div class="n">${label}</div><div class="tv">${f2(n, 1)}°C</div></div>`);
+        rows.push(`<div class="temp chartable" data-chart-key="${key}" data-chart-label="${label}" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="n">${label}</div><div class="tv">${f2(n, 1)}°C</div></div>`);
       }
     };
-    add('Πακέτο', b.avg_temp);
-    add('Περιβάλλον', b.ambient_temp);
-    add('MOSFET', b.mosfet_temp);
+    add('Πακέτο', 'bms.avg_temp', b.avg_temp);
+    add('Περιβάλλον', 'bms.ambient_temp', b.ambient_temp);
+    add('MOSFET', 'bms.mosfet_temp', b.mosfet_temp);
     return rows.length ? rows.join('') : '<div class="small muted">—</div>';
   }
 

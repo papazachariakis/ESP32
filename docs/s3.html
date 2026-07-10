@@ -775,13 +775,13 @@
       <button class="btn" onclick="bleConnectRemote()">Σύνδεση BMS</button>
     </div>
     <button class="btn danger" style="margin-top:8px" onclick="bleDisconnectRemote()">Αποσύνδεση BMS</button>
-    <p class="small muted" style="margin-top:6px">Βρίσκει JK / Basen / Tianpower BMS κοντά στο ESP32 (~8s σάρωση).</p>
+    <p class="small muted" style="margin-top:6px">Βρίσκει JK / Jikong / Basen BMS κοντά στο ESP32 (~12s σάρωση).</p>
     <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
     <div class="card-title" style="margin-bottom:8px">Συσκευή</div>
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.9</span></b> · esp32ota · ~2 λεπτά reboot</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.12</span></b> · esp32ota · browser push ~2 λεπτά</p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -806,7 +806,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.9';
+    const EXPECTED_FIRMWARE = '3.0.12';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1509,20 +1509,87 @@
       }
     }
 
-    function remoteOta() {
+    function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function uint8ToBase64(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(bin);
+    }
+
+    async function fetchOtaFirmware() {
+      const urls = [
+        'https://cdn.jsdelivr.net/gh/papazachariakis/ESP32@master/docs/' + OTA_FIRMWARE_FILE,
+        'https://raw.githubusercontent.com/papazachariakis/ESP32/master/docs/' + OTA_FIRMWARE_FILE
+      ];
+      for (const url of urls) {
+        try {
+          toast('Λήψη firmware…', 3000);
+          const r = await fetch(url, { cache: 'no-store' });
+          if (!r.ok) continue;
+          const buf = new Uint8Array(await r.arrayBuffer());
+          if (buf.length >= 500000 && buf[0] === 0xE9 && buf[12] === 9) return buf;
+        } catch (e) { console.warn('OTA fetch', url, e); }
+      }
+      return null;
+    }
+
+    async function remoteOtaBrowserPush(pw) {
+      const buf = await fetchOtaFirmware();
+      if (!buf) {
+        toast('Αποτυχία λήψης firmware — έλεγξε internet / GitHub', 7000);
+        return false;
+      }
+      toast(`Firmware ${(buf.length / 1024 / 1024).toFixed(2)} MB — αποστολή στο ESP32…`, 4000);
+      client.publish(cmdTopic, JSON.stringify({ ota_mqtt: pw, size: buf.length }), { qos: 1 });
+      await sleepMs(2000);
+      if (lastStatus && lastStatus.ota_error) {
+        toast('OTA σφάλμα: ' + lastStatus.ota_error, 7000);
+        return false;
+      }
+      const CHUNK = 512;
+      for (let off = 0; off < buf.length; off += CHUNK) {
+        const slice = buf.subarray(off, Math.min(off + CHUNK, buf.length));
+        client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }));
+        if (off === 0 || off % (CHUNK * 50) === 0) {
+          toast('OTA ' + Math.round((off + slice.length) / buf.length * 100) + '%', 1200);
+          await sleepMs(40);
+        } else {
+          await sleepMs(12);
+        }
+      }
+      client.publish(cmdTopic, JSON.stringify({ ota_end: pw }), { qos: 1 });
+      toast('OTA ολοκληρώθηκε — reboot ESP32 ~30s', 6000);
+      return true;
+    }
+
+    async function remoteOtaEspPull(pw) {
+      client.publish(cmdTopic, JSON.stringify({ ota: pw }), { qos: 1 });
+      toast('ESP32 κατεβάζει από GitHub — περίμενε ~2 λεπτά', 6000);
+      return true;
+    }
+
+    async function remoteOta() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       const s = lastStatus || {};
       if (s.board && s.board !== BOARD_EXPECT) {
         toast('Λάθος συσκευή — χρησιμοποίησε το σωστό dashboard (S3 vs Classic)', 6000);
         return;
       }
-      const fw = s.ota_firmware_file || OTA_FIRMWARE_FILE;
       const pw = prompt('Κωδικός OTA:', 'esp32ota');
       if (!pw) return;
-      if (!confirm(`Απομακρυσμένη OTA: ${fw}\nΈκδοση στόχος: v${EXPECTED_FIRMWARE}\nΜόνο για ${BOARD_LABEL}.\nReboot ~2 λεπτά.`)) return;
-      client.publish(cmdTopic, JSON.stringify({ ota: pw }));
-      toast(`OTA v${EXPECTED_FIRMWARE} — περίμενε ~2 λεπτά`, 5000);
+      if (!confirm(`Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n• OK = browser push (συνιστάται)\n• Άκυρο = ESP κατεβάζει μόνο του από GitHub\n\nΜόνο για ${BOARD_LABEL}.`)) {
+        closeDrawer();
+        await remoteOtaEspPull(pw);
+        return;
+      }
       closeDrawer();
+      if (await remoteOtaBrowserPush(pw)) return;
+      if (confirm('Το browser push απέτυχε.\n\nΔοκιμή fallback: ESP κατεβάζει από GitHub;')) {
+        await remoteOtaEspPull(pw);
+      }
     }
 
     function remoteReboot() {
@@ -1592,7 +1659,7 @@
 
     function bleScanRemote() {
       if (!client || !cmdTopic) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      document.getElementById('bleDevList').innerHTML = '<div class="small muted">Σάρωση BLE από ESP32... (~8s)</div>';
+      document.getElementById('bleDevList').innerHTML = '<div class="small muted">Σάρωση BLE από ESP32... (~12s, max ισχύς)</div>';
       document.getElementById('bleConnectBox').style.display = 'none';
       blePick = null;
       pubCmd({ ble_scan: true });
@@ -1604,7 +1671,7 @@
       if (!el) return;
       const devs = j.devices || [];
       if (!devs.length) {
-        el.innerHTML = '<div class="small muted">Δεν βρέθηκε BMS — βεβαιώσου ότι είναι ενεργό κοντά στο ESP32.</div>';
+        el.innerHTML = '<div class="small muted">Δεν βρέθηκε BMS — κλείσε app JK-BMS / Smart BMS / BasenGreen στο κινητό, βάλε την μπαταρία ON κοντά (1–3m) και ξαναδοκίμασε.</div>';
         return;
       }
       el.innerHTML = devs.map(d => {

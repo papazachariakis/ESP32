@@ -83,8 +83,10 @@ inline BmsType bmsDetectFromName(const String& name) {
   n.toUpperCase();
   if (n.indexOf("JK") >= 0) return BmsType::Jk;
   if (n.startsWith("JK_") || n.startsWith("JK-")) return BmsType::Jk;
+  if (n.indexOf("-B2A") >= 0 || n.indexOf("_B2A") >= 0) return BmsType::Jk;
+  if (n.indexOf("_BD") >= 0 || n.indexOf("-BD") >= 0) return BmsType::Jk;
   if (n.startsWith("TP_") || n.startsWith("TP-")) return BmsType::Basen;
-  if (n.indexOf("BSTBD") >= 0 || n.indexOf("TIANPOWER") >= 0) return BmsType::Basen;
+  if (n.indexOf("BSTBD") >= 0 || n.indexOf("LT55") >= 0 || n.indexOf("TIANPOWER") >= 0) return BmsType::Basen;
   if (n.indexOf("BASEN") >= 0) return BmsType::Basen;
   return BmsType::None;
 }
@@ -114,8 +116,7 @@ inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
     return BmsType::Basen;
   }
 
-  if ((bmsMfgMatch(d, 0x0B65) || bmsMfgMatch(d, 0x4B4A)) &&
-      (name.indexOf("JK") >= 0 || name.indexOf("jk") >= 0 || name.length() == 0)) {
+  if (bmsMfgMatch(d, 0x4B4A) || bmsMfgMatch(d, 0x0B65)) {
     return BmsType::Jk;
   }
 

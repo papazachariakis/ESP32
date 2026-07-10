@@ -35,9 +35,18 @@ inline OtaHookFn& otaPrepHook() {
   return fn;
 }
 
+inline OtaHookFn& otaPumpHook() {
+  static OtaHookFn fn = nullptr;
+  return fn;
+}
+
 inline OtaHookFn& otaStatusHook() {
   static OtaHookFn fn = nullptr;
   return fn;
+}
+
+inline void otaPump() {
+  if (otaPumpHook()) otaPumpHook()();
 }
 
 inline void otaNotifyStatus() {
@@ -233,7 +242,7 @@ inline bool otaReadHttpHeaders(Client& client, int& contentLen) {
     if (!client.available()) {
       if (!client.connected()) break;
       delay(10);
-      yield();
+      otaPump();
       continue;
     }
     String line = client.readStringUntil('\n');
@@ -268,7 +277,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     if (avail <= 0) {
       if (!client.connected()) break;
       delay(5);
-      yield();
+      otaPump();
       continue;
     }
     int n = client.read(header + hdrRead, avail < (16 - hdrRead) ? avail : (16 - hdrRead));
@@ -302,7 +311,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
         continue;
       }
       delay(1);
-      yield();
+      otaPump();
       continue;
     }
     lastData = millis();
@@ -317,7 +326,11 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
       return false;
     }
     total += n;
-    yield();
+    if ((total % 65536) == 0) {
+      Serial.printf("OTA download: %d / %d\n", total, contentLen);
+      otaNotifyStatus();
+    }
+    otaPump();
   }
 
   if (total != contentLen || !Update.end(true)) {
@@ -445,17 +458,18 @@ inline bool performRemoteOta() {
   otaPrepareFlash();
 
   Serial.printf("Remote OTA: board expects %s\n", OTA_FIRMWARE_FILE);
-  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH, true)) {
-    otaInProgress() = false;
-    return true;
-  }
   String cdnPath = String(OTA_CDN_PREFIX) + OTA_FIRMWARE_FILE;
   if (performRemoteOtaFromHost("cdn.jsdelivr.net", cdnPath.c_str(), true)) {
     otaInProgress() = false;
     return true;
   }
+  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH, true)) {
+    otaInProgress() = false;
+    return true;
+  }
 
   otaInProgress() = false;
+  otaSetError("failed", "GitHub/jsDelivr download failed");
   return false;
 }
 
@@ -532,7 +546,7 @@ inline bool mqttOtaFeedChunkJson(const char* payload, unsigned int length) {
   if (!end || end <= start) return false;
 
   size_t b64Len = (size_t)(end - start);
-  uint8_t buf[768];
+  uint8_t buf[1536];
   size_t outLen = 0;
   int rc = mbedtls_base64_decode(buf, sizeof(buf), &outLen, (const unsigned char*)start, b64Len);
   if (rc != 0 || outLen == 0) {

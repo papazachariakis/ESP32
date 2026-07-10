@@ -271,9 +271,23 @@ struct BmsManager {
     delay(400);
 
     if (!getBleChars(client)) {
-      Serial.println("BMS service/char not found");
-      dropLink();
-      return false;
+      BmsType alt = (type == BmsType::Basen) ? BmsType::Jk : BmsType::Basen;
+      if (alt != type) {
+        Serial.printf("BMS protocol retry as %s\n", bmsTypeId(alt));
+        type = alt;
+        bms.type = type;
+        chrNotify = nullptr;
+        chrWrite = nullptr;
+        if (!getBleChars(client)) {
+          Serial.println("BMS service/char not found");
+          dropLink();
+          return false;
+        }
+      } else {
+        Serial.println("BMS service/char not found");
+        dropLink();
+        return false;
+      }
     }
 
     gInstance = this;

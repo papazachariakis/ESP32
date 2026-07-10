@@ -734,6 +734,15 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
+  if (bmsMgr.name.length()) {
+    BmsType detected = bmsDetectFromName(bmsMgr.name);
+    if (detected != BmsType::None && detected != bmsMgr.type) {
+      Serial.printf("BMS type corrected: %s -> %s (%s)\n",
+                    bmsTypeId(bmsMgr.type), bmsTypeId(detected), bmsMgr.name.c_str());
+      bmsMgr.type = detected;
+      prefs.putString("bms_type", bmsTypeId(detected));
+    }
+  }
   if (bmsMgr.type == BmsType::None && bmsMgr.name.length())
     bmsMgr.type = bmsDetectFromName(bmsMgr.name);
   if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
@@ -803,14 +812,32 @@ void setupWiFi() {
 
 
 
+void configureBleRadio() {
+  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
+  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_SCAN);
+  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
+  Serial.println("BLE TX power: +9 dBm (default/scan/adv)");
+}
+
 void startBleScan() {
   pumpNetwork();
-  BLEScan* scan = BLEDevice::getScan();
 
+  if (bmsMgr.client && bmsMgr.client->isConnected()) {
+    Serial.println("BLE scan: disconnecting BMS link so it can advertise");
+    bmsMgr.client->disconnect();
+    delay(250);
+  }
+
+  BLEScan* scan = BLEDevice::getScan();
   scan->setActiveScan(true);
+  scan->setInterval(BLE_SCAN_INTERVAL_MS);
+  scan->setWindow(BLE_SCAN_WINDOW_MS);
+  scan->setDuplicateFilter(false);
 
   scan->clearResults();
 
+  Serial.printf("BLE scan %ds (active, interval=%ums window=%ums)\n",
+                BLE_SCAN_SECONDS, BLE_SCAN_INTERVAL_MS, BLE_SCAN_WINDOW_MS);
   BLEScanResults* results = scan->start(BLE_SCAN_SECONDS, false);
 
 
@@ -820,6 +847,7 @@ void startBleScan() {
   JsonArray arr = doc.to<JsonArray>();
 
   int count = results ? results->getCount() : 0;
+  int bmsCount = 0;
 
   for (int i = 0; i < count; i++) {
 
@@ -830,6 +858,7 @@ void startBleScan() {
     BmsType bt = bmsDetectType(name, d);
 
     if (bt == BmsType::None) continue;
+    bmsCount++;
 
     JsonObject o = arr.add<JsonObject>();
 
@@ -854,7 +883,7 @@ void startBleScan() {
 
   scan->clearResults();
   pumpNetwork();
-  Serial.println("BLE scan done");
+  Serial.printf("BLE scan done: %d devices, %d BMS\n", count, bmsCount);
 }
 
 
@@ -1288,8 +1317,7 @@ void setup() {
 
 
   BLEDevice::init("ESP32-Control");
-
-
+  configureBleRadio();
 
   setupWiFi();
 
@@ -1307,6 +1335,7 @@ void setup() {
     }
   };
   otaStatusHook() = []() { publishStatus(); };
+  otaPumpHook() = pumpNetwork;
   modbusSetPump(pumpNetwork);
   mqttConnect();
 

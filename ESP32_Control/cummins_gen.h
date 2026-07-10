@@ -54,6 +54,7 @@
 
 struct GenData {
   bool valid = false;
+  bool pollComplete = false;
   unsigned long lastUpdate = 0;
   uint8_t controllerType = 0;
   uint8_t opMode = 0;
@@ -178,6 +179,7 @@ inline float entesFloat(const uint16_t* r, uint8_t pairIdx) {
 
 inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["valid"] = g.valid;
+  o["poll_complete"] = g.pollComplete;
   o["profile"] = (profile == MODBUS_PROFILE_ENTES) ? "ENTES_MPR46S" : "PS0600";
   o["controller_type"] = g.controllerType;
   o["op_mode"] = g.opMode;
@@ -243,9 +245,30 @@ struct GenManager {
   uint16_t probeReg = CUMMINS_REG_CONTROLLER;  // 4xxxx register used by auto-scan
   unsigned long lastPoll = 0;
   uint16_t pollIntervalMs = 3000;
-  uint8_t pollStep = 0;
   uint8_t pollFailStreak = 0;
-  static const uint8_t kPollStepsPerLoop = 4;
+  bool pollPaused = false;
+
+  void flushBus() {
+    if (bus) while (bus->available()) bus->read();
+  }
+
+  bool readBlockGap(uint16_t reg40001, uint16_t count, uint16_t* out) {
+    if (!readBlock(reg40001, count, out)) return false;
+    modbusBusGap();
+    return true;
+  }
+
+  bool writeHoldRetry(uint16_t reg40001, uint16_t value, uint8_t tries = 3) {
+    for (uint8_t i = 0; i < tries; i++) {
+      if (writeHold(reg40001, value)) return true;
+      modbusBusGap(40);
+    }
+    return false;
+  }
+
+  bool readHoldOne(uint16_t reg40001, uint16_t* out) {
+    return readBlock(reg40001, 1, out);
+  }
 
   bool refreshStatusBlock() {
     uint16_t a[5];
@@ -379,8 +402,8 @@ struct GenManager {
     return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value);
   }
 
-  bool cmdStart() { return writeHold(CUMMINS_CMD_START, 1); }
-  bool cmdStop() { return writeHold(CUMMINS_CMD_START, 0); }
+  bool cmdStart() { return writeHoldRetry(CUMMINS_CMD_START, 1); }
+  bool cmdStop() { return writeHoldRetry(CUMMINS_CMD_START, 0); }
   bool cmdFaultReset() {
     if (!writeHold(CUMMINS_CMD_RESET, 1)) return false;
     delay(80);
@@ -395,6 +418,11 @@ struct GenManager {
       data.lastError = "genset cmd unavailable (enable PS0600 profile)";
       return false;
     }
+
+    pollPaused = true;
+    flushBus();
+    modbusBusGap(30);
+
     bool ok = false;
     if (strcmp(action, "start") == 0) {
       ok = cmdStart();
@@ -412,22 +440,34 @@ struct GenManager {
       ok = cmdEstop(false);
       if (!ok) data.lastError = "estop release write 40302 failed";
     } else {
+      pollPaused = false;
       data.lastError = "unknown genset cmd";
       return false;
     }
+
     data.lastCmdOk = ok;
     if (ok) {
-      delay(120);
+      modbusBusGap(150);
+      uint16_t rb = 0;
+      if (readHoldOne(CUMMINS_CMD_START, &rb) && strcmp(action, "start") == 0) {
+        if (rb != 1) data.lastError = "start reg 40300 still inactive after write";
+      }
       refreshStatusBlock();
-      if (strcmp(action, "start") == 0 && data.opMode != 2)
-        data.lastError = "start sent — switch panel must be MANUAL for Modbus start";
-      else
+      if (strcmp(action, "start") == 0) {
+        if (data.opMode != 2)
+          data.lastError = "start sent — βάλε MANUAL στο panel (όχι Auto/Off)";
+        else if (data.lastError.length() == 0 || data.lastError.indexOf("still inactive") >= 0)
+          data.lastError = rb == 1 ? "start ενεργό στο Modbus" : data.lastError;
+      } else if (data.lastError.indexOf("failed") < 0) {
         data.lastError = "";
+      }
     }
+
+    pollPaused = false;
     return ok;
   }
 
-  void pollReset() { pollStep = 0; }
+  void pollReset() {}
 
   bool pollEntesOnce() {
     uint16_t r[ENTES_REG_MEAS_COUNT];
@@ -460,203 +500,164 @@ struct GenManager {
     return true;
   }
 
-  bool pollStepOnce() {
-    if (!enabled || !bus) return false;
-    if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
+  bool pollFullPs0600() {
+    if (!enabled || !bus || pollPaused) return false;
 
-    switch (pollStep) {
-      case 0: {
-        uint16_t a[5];
-        if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
-          data.lastError = "modbus 40009 - check TX/RX crossover (TX2→RXD, RX2→TXD) and RS485";
-          pollStep = 0;
-          if (++pollFailStreak >= 3) data.valid = false;
-          return false;
-        }
-        pollFailStreak = 0;
-        data.controllerType = (uint8_t)a[0];
-        data.opMode = (uint8_t)a[1];
-        data.gensetState = (uint8_t)a[2];
-        data.activeFault = a[3];
-        data.faultType = (uint8_t)a[4];
-        pollStep = 1;
-        return false;
-      }
-      case 1: {
-        uint16_t f[2];
-        if (!readBlock(CUMMINS_REG_NFPA_FAULT, 2, f)) {
-          data.lastError = "modbus 40016 (optional, skipped)";
-          pollStep = 2;
-          return false;
-        }
-        data.nfpaFault = ((uint32_t)f[0] << 16) | f[1];
-        pollStep = 2;
-        return false;
-      }
-      case 2: {
-        uint16_t v[3];
-        if (!readBlock(CUMMINS_REG_VOLT_L1N, 3, v)) {
-          data.lastError = "modbus 40018";
-          pollStep = 3;
-          return false;
-        }
-        data.voltL1N = cumminsNaU(v[0]) ? 0 : (float)v[0];
-        data.voltL2N = cumminsNaU(v[1]) ? 0 : (float)v[1];
-        data.voltL3N = cumminsNaU(v[2]) ? 0 : (float)v[2];
-        pollStep = 3;
-        return false;
-      }
-      case 3: {
-        uint16_t ll[3];
-        if (!readBlock(CUMMINS_REG_VOLT_L1L2, 3, ll)) {
-          data.lastError = "modbus 40022";
-          pollStep = 4;
-          return false;
-        }
-        data.voltL1L2 = cumminsNaU(ll[0]) ? 0 : (float)ll[0];
-        data.voltL2L3 = cumminsNaU(ll[1]) ? 0 : (float)ll[1];
-        data.voltL3L1 = cumminsNaU(ll[2]) ? 0 : (float)ll[2];
-        pollStep = 4;
-        return false;
-      }
-      case 4: {
-        uint16_t c[3];
-        if (!readBlock(CUMMINS_REG_CURR_L1, 3, c)) {
-          data.lastError = "modbus 40026";
-          pollStep = 5;
-          return false;
-        }
-        data.currL1 = cumminsNaU(c[0]) ? 0 : (float)c[0];
-        data.currL2 = cumminsNaU(c[1]) ? 0 : (float)c[1];
-        data.currL3 = cumminsNaU(c[2]) ? 0 : (float)c[2];
-        data.currAvg = (data.currL1 + data.currL2 + data.currL3) / 3.0f;
-        data.voltAvgLL = (data.voltL1L2 + data.voltL2L3 + data.voltL3L1) / 3.0f;
-        pollStep = 5;
-        return false;
-      }
-      case 5: {
-        uint16_t k[4];
-        if (!readBlock(CUMMINS_REG_KW_L1, 4, k)) {
-          data.lastError = "modbus 40031";
-          pollStep = 6;
-          return false;
-        }
-        data.kwL1 = cumminsNaS((int16_t)k[0]) ? 0 : (int16_t)k[0];
-        data.kwL2 = cumminsNaS((int16_t)k[1]) ? 0 : (int16_t)k[1];
-        data.kwL3 = cumminsNaS((int16_t)k[2]) ? 0 : (int16_t)k[2];
-        data.kwTotal = cumminsNaS((int16_t)k[3]) ? 0 : (int16_t)k[3];
-        pollStep = 6;
-        return false;
-      }
-      case 6: {
-        uint16_t p[5];
-        if (!readBlock(CUMMINS_REG_KVA_L1, 5, p)) {
-          data.lastError = "modbus 40040";
-          pollStep = 7;
-          return false;
-        }
-        data.kvaL1 = cumminsNaU(p[0]) ? 0 : (float)p[0];
-        data.kvaL2 = cumminsNaU(p[1]) ? 0 : (float)p[1];
-        data.kvaL3 = cumminsNaU(p[2]) ? 0 : (float)p[2];
-        data.kvaTotal = cumminsNaU(p[3]) ? 0 : (float)p[3];
-        data.frequency = cumminsNaU(p[4]) ? 0 : p[4] * 0.01f;
-        pollStep = 7;
-        return false;
-      }
-      case 7: {
-        uint16_t l[3];
-        if (!readBlock(CUMMINS_REG_LOAD_L1, 3, l)) {
-          data.lastError = "modbus 40058";
-          pollStep = 8;
-          return false;
-        }
-        data.loadL1Pct = cumminsNaU(l[0]) ? 0 : l[0] * 0.1f;
-        data.loadL2Pct = cumminsNaU(l[1]) ? 0 : l[1] * 0.1f;
-        data.loadL3Pct = cumminsNaU(l[2]) ? 0 : l[2] * 0.1f;
-        pollStep = 8;
-        return false;
-      }
-      case 8: {
-        uint16_t e[2];
-        if (!readBlock(CUMMINS_REG_BATTERY_V, 2, e)) {
-          data.lastError = "modbus 40061";
-          pollStep = 9;
-          return false;
-        }
-        data.batteryV = cumminsNaU(e[0]) ? 0 : e[0] * 0.001f;
-        // Oil pressure register is psi x0.1; convert to kPa for display.
-        data.oilKpa = cumminsNaU(e[1]) ? 0 : (e[1] * 0.1f) * 6.894757f;
-        pollStep = 9;
-        return false;
-      }
-      case 9: {
-        uint16_t t[1];
-        if (!readBlock(CUMMINS_REG_COOLANT_F, 1, t)) {
-          data.lastError = "modbus 40064";
-          pollStep = 10;
-          return false;
-        }
-        // Coolant register is degF x0.1 (int16); convert to degC.
-        int16_t rawF = (int16_t)t[0];
-        data.coolantC = cumminsNaS(rawF) ? 0 : ((rawF * 0.1f) - 32.0f) * (5.0f / 9.0f);
-        pollStep = 10;
-        return false;
-      }
-      case 10: {
-        uint16_t r[4];
-        if (!readBlock(CUMMINS_REG_ENGINE_RPM, 4, r)) {
-          data.lastError = "modbus 40068";
-          pollStep = 0;
-          return false;
-        }
-        data.engineRpm = cumminsNaU(r[0]) ? 0 : (uint16_t)(r[0] * 0.125f);
-        data.totalRuns = cumminsNaU(r[1]) ? 0 : r[1];
-        // Engine Running Time: uint32 x0.05 hours.
-        uint32_t rtRaw = ((uint32_t)r[2] << 16) | r[3];
-        data.runtimeHours = rtRaw * 0.05f;
-        data.runTimeSec = (uint32_t)(data.runtimeHours * 3600.0f);
-        data.valid = true;
-        data.lastUpdate = millis();
-        data.lastError = "";
-        pollFailStreak = 0;
-        pollStep = 0;
-        return true;
-      }
-      default:
-        pollStep = 0;
-        return false;
+    flushBus();
+    data.pollComplete = false;
+    bool full = true;
+
+    uint16_t a[5];
+    if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
+      data.lastError = "modbus 40009 - check RS485 A/B, baud, slave ID";
+      if (++pollFailStreak >= 5) data.valid = false;
+      return false;
     }
+    pollFailStreak = 0;
+    data.controllerType = (uint8_t)a[0];
+    data.opMode = (uint8_t)a[1];
+    data.gensetState = (uint8_t)a[2];
+    data.activeFault = a[3];
+    data.faultType = (uint8_t)a[4];
+    data.valid = true;
+    data.lastUpdate = millis();
+    modbusBusGap();
+
+    uint16_t f[2];
+    if (readBlock(CUMMINS_REG_NFPA_FAULT, 2, f))
+      data.nfpaFault = ((uint32_t)f[0] << 16) | f[1];
+    modbusBusGap();
+
+    uint16_t v[3];
+    if (!readBlock(CUMMINS_REG_VOLT_L1N, 3, v)) {
+      data.lastError = "modbus 40018";
+      full = false;
+    } else {
+      data.voltL1N = cumminsNaU(v[0]) ? 0 : (float)v[0];
+      data.voltL2N = cumminsNaU(v[1]) ? 0 : (float)v[1];
+      data.voltL3N = cumminsNaU(v[2]) ? 0 : (float)v[2];
+    }
+    modbusBusGap();
+
+    uint16_t ll[3];
+    if (!readBlock(CUMMINS_REG_VOLT_L1L2, 3, ll)) {
+      data.lastError = "modbus 40022";
+      full = false;
+    } else {
+      data.voltL1L2 = cumminsNaU(ll[0]) ? 0 : (float)ll[0];
+      data.voltL2L3 = cumminsNaU(ll[1]) ? 0 : (float)ll[1];
+      data.voltL3L1 = cumminsNaU(ll[2]) ? 0 : (float)ll[2];
+    }
+    modbusBusGap();
+
+    uint16_t c[3];
+    if (!readBlock(CUMMINS_REG_CURR_L1, 3, c)) {
+      data.lastError = "modbus 40026";
+      full = false;
+    } else {
+      data.currL1 = cumminsNaU(c[0]) ? 0 : (float)c[0];
+      data.currL2 = cumminsNaU(c[1]) ? 0 : (float)c[1];
+      data.currL3 = cumminsNaU(c[2]) ? 0 : (float)c[2];
+      data.currAvg = (data.currL1 + data.currL2 + data.currL3) / 3.0f;
+      data.voltAvgLL = (data.voltL1L2 + data.voltL2L3 + data.voltL3L1) / 3.0f;
+    }
+    modbusBusGap();
+
+    uint16_t k[4];
+    if (!readBlock(CUMMINS_REG_KW_L1, 4, k)) {
+      data.lastError = "modbus 40031";
+      full = false;
+    } else {
+      data.kwL1 = cumminsNaS((int16_t)k[0]) ? 0 : (int16_t)k[0];
+      data.kwL2 = cumminsNaS((int16_t)k[1]) ? 0 : (int16_t)k[1];
+      data.kwL3 = cumminsNaS((int16_t)k[2]) ? 0 : (int16_t)k[2];
+      data.kwTotal = cumminsNaS((int16_t)k[3]) ? 0 : (int16_t)k[3];
+    }
+    modbusBusGap();
+
+    uint16_t p[5];
+    if (!readBlock(CUMMINS_REG_KVA_L1, 5, p)) {
+      data.lastError = "modbus 40040";
+      full = false;
+    } else {
+      data.kvaL1 = cumminsNaU(p[0]) ? 0 : (float)p[0];
+      data.kvaL2 = cumminsNaU(p[1]) ? 0 : (float)p[1];
+      data.kvaL3 = cumminsNaU(p[2]) ? 0 : (float)p[2];
+      data.kvaTotal = cumminsNaU(p[3]) ? 0 : (float)p[3];
+      data.frequency = cumminsNaU(p[4]) ? 0 : p[4] * 0.01f;
+    }
+    modbusBusGap();
+
+    uint16_t l[3];
+    if (!readBlock(CUMMINS_REG_LOAD_L1, 3, l)) {
+      data.lastError = "modbus 40058";
+      full = false;
+    } else {
+      data.loadL1Pct = cumminsNaU(l[0]) ? 0 : l[0] * 0.1f;
+      data.loadL2Pct = cumminsNaU(l[1]) ? 0 : l[1] * 0.1f;
+      data.loadL3Pct = cumminsNaU(l[2]) ? 0 : l[2] * 0.1f;
+    }
+    modbusBusGap();
+
+    uint16_t e[2];
+    if (!readBlock(CUMMINS_REG_BATTERY_V, 2, e)) {
+      data.lastError = "modbus 40061";
+      full = false;
+    } else {
+      data.batteryV = cumminsNaU(e[0]) ? 0 : e[0] * 0.001f;
+      data.oilKpa = cumminsNaU(e[1]) ? 0 : (e[1] * 0.1f) * 6.894757f;
+    }
+    modbusBusGap();
+
+    uint16_t t[1];
+    if (!readBlock(CUMMINS_REG_COOLANT_F, 1, t)) {
+      data.lastError = "modbus 40064";
+      full = false;
+    } else {
+      int16_t rawF = (int16_t)t[0];
+      data.coolantC = cumminsNaS(rawF) ? 0 : ((rawF * 0.1f) - 32.0f) * (5.0f / 9.0f);
+    }
+    modbusBusGap();
+
+    uint16_t r[4];
+    if (!readBlock(CUMMINS_REG_ENGINE_RPM, 4, r)) {
+      data.lastError = "modbus 40068";
+      full = false;
+    } else {
+      data.engineRpm = cumminsNaU(r[0]) ? 0 : (uint16_t)(r[0] * 0.125f);
+      data.totalRuns = cumminsNaU(r[1]) ? 0 : r[1];
+      uint32_t rtRaw = ((uint32_t)r[2] << 16) | r[3];
+      data.runtimeHours = rtRaw * 0.05f;
+      data.runTimeSec = (uint32_t)(data.runtimeHours * 3600.0f);
+    }
+
+    data.pollComplete = full;
+    data.valid = true;
+    data.lastUpdate = millis();
+    if (full) data.lastError = "";
+    return full;
   }
 
   bool pollOnce() {
-    pollReset();
     if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
-    for (uint8_t i = 0; i < 24; i++) {
-      if (pollStepOnce()) return true;
-      modbusPump();
-    }
-    return data.valid;
+    return pollFullPs0600();
   }
 
   void poll() {
-    if (!enabled) return;
+    if (!enabled || pollPaused) return;
     if (profile == MODBUS_PROFILE_ENTES) {
       if (millis() - lastPoll < pollIntervalMs) return;
       lastPoll = millis();
       pollEntesOnce();
       return;
     }
-    if (pollStep == 0 && millis() - lastPoll < pollIntervalMs) return;
-    if (pollStep == 0) lastPoll = millis();
+    if (millis() - lastPoll < pollIntervalMs) return;
+    lastPoll = millis();
+    pollFullPs0600();
 
-    for (uint8_t n = 0; n < kPollStepsPerLoop; n++) {
-      if (pollStepOnce()) break;
-      modbusPump();
-      if (pollStep == 0 && pollFailStreak > 0) break;
-    }
-
-    if (data.valid && data.lastUpdate && millis() - data.lastUpdate > 45000) {
+    if (data.valid && data.lastUpdate && millis() - data.lastUpdate > 120000) {
       data.valid = false;
+      data.pollComplete = false;
       data.lastError = "modbus timeout";
     }
   }

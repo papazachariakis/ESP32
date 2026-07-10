@@ -973,6 +973,7 @@
       document.getElementById('sbMsgs').textContent = totalMsgs;
 
       document.getElementById('diagSummary').innerHTML = [
+        diagRow('Firmware', s.firmware || '—'),
         diagRow('Device ID', s.device_id || '—'),
         diagRow('Board', s.board_label || s.board || '—'),
         diagRow('Dashboard MQTT', pill(connected, 'Online', 'Connecting', 'Offline')),
@@ -1006,7 +1007,8 @@
         diagRow('Profile', gen.profile || '—'),
         diagRow('Slave ID', gen.slave_id ?? '—'),
         diagRow('Baud', gen.baud ?? '—'),
-        diagRow('Valid', pill(gen.valid, 'Yes', 'Polling', 'No')),
+        diagRow('Valid', pill(gen.valid, 'Yes', 'Partial', 'No')),
+        diagRow('Poll complete', pill(gen.poll_complete, 'Yes', 'Partial', 'No')),
         diagRow('Τελευταίο σφάλμα', gen.error
           ? `<span style="color:var(--bad)">${gen.error}</span>` : pill(gen.valid, '—', '—', '—')),
         diagRow('Controller', gen.controller_type || '—'),
@@ -1096,7 +1098,7 @@
 
     function renderOverview(b, g) {
       const bValid = b && b.valid;
-      const gValid = g && g.valid;
+      const gValid = g && (g.valid || g.genset_state != null);
 
       document.getElementById('heroSoc').textContent = bValid ? f0(b.soc) + '%' : '—%';
       document.getElementById('heroBmsDetail').textContent = bValid
@@ -1247,16 +1249,17 @@
     }
 
     function renderGenset(g) {
-      const valid = g && g.valid;
-      const stale = g && !valid && Number(g.age_sec) < 90 && g.genset_state != null;
-      const show = valid || stale;
+      if (!g) return;
+      const valid = g.valid;
+      const hasData = valid || g.genset_state != null || g.controller_type != null;
+      const partial = hasData && !g.poll_complete;
       const box = document.getElementById('genStatusBox');
-      const isEntes = g && String(g.profile || '').includes('ENTES');
+      const isEntes = String(g.profile || '').includes('ENTES');
 
       syncModbusCfg(g);
 
-      if (!show) {
-        document.getElementById('genState').textContent = g && g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων...';
+      if (!hasData) {
+        document.getElementById('genState').textContent = g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων...';
         document.getElementById('genMode').textContent = '—';
         box.className = 'gen-hero off';
         document.getElementById('genChips').innerHTML = '';
@@ -1301,7 +1304,8 @@
       box.className = 'gen-hero ' + (running ? 'run' : warn ? 'warn' : 'off');
 
       const chips = [];
-      if (stale) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
+      if (partial) chips.push({ t: 'ΜΕΡΙΚΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
+      else if (!valid) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
       if (running) chips.push({ t: 'ΛΕΙΤΟΥΡΓΕΙ', cls: 'ok' });
       else if (crank) chips.push({ t: 'CRANK', cls: 'warn' });
       else chips.push({ t: state.toUpperCase(), cls: '' });

@@ -70,7 +70,7 @@ inline bool modbusReadHolding(
   ser.flush();
   modbusSetTx(dePin, false);
   modbusPump();
-  delay(dePin < 0 ? 25 : 2);
+  delay(dePin < 0 ? 25 : 8);
 
   uint8_t hdr[3];
   if (!modbusReadBytes(ser, hdr, 3, timeoutMs)) return false;
@@ -164,7 +164,7 @@ inline bool modbusWriteSingle(
   ser.flush();
   modbusSetTx(dePin, false);
   modbusPump();
-  delay(2);
+  delay(dePin < 0 ? 25 : 8);
 
   uint8_t resp[8];
   if (!modbusReadBytes(ser, resp, 8, timeoutMs)) return false;
@@ -179,4 +179,9 @@ inline bool modbusWriteSingle(
 // Cummins docs use 4xxxx holding register numbers.
 inline uint16_t modbusHoldAddr(uint16_t reg40001) {
   return (uint16_t)(reg40001 - 40001);
+}
+
+inline void modbusBusGap(uint16_t ms = 20) {
+  modbusPump();
+  delay(ms);
 }

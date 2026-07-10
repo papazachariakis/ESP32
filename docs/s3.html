@@ -677,7 +677,7 @@
     <input id="deviceId" placeholder="1CDBD47A3C50" />
     <label>MQTT WebSocket</label>
     <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
-    <p class="small muted" style="margin:4px 0 8px">Τοπικά = HTTP στο ESP32. GitHub = MQTT cloud — ο ESP32 πρέπει <b>mqtt.connected:true</b> στο <code>/api/status</code>.</p>
+    <p class="small muted" style="margin:4px 0 8px">Τοπικά = HTTP στο ESP32. GitHub = MQTT cloud — κάθε ESP32 έχει <b>μοναδικό Device ID</b> (από MAC). Η σάρωση βρίσκει μόνο <b>ESP32-S3 RS485</b> online στον broker.</p>
     <button class="btn" onclick="connect();closeDrawer()">Σύνδεση</button>
     <button class="btn sec" onclick="scanDevices()">🔍 Εύρεση συσκευών</button>
     <button class="btn sec" onclick="disconnect()">Αποσύνδεση</button>
@@ -717,7 +717,9 @@
 
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
-    const LS = { id: 'esp32_s3_device_id', broker: 'esp32_ws_broker' };
+    const LS = { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
+    const BOARD_EXPECT = 'esp32s3-rs485';
+    const BOARD_LABEL = 'ESP32-S3 RS485';
     const BOARD_PAGE = 's3';
     let client = null, scanClient = null, scanTimer = null, cmdTopic = '';
     let outputs = [], connected = false, lastStatus = {}, lastUpdate = 0;
@@ -729,7 +731,7 @@
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
-    const savedBroker = localStorage.getItem(LS.broker);
+    const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');
     if (savedBroker) document.getElementById('broker').value = savedBroker;
 
     function toast(msg, ms = 3000) {
@@ -1261,6 +1263,7 @@
     function handleStatus(j) {
       lastStatus = j;
       msgStats.status++;
+      warnWrongBoard(j);
       updateStatusBar(j);
       updateFreshness();
       if (j.outputs) { outputs = j.outputs; renderRelays(); }
@@ -1481,17 +1484,32 @@
       return m ? m[1].toUpperCase() : '';
     }
 
+    function deviceForThisPage(d) {
+      if (!d.board) return true;
+      return d.board === BOARD_EXPECT;
+    }
+
     function renderDeviceList() {
       const el = document.getElementById('deviceList');
-      const items = [...foundDevices.values()].sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
-      el.innerHTML = items.length
-        ? items.map(d => `
+      const all = [...foundDevices.values()];
+      const items = all.filter(deviceForThisPage).sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
+      const others = all.filter(d => d.board && d.board !== BOARD_EXPECT).length;
+      if (!items.length) {
+        el.innerHTML = `<div class="small muted">Δεν βρέθηκε ${BOARD_LABEL} online.${others ? ` (${others} άλλη/ες συσκευή/ές στον broker)` : ''}</div>`;
+        return;
+      }
+      el.innerHTML = items.map(d => `
           <div class="device-item" onclick="selectDevice('${d.id}')">
             <div><div class="id">${d.id}</div>
-              <div class="meta">${d.ip || '?'} • ${d.ssid || '?'} • ${d.rssi ?? '?'} dBm</div>
+              <div class="meta">${d.board_label || BOARD_LABEL} · ${d.ip || '?'} · ${d.ssid || '?'} · ${d.rssi ?? '?'} dBm</div>
             </div><span class="chip ok">online</span>
           </div>`).join('')
-        : '<div class="small muted">Δεν βρέθηκαν συσκευές...</div>';
+        + (others ? `<div class="small muted" style="margin-top:8px">${others} άλλη/ες συσκευή/ές (άλλη πλακέτα) — άνοιξε το σωστό dashboard.</div>` : '');
+    }
+
+    function warnWrongBoard(j) {
+      if (!j.board || j.board === BOARD_EXPECT) return;
+      toast(`Λάθος πλακέτα: συνδέθηκες σε ${j.board_label || j.board}. Χρησιμοποίησε esp32.html για Classic.`, 8000);
     }
 
     function selectDevice(id) {
@@ -1525,17 +1543,20 @@
           if (!id) return;
           foundDevices.set(id, {
             id, ip: j.ip || '', ssid: j.wifi_ssid || '', rssi: j.rssi,
-            lastSeen: Date.now()
+            board: j.board || '', board_label: j.board_label || '',
+            firmware: j.firmware || '', lastSeen: Date.now()
           });
           renderDeviceList();
         } catch (e) {}
       });
       scanTimer = setTimeout(() => {
         stopScan();
-        const n = foundDevices.size;
+        const n = [...foundDevices.values()].filter(deviceForThisPage).length;
+        const total = foundDevices.size;
         document.getElementById('statusLine').textContent = n
-          ? `Βρέθηκαν ${n} συσκευή(ές).` : 'Δεν βρέθηκαν συσκευές.';
-        toast(n ? `Βρέθηκαν ${n} συσκευές` : 'Δεν βρέθηκαν συσκευές');
+          ? `Βρέθηκαν ${n} ${BOARD_LABEL} (${total} συνολικά στον broker).`
+          : (total ? `Δεν βρέθηκε ${BOARD_LABEL} — ${total} άλλη/ες online.` : 'Δεν βρέθηκαν συσκευές.');
+        toast(n ? `Βρέθηκαν ${n} S3` : (total ? 'Μόνο άλλες πλακέτες online' : 'Δεν βρέθηκαν συσκευές'));
       }, 10000);
     }
 

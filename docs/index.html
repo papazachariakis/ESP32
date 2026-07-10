@@ -33,7 +33,7 @@
 <body>
   <div class="wrap">
     <h1>⚡ ESP32 Energy Hub</h1>
-    <p class="sub">Επίλεξε πλακέτα — κάθε dashboard συνδέεται στο δικό του ESP32 μέσω MQTT (Device ID).</p>
+    <p class="sub">Επίλεξε πλακέτα — κάθε dashboard συνδέεται στο δικό του ESP32 μέσω MQTT (μοναδικό Device ID ανά MAC).</p>
     <div class="grid">
       <a class="card" href="esp32.html">
         <div class="icon">🔌</div>
@@ -49,7 +49,8 @@
       </a>
     </div>
     <footer>
-      MQTT broker: broker.hivemq.com:1883 (WebSocket) · Το Device ID βρίσκεται στο Serial Monitor ή Web UI κάθε συσκευής.<br>
+      MQTT broker: broker.hivemq.com:1883 (WebSocket) — <b>κοινός δημόσιος broker</b> για όλους.<br>
+      Κάθε ESP32 έχει μοναδικό Device ID (από MAC). Η σάρωση στο κάθε dashboard δείχνει μόνο τη σωστή πλακέτα (Classic ή S3).<br>
       Firmware: <code>firmware.bin</code> (ESP32) · <code>firmware-s3.bin</code> (S3)
     </footer>
   </div>

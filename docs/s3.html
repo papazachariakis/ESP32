@@ -1012,6 +1012,9 @@
         diagRow('Τελευταίο σφάλμα', gen.error
           ? `<span style="color:var(--bad)">${gen.error}</span>` : pill(gen.valid, '—', '—', '—')),
         diagRow('Controller', gen.controller_type || '—'),
+        diagRow('Op mode', (gen.op_mode_label_el || gen.op_mode_label || '—') + ' (' + (gen.op_mode ?? '—') + ')'),
+        diagRow('40300 start reg', gen.remote_start_reg ?? '—'),
+        diagRow('40302 estop reg', gen.network_shutdown_reg ?? '—'),
         diagRow('Pins firmware', gen.modbus_rx != null
           ? `RX=GPIO${gen.modbus_rx} TX=GPIO${gen.modbus_tx} DE=${gen.modbus_de < 0 ? 'off' : 'GPIO' + gen.modbus_de}`
           : 'RX=GPIO16 TX=GPIO17 DE=off')
@@ -1753,8 +1756,8 @@
           if (t.endsWith('/genset')) {
             msgStats.genset++;
             if (pendingGenCmd && j.last_cmd === pendingGenCmd) {
-              if (j.last_cmd_ok) toast(j.error || ('OK: ' + pendingGenCmd), j.error ? 7000 : 3000);
-              else toast('Αποτυχία ' + pendingGenCmd + ': ' + (j.error || '?'), 6000);
+              const msg = j.error || (j.last_cmd_ok ? ('OK: ' + pendingGenCmd) : ('Αποτυχία ' + pendingGenCmd));
+              toast(msg, j.last_cmd_ok && !j.error ? 4000 : 8000);
               pendingGenCmd = '';
             }
             renderGenset(j);

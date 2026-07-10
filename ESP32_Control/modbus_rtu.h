@@ -146,7 +146,10 @@ inline int modbusProbeRegister(
 inline bool modbusWriteSingle(
   HardwareSerial& ser, int dePin, uint8_t slave,
   uint16_t reg, uint16_t value,
-  uint32_t timeoutMs = 1200) {
+  uint32_t timeoutMs = 1200,
+  uint8_t* exceptionOut = nullptr) {
+  if (exceptionOut) *exceptionOut = 0;
+
   uint8_t req[8];
   req[0] = slave;
   req[1] = 0x06;
@@ -164,15 +167,31 @@ inline bool modbusWriteSingle(
   ser.flush();
   modbusSetTx(dePin, false);
   modbusPump();
-  delay(dePin < 0 ? 25 : 8);
+  delay(dePin < 0 ? 25 : 15);
 
-  uint8_t resp[8];
-  if (!modbusReadBytes(ser, resp, 8, timeoutMs)) return false;
-  if (resp[0] != slave || resp[1] != 0x06) return false;
-  uint16_t rxCrc = resp[6] | ((uint16_t)resp[7] << 8);
-  if (bmsCrcModbus(resp, 6) != rxCrc) return false;
-  uint16_t wReg = ((uint16_t)resp[2] << 8) | resp[3];
-  uint16_t wVal = ((uint16_t)resp[4] << 8) | resp[5];
+  uint8_t hdr[2];
+  if (!modbusReadBytes(ser, hdr, 2, timeoutMs)) return false;
+  if (hdr[0] != slave) return false;
+
+  if (hdr[1] == 0x86) {
+    uint8_t tail[3];
+    if (!modbusReadBytes(ser, tail, 3, timeoutMs)) return false;
+    if (exceptionOut) *exceptionOut = tail[0];
+    return false;
+  }
+  if (hdr[1] != 0x06) return false;
+
+  uint8_t rest[6];
+  if (!modbusReadBytes(ser, rest, 6, timeoutMs)) return false;
+
+  uint16_t rxCrc = rest[4] | ((uint16_t)rest[5] << 8);
+  uint8_t check[6];
+  check[0] = hdr[0];
+  check[1] = hdr[1];
+  memcpy(check + 2, rest, 4);
+  if (bmsCrcModbus(check, 6) != rxCrc) return false;
+  uint16_t wReg = ((uint16_t)rest[0] << 8) | rest[1];
+  uint16_t wVal = ((uint16_t)rest[2] << 8) | rest[3];
   return wReg == reg && wVal == value;
 }
 

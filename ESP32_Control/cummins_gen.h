@@ -96,6 +96,8 @@ struct GenData {
   String lastScan;
   String lastCmd;
   bool lastCmdOk = false;
+  uint16_t remoteStartReg = 0;
+  uint16_t networkShutdownReg = 0;
 };
 
 // PS0600 abnormal-state sentinels: unsigned 65531..65535, signed 32763..32767.
@@ -229,6 +231,8 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
     o["last_cmd"] = g.lastCmd;
     o["last_cmd_ok"] = g.lastCmdOk;
   }
+  o["remote_start_reg"] = g.remoteStartReg;
+  o["network_shutdown_reg"] = g.networkShutdownReg;
   if (g.lastUpdate) {
     o["last_update_ms"] = g.lastUpdate;
     o["age_sec"] = (millis() - g.lastUpdate) / 1000;
@@ -273,16 +277,74 @@ struct GenManager {
     return true;
   }
 
+  bool writeHold(uint16_t reg40001, uint16_t value, uint8_t* exceptionOut = nullptr) {
+    if (!bus) return false;
+    return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value,
+                             MODBUS_WRITE_TIMEOUT_MS, exceptionOut);
+  }
+
+  bool readCmdRegs() {
+    uint16_t c[3];
+    if (!readBlock(CUMMINS_CMD_START, 3, c)) return false;
+    data.remoteStartReg = c[0];
+    data.networkShutdownReg = c[2];
+    return true;
+  }
+
+  String writeError(uint16_t reg40001, uint8_t exc) const {
+    if (exc == 0) return "write " + String(reg40001) + " no response";
+    return "write " + String(reg40001) + " modbus exc " + String(exc);
+  }
+
   bool writeHoldRetry(uint16_t reg40001, uint16_t value, uint8_t tries = 3) {
+    uint8_t exc = 0;
     for (uint8_t i = 0; i < tries; i++) {
-      if (writeHold(reg40001, value)) return true;
-      modbusBusGap(40);
+      if (writeHold(reg40001, value, &exc)) return true;
+      modbusBusGap(50);
     }
+    data.lastError = writeError(reg40001, exc);
     return false;
   }
 
-  bool readHoldOne(uint16_t reg40001, uint16_t* out) {
-    return readBlock(reg40001, 1, out);
+  bool cmdStart() {
+    uint8_t exc = 0;
+    // Clear network shutdown / E-stop Modbus latch if active.
+    if (readCmdRegs() && data.networkShutdownReg) {
+      writeHold(CUMMINS_CMD_ESTOP, 0, &exc);
+      modbusBusGap(80);
+    }
+    if (data.activeFault > 0) cmdFaultReset();
+
+    if (!writeHold(CUMMINS_CMD_START, 0, &exc)) {
+      data.lastError = writeError(CUMMINS_CMD_START, exc);
+      return false;
+    }
+    modbusBusGap(100);
+
+    if (!writeHold(CUMMINS_CMD_START, 1, &exc)) {
+      data.lastError = writeError(CUMMINS_CMD_START, exc);
+      return false;
+    }
+    modbusBusGap(400);
+
+    // PS0600 keeps remote start Active while cranking — verify readback when readable.
+    if (readCmdRegs()) {
+      if (data.remoteStartReg != 1) {
+        data.lastError = "40300 readback=" + String(data.remoteStartReg) + " (expected 1)";
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool cmdStop() {
+    if (!writeHoldRetry(CUMMINS_CMD_START, 0)) return false;
+    modbusBusGap(200);
+    if (readCmdRegs() && data.remoteStartReg != 0) {
+      data.lastError = "40300 stop readback=" + String(data.remoteStartReg);
+      return false;
+    }
+    return true;
   }
 
   bool refreshStatusBlock() {
@@ -414,19 +476,24 @@ struct GenManager {
     return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, startReg, count, out, 2000);
   }
 
-  bool writeHold(uint16_t reg40001, uint16_t value) {
-    if (!bus) return false;
-    return modbusWriteSingle(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), value);
+  bool readHoldOne(uint16_t reg40001, uint16_t* out) {
+    return readBlock(reg40001, 1, out);
   }
 
-  bool cmdStart() { return writeHoldRetry(CUMMINS_CMD_START, 1); }
-  bool cmdStop() { return writeHoldRetry(CUMMINS_CMD_START, 0); }
   bool cmdFaultReset() {
-    if (!writeHold(CUMMINS_CMD_RESET, 1)) return false;
-    delay(80);
-    return writeHold(CUMMINS_CMD_RESET, 0);
+    uint8_t exc = 0;
+    if (!writeHold(CUMMINS_CMD_RESET, 1, &exc)) {
+      data.lastError = writeError(CUMMINS_CMD_RESET, exc);
+      return false;
+    }
+    modbusBusGap(80);
+    return writeHold(CUMMINS_CMD_RESET, 0, &exc);
   }
-  bool cmdEstop(bool active) { return writeHold(CUMMINS_CMD_ESTOP, active ? 1 : 0); }
+
+  bool cmdEstop(bool active) {
+    uint8_t exc = 0;
+    return writeHold(CUMMINS_CMD_ESTOP, active ? 1 : 0, &exc);
+  }
 
   bool runGensetCmd(const char* action) {
     data.lastCmd = action ? action : "";
@@ -438,18 +505,25 @@ struct GenManager {
 
     pollPaused = true;
     flushBus();
-    modbusBusGap(30);
+    modbusBusGap(50);
+    refreshStatusBlock();
+    readCmdRegs();
 
     bool ok = false;
     if (strcmp(action, "start") == 0) {
       ok = cmdStart();
-      if (!ok) data.lastError = "start write 40300 failed";
+      if (ok && data.opMode != 2)
+        data.lastError = "40300=1 OK — βάλε MANUAL στο panel για εκκίνηση";
+      else if (ok && data.gensetState == 1)
+        data.lastError = "40300=1 OK — κατάσταση Stop (περίμενε Precrank/Crank)";
+      else if (ok)
+        data.lastError = "start OK • reg40300=1 • " + String(cumminsStateLabelEl(data.gensetState));
     } else if (strcmp(action, "stop") == 0) {
       ok = cmdStop();
-      if (!ok) data.lastError = "stop write 40300 failed";
+      if (ok) data.lastError = "stop OK • reg40300=0";
     } else if (strcmp(action, "reset") == 0) {
       ok = cmdFaultReset();
-      if (!ok) data.lastError = "fault reset write 40301 failed";
+      if (!ok && data.lastError.length() == 0) data.lastError = "fault reset write 40301 failed";
     } else if (strcmp(action, "estop_on") == 0) {
       ok = cmdEstop(true);
       if (!ok) data.lastError = "estop write 40302 failed";
@@ -462,24 +536,10 @@ struct GenManager {
       return false;
     }
 
+    refreshStatusBlock();
+    readCmdRegs();
     data.lastCmdOk = ok;
-    if (ok) {
-      modbusBusGap(150);
-      uint16_t rb = 0;
-      if (readHoldOne(CUMMINS_CMD_START, &rb) && strcmp(action, "start") == 0) {
-        if (rb != 1) data.lastError = "start reg 40300 still inactive after write";
-      }
-      refreshStatusBlock();
-      if (strcmp(action, "start") == 0) {
-        if (data.opMode != 2)
-          data.lastError = "start sent — βάλε MANUAL στο panel (όχι Auto/Off)";
-        else if (data.lastError.length() == 0 || data.lastError.indexOf("still inactive") >= 0)
-          data.lastError = rb == 1 ? "start ενεργό στο Modbus" : data.lastError;
-      } else if (data.lastError.indexOf("failed") < 0) {
-        data.lastError = "";
-      }
-    }
-
+    publishPending = true;
     pollPaused = false;
     return ok;
   }
@@ -548,6 +608,7 @@ struct GenManager {
         uint16_t f[2];
         if (readBlock(CUMMINS_REG_NFPA_FAULT, 2, f))
           data.nfpaFault = ((uint32_t)f[0] << 16) | f[1];
+        readCmdRegs();
         pollStep = 2;
         modbusBusGap();
         return false;

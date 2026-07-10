@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include "modbus_rtu.h"
 
 #if __has_include("wifi_secrets.h")
 #include "wifi_secrets.h"
@@ -49,6 +50,7 @@ inline String wifiStoreCurrentSsid(Preferences& prefs) {
 inline bool wifiWaitConnected(uint32_t timeoutMs = 12000) {
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
+    modbusPump();
     delay(200);
   }
   return WiFi.status() == WL_CONNECTED;

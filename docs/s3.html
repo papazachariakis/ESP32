@@ -797,6 +797,12 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const BOARD_PAGE = 's3';
+    const MQTT_CMD_PW = 'esp32ota';
+
+    function pubCmd(obj) {
+      if (!client) return;
+      client.publish(cmdTopic, JSON.stringify(Object.assign({ password: MQTT_CMD_PW }, obj)));
+    }
     let client = null, scanClient = null, scanTimer = null, cmdTopic = '';
     let outputs = [], connected = false, lastStatus = {}, lastUpdate = 0;
     const foundDevices = new Map();
@@ -1391,7 +1397,7 @@
     function genCmd(action) {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Εντολή γεννήτριας: ' + action + ';')) return;
-      client.publish(cmdTopic, JSON.stringify({ genset: action }));
+      pubCmd({ genset: action });
       toast('Εντολή στάλθηκε: ' + action);
     }
 
@@ -1404,20 +1410,20 @@
         slave_id: +document.getElementById('cfgSlave').value,
         probe_reg: +document.getElementById('cfgProbe').value
       };
-      client.publish(cmdTopic, JSON.stringify({ modbus_cfg: cfg }));
+      pubCmd({ modbus_cfg: cfg });
       toast(`Modbus: baud ${cfg.baud}, ID ${cfg.slave_id} στάλθηκε`);
     }
 
     function scanModbus() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      client.publish(cmdTopic, JSON.stringify({ modbus_scan: 'esp32ota' }));
+      pubCmd({ modbus_scan: MQTT_CMD_PW });
       toast('Σάρωση baud/slave... (~10s)');
       document.getElementById('scanResult').textContent = 'Σάρωση σε εξέλιξη...';
     }
 
     function loopbackModbus() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      client.publish(cmdTopic, JSON.stringify({ modbus_loopback: true }));
+      pubCmd({ modbus_loopback: true });
       toast('Loopback test...');
       document.getElementById('scanResult').textContent = 'Loopback test σε εξέλιξη...';
     }
@@ -1485,7 +1491,7 @@
     function wifiScanRemote() {
       if (!client || !cmdTopic) { toast('Σύνδεση MQTT απαιτείται'); return; }
       document.getElementById('wifiNetList').innerHTML = '<div class="small muted">Σάρωση από ESP32...</div>';
-      client.publish(cmdTopic, JSON.stringify({ wifi_scan: true }));
+      pubCmd({ wifi_scan: true });
       toast('Εντολή σάρωσης WiFi στάλθηκε');
     }
 
@@ -1524,7 +1530,7 @@
       if (!client || !wifiPick) { toast('Διάλεξε δίκτυο'); return; }
       const pass = document.getElementById('wifiPickPass').value;
       if (!confirm(`Σύνδεση ESP32 στο WiFi "${wifiPick}";`)) return;
-      client.publish(cmdTopic, JSON.stringify({ wifi_connect: { ssid: wifiPick, pass } }));
+      pubCmd({ wifi_connect: { ssid: wifiPick, pass } });
       toast('Εντολή σύνδεσης — περίμενε ~20 δευτ');
       document.getElementById('wifiConnectBox').style.display = 'none';
     }
@@ -1534,7 +1540,7 @@
       document.getElementById('bleDevList').innerHTML = '<div class="small muted">Σάρωση BLE από ESP32... (~8s)</div>';
       document.getElementById('bleConnectBox').style.display = 'none';
       blePick = null;
-      client.publish(cmdTopic, JSON.stringify({ ble_scan: true }));
+      pubCmd({ ble_scan: true });
       toast('Εντολή σάρωσης BLE στάλθηκε');
     }
 
@@ -1572,9 +1578,9 @@
     function bleConnectRemote() {
       if (!client || !blePick) { toast('Διάλεξε BMS από τη λίστα'); return; }
       if (!confirm(`Σύνδεση ESP32 στο BMS "${blePick.name || blePick.mac}";`)) return;
-      client.publish(cmdTopic, JSON.stringify({
+      pubCmd({
         ble_connect: { mac: blePick.mac, name: blePick.name, type: blePick.type || 'auto' }
-      }));
+      });
       toast('Εντολή σύνδεσης BMS — περίμενε ~10 δευτ');
       document.getElementById('bleConnectBox').style.display = 'none';
     }
@@ -1582,7 +1588,7 @@
     function bleDisconnectRemote() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Αποσύνδεση BMS από το ESP32;')) return;
-      client.publish(cmdTopic, JSON.stringify({ ble_disconnect: true }));
+      pubCmd({ ble_disconnect: true });
       toast('Εντολή αποσύνδεσης BMS στάλθηκε');
     }
 
@@ -1765,10 +1771,10 @@
     }
 
     function setRelay(i, on) {
-      if (client) client.publish(cmdTopic, JSON.stringify({ relay: i, on }));
+      pubCmd({ relay: i, on });
     }
     function allOff() {
-      if (client) client.publish(cmdTopic, JSON.stringify({ relay: 'all', on: false }));
+      pubCmd({ relay: 'all', on: false });
       toast('Όλα OFF');
     }
 

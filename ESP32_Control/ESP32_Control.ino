@@ -43,6 +43,7 @@
 #include "wifi_store.h"
 #include "hub_reset.h"
 #include "ota.h"
+#include "mqtt_auth.h"
 #include "cummins_gen.h"
 
 
@@ -104,7 +105,18 @@ void startBleScan();
 
 void pumpNetwork() {
   server.handleClient();
-  // Web OTA upload handled in server routes
+  if (WiFi.status() == WL_CONNECTED && mqtt.connected()) mqtt.loop();
+}
+
+bool webBodyAuthorized() {
+  if (!server.hasArg("plain")) return false;
+  StaticJsonDocument<128> doc;
+  if (deserializeJson(doc, server.arg("plain"))) return false;
+  return webJsonPasswordOk(doc);
+}
+
+void webRejectAuth() {
+  server.send(403, "application/json", "{\"ok\":false,\"error\":\"bad password\"}");
 }
 
 
@@ -196,7 +208,7 @@ void publishBmsMqtt() {
 
 String buildStatusJson() {
 
-  StaticJsonDocument<6144> doc;
+  StaticJsonDocument<STATUS_JSON_CAPACITY> doc;
 
   doc["device_id"] = deviceId;
   doc["firmware"] = FIRMWARE_VERSION;
@@ -322,9 +334,9 @@ void publishStatus() {
 
 void publishWifiScan() {
   if (!mqtt.connected()) return;
-
+  pumpNetwork();
   int found = WiFi.scanNetworks(false, true);
-  StaticJsonDocument<2048> doc;
+  StaticJsonDocument<WIFI_SCAN_JSON_CAPACITY> doc;
   JsonArray nets = doc.createNestedArray("networks");
   for (int i = 0; i < found; i++) {
     String ssid = WiFi.SSID(i);
@@ -343,6 +355,7 @@ void publishWifiScan() {
   serializeJson(doc, out);
   mqtt.publish(topicWifi.c_str(), out.c_str(), false);
   WiFi.scanDelete();
+  pumpNetwork();
 }
 
 void publishWifiResult(bool ok, const char* errorMsg = nullptr) {
@@ -467,29 +480,26 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   if (deserializeJson(doc, payload, length)) return;
 
-
-
   if (doc.containsKey("relay")) {
-
-    if (doc["relay"] == "all") {
-
-      allRelaysOff();
-
-    } else {
-
-      int idx = doc["relay"].as<int>();
-
-      bool on = doc["on"] | false;
-
-      setRelay(idx, on);
-
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: relay rejected (bad password)");
+      return;
     }
-
+    if (doc["relay"] == "all") {
+      allRelaysOff();
+    } else {
+      int idx = doc["relay"].as<int>();
+      bool on = doc["on"] | false;
+      setRelay(idx, on);
+    }
     publishStatus();
-
   }
 
   if (doc.containsKey("genset")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: genset rejected (bad password)");
+      return;
+    }
     const char* action = doc["genset"];
     if (action && genMgr.runGensetCmd(action)) {
       genMgr.pollOnce();
@@ -499,6 +509,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (doc.containsKey("modbus_cfg")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: modbus_cfg rejected (bad password)");
+      return;
+    }
     JsonObject cfg = doc["modbus_cfg"];
     if (cfg.containsKey("enabled")) genMgr.enabled = cfg["enabled"].as<bool>();
     if (cfg.containsKey("slave_id")) genMgr.slaveId = (uint8_t)(cfg["slave_id"].as<int>());
@@ -520,68 +534,79 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (doc.containsKey("modbus_scan")) {
-    const char* pw = doc["modbus_scan"];
-    if (!pw || remoteOtaPasswordOk(pw) || doc["modbus_scan"].is<bool>()) {
-      Serial.println("MQTT: modbus scan requested");
-      gModbusScanPending = true;
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: modbus_scan rejected (bad password)");
+      return;
     }
+    Serial.println("MQTT: modbus scan requested");
+    gModbusScanPending = true;
   }
 
   if (doc.containsKey("modbus_loopback")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: modbus_loopback rejected (bad password)");
+      return;
+    }
     Serial.println("MQTT: modbus loopback requested");
     gModbusLoopbackPending = true;
   }
 
   if (doc.containsKey("reboot")) {
-    const char* pw = doc["reboot"];
-    if (remoteOtaPasswordOk(pw)) {
-      Serial.println("MQTT: reboot requested");
-      publishStatus();
-      delay(300);
-      ESP.restart();
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: reboot rejected (bad password)");
+      return;
     }
+    Serial.println("MQTT: reboot requested");
+    publishStatus();
+    delay(300);
+    ESP.restart();
   }
 
   if (doc.containsKey("ota")) {
-    const char* pw = doc["ota"];
-    if (remoteOtaPasswordOk(pw)) {
-      Serial.println("MQTT: remote OTA queued");
-      requestRemoteOta();
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: ota rejected (bad password)");
+      return;
     }
+    Serial.println("MQTT: remote OTA queued");
+    requestRemoteOta();
   }
 
   if (doc.containsKey("ota_http") && doc.containsKey("url")) {
-    const char* pw = doc["ota_http"];
+    if (!mqttDocAuthorized(doc)) return;
     const char* url = doc["url"];
-    if (remoteOtaPasswordOk(pw) && url) {
+    if (url) {
       Serial.println("MQTT: HTTP OTA queued");
       requestHttpOta(url);
     }
   }
 
   if (doc.containsKey("ota_mqtt")) {
-    const char* pw = doc["ota_mqtt"];
-    if (remoteOtaPasswordOk(pw)) {
-      int size = doc["size"] | 0;
-      Serial.printf("MQTT: chunk OTA begin %d\n", size);
-      mqttOtaBegin(size);
-    }
+    if (!mqttDocAuthorized(doc)) return;
+    int size = doc["size"] | 0;
+    Serial.printf("MQTT: chunk OTA begin %d\n", size);
+    mqttOtaBegin(size);
   }
 
   if (doc.containsKey("ota_end")) {
-    const char* pw = doc["ota_end"];
-    if (remoteOtaPasswordOk(pw)) {
-      Serial.println("MQTT: chunk OTA end");
-      mqttOtaFinish();
-    }
+    if (!mqttDocAuthorized(doc)) return;
+    Serial.println("MQTT: chunk OTA end");
+    mqttOtaFinish();
   }
 
   if (doc.containsKey("wifi_scan")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: wifi_scan rejected (bad password)");
+      return;
+    }
     Serial.println("MQTT: wifi scan requested");
     gWifiScanPending = true;
   }
 
   if (doc.containsKey("wifi_connect")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: wifi_connect rejected (bad password)");
+      return;
+    }
     JsonObject w = doc["wifi_connect"];
     const char* ssid = w["ssid"];
     if (ssid && ssid[0]) {
@@ -593,11 +618,19 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (doc.containsKey("ble_scan")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: ble_scan rejected (bad password)");
+      return;
+    }
     Serial.println("MQTT: ble scan requested");
     gBleScanPending = true;
   }
 
   if (doc.containsKey("ble_connect")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: ble_connect rejected (bad password)");
+      return;
+    }
     JsonObject b = doc["ble_connect"];
     const char* mac = b["mac"];
     if (mac && mac[0]) {
@@ -610,6 +643,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (doc.containsKey("ble_disconnect")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: ble_disconnect rejected (bad password)");
+      return;
+    }
     Serial.println("MQTT: ble disconnect requested");
     bmsMgr.disconnect(prefs);
     publishBmsMqtt();
@@ -618,23 +655,25 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (doc.containsKey("factory_reset")) {
-    const char* pw = doc["factory_reset"];
-    if (remoteOtaPasswordOk(pw)) {
-      Serial.println("MQTT: factory reset requested");
-      publishStatus();
-      delay(300);
-      performFactoryReset(prefs);
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: factory_reset rejected (bad password)");
+      return;
     }
+    Serial.println("MQTT: factory reset requested");
+    publishStatus();
+    delay(300);
+    performFactoryReset(prefs);
   }
 
   if (doc.containsKey("wifi_clear")) {
-    const char* pw = doc["wifi_clear"];
-    if (remoteOtaPasswordOk(pw)) {
-      Serial.println("MQTT: wifi clear requested");
-      publishStatus();
-      delay(300);
-      performWifiClear(prefs);
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: wifi_clear rejected (bad password)");
+      return;
     }
+    Serial.println("MQTT: wifi clear requested");
+    publishStatus();
+    delay(300);
+    performWifiClear(prefs);
   }
 
 }
@@ -649,7 +688,7 @@ bool mqttConnect() {
 
   mqtt.setCallback(mqttCallback);
 
-  mqtt.setBufferSize(8192);
+  mqtt.setBufferSize(10240);
 
 
 
@@ -760,7 +799,7 @@ void setupWiFi() {
 
 
 void startBleScan() {
-
+  pumpNetwork();
   BLEScan* scan = BLEDevice::getScan();
 
   scan->setActiveScan(true);
@@ -809,9 +848,8 @@ void startBleScan() {
   serializeJson(arr, bleScanJson);
 
   scan->clearResults();
-
+  pumpNetwork();
   Serial.println("BLE scan done");
-
 }
 
 
@@ -848,6 +886,8 @@ void handleRelay() {
 
   }
 
+  if (!webJsonPasswordOk(doc)) { webRejectAuth(); return; }
+
   setRelay(doc["index"] | 0, doc["on"] | false);
 
   publishStatus();
@@ -860,6 +900,8 @@ void handleRelay() {
 
 void handleAllOff() {
 
+  if (!webBodyAuthorized()) { webRejectAuth(); return; }
+
   allRelaysOff();
 
   publishStatus();
@@ -871,6 +913,8 @@ void handleAllOff() {
 
 
 void handleBleScan() {
+
+  if (!webBodyAuthorized()) { webRejectAuth(); return; }
 
   startBleScan();
 
@@ -893,6 +937,8 @@ void handleBleConnect() {
     server.send(400, "application/json", "{\"ok\":false,\"error\":\"bad json\"}");
     return;
   }
+
+  if (!webJsonPasswordOk(doc)) { webRejectAuth(); return; }
 
   String mac = doc["mac"] | "";
 
@@ -974,6 +1020,8 @@ void handleGensetCmd() {
 
   }
 
+  if (!webJsonPasswordOk(doc)) { webRejectAuth(); return; }
+
   const char* action = doc["action"];
 
   if (!action || !genMgr.runGensetCmd(action)) {
@@ -1016,6 +1064,8 @@ void handleModbusSave() {
 
   }
 
+  if (!webJsonPasswordOk(doc)) { webRejectAuth(); return; }
+
   genMgr.enabled = doc["enabled"] | true;
 
   genMgr.slaveId = (uint8_t)(doc["slave_id"] | 1);
@@ -1047,6 +1097,7 @@ void handleModbusSave() {
 
 
 void handleModbusScan() {
+  if (!webBodyAuthorized()) { webRejectAuth(); return; }
   bool found = genMgr.scanBus(1, 8);
   if (found) {
     genMgr.enabled = true;
@@ -1066,6 +1117,7 @@ void handleModbusScan() {
 
 
 void handleModbusLoopback() {
+  if (!webBodyAuthorized()) { webRejectAuth(); return; }
   String r = genMgr.loopbackTest();
   genMgr.applyBaud();
   StaticJsonDocument<160> doc;
@@ -1079,6 +1131,8 @@ void handleModbusLoopback() {
 
 
 void handleBleDisconnect() {
+
+  if (!webBodyAuthorized()) { webRejectAuth(); return; }
 
   bmsMgr.disconnect(prefs);
 
@@ -1167,7 +1221,7 @@ void setupRoutes() {
 
   server.on("/api/relay/alloff", HTTP_POST, handleAllOff);
 
-  server.on("/api/ble/scan", HTTP_GET, handleBleScan);
+  server.on("/api/ble/scan", HTTP_POST, handleBleScan);
 
   server.on("/api/ble/connect", HTTP_POST, handleBleConnect);
 

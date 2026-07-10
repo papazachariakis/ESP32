@@ -17,7 +17,18 @@
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
 
-#define FIRMWARE_VERSION "3.0.4"
+// Default WiFi SSIDs (passwords in wifi_secrets.h — gitignored)
+#define WIFI_DEFAULT_SSID_PRIMARY   "mikrotik"
+#define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
+#define WIFI_DEFAULT_SEED_COUNT 2
+
+#define FIRMWARE_VERSION "3.0.5"
+
+// Shared password for OTA, MQTT remote commands, and protected HTTP APIs
+#define DEVICE_CMD_PASSWORD "esp32ota"
+
+#define STATUS_JSON_CAPACITY 8192
+#define WIFI_SCAN_JSON_CAPACITY 4096
 
 // Fresh install defaults (factory / first boot)
 #define MODBUS_DEFAULT_ENABLED true
@@ -30,7 +41,7 @@
 #define MQTT_PUBLISH_INTERVAL_MS 2000
 #define MQTT_BMS_PUBLISH_INTERVAL_MS 2000
 
-#define BLE_SCAN_SECONDS 8
+#define BLE_SCAN_SECONDS 5
 #define BLE_RECONNECT_MS 2000
 #define BLE_POLL_MS 5000
 #define BLE_NOTIFY_KICK_MS 8000

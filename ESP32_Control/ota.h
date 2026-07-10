@@ -6,9 +6,10 @@
 #include <Update.h>
 #include <WiFiClientSecure.h>
 #include "mbedtls/base64.h"
+#include "config.h"
 
 #ifndef OTA_PASSWORD
-#define OTA_PASSWORD "esp32ota"
+#define OTA_PASSWORD DEVICE_CMD_PASSWORD
 #endif
 
 #ifndef OTA_REMOTE_HOST
@@ -150,9 +151,12 @@ inline void setupArduinoOta() {
 
 inline void handleOtaUpload(WebServer& server) {
   static bool headerChecked = false;
+  static uint8_t headerBuf[16];
+  static size_t headerLen = 0;
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
     headerChecked = false;
+    headerLen = 0;
     otaInProgress() = true;
     Serial.printf("Web OTA: %s (expect %s)\n", upload.filename.c_str(), OTA_FIRMWARE_FILE);
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
@@ -161,13 +165,21 @@ inline void handleOtaUpload(WebServer& server) {
     }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (!headerChecked) {
-      if (!otaValidateFirmwareHeader(upload.buf, upload.currentSize)) {
-        Serial.printf("Web OTA rejected: chip_id=%u expected=%u\n",
-                      upload.currentSize >= 13 ? upload.buf[12] : 255, otaExpectedChipId());
-        otaAbortWrongImage("upload");
-        return;
+      size_t room = sizeof(headerBuf) - headerLen;
+      size_t n = upload.currentSize < room ? upload.currentSize : room;
+      if (n > 0) {
+        memcpy(headerBuf + headerLen, upload.buf, n);
+        headerLen += n;
       }
-      headerChecked = true;
+      if (headerLen >= 13) {
+        if (!otaValidateFirmwareHeader(headerBuf, headerLen)) {
+          Serial.printf("Web OTA rejected: chip_id=%u expected=%u\n",
+                        headerBuf[12], otaExpectedChipId());
+          otaAbortWrongImage("upload");
+          return;
+        }
+        headerChecked = true;
+      }
     }
     if (upload.totalSize > 1966080) {
       Update.abort();
@@ -180,6 +192,7 @@ inline void handleOtaUpload(WebServer& server) {
   } else if (upload.status == UPLOAD_FILE_END) {
     otaInProgress() = false;
     headerChecked = false;
+    headerLen = 0;
     if (upload.totalSize < 500000 || upload.totalSize > 1966080) {
       Update.abort();
     } else if (Update.end(true)) {
@@ -190,6 +203,7 @@ inline void handleOtaUpload(WebServer& server) {
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     otaInProgress() = false;
     headerChecked = false;
+    headerLen = 0;
     Update.abort();
   }
 }

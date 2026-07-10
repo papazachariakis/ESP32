@@ -117,6 +117,8 @@ pre{white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background
 
 <script>
 var E=function(i){return document.getElementById(i)};
+var API_PW='esp32ota';
+function auth(o){o.password=API_PW;return o}
 function j(u,o){return fetch(u,o).then(function(r){return r.json()})}
 function msg(id,txt,cls){var m=E(id);m.textContent=txt;m.className='msg show '+cls}
 function f(x,d){return (x!=null&&isFinite(x))?Number(x).toFixed(d):'—'}
@@ -168,30 +170,30 @@ function go(){
  }).catch(function(){E('dot').className='dot';E('hdr').textContent='offline'})
 }
 function saveM(){
- j('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:E('me').value==='1',profile:E('mp').value,slave_id:+E('msid').value,baud:+E('mbaud').value,probe_reg:+E('mreg').value})})
+ j('/api/modbus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({enabled:E('me').value==='1',profile:E('mp').value,slave_id:+E('msid').value,baud:+E('mbaud').value,probe_reg:+E('mreg').value}))})
  .then(function(){msg('mMsg','Αποθηκεύτηκε','ok');go()});
 }
 function scanM(){
  msg('mMsg','Σάρωση baud/slave... (~10s)','info');
- j('/api/modbus/scan',{method:'POST'}).then(function(r){
+ j('/api/modbus/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({}))}).then(function(r){
   msg('mMsg',(r.ok?'✓ ':'✗ ')+(r.result||''),r.ok?'ok':'bad');go();
  }).catch(function(){msg('mMsg','Σφάλμα σάρωσης','bad')});
 }
 function loopM(){
  msg('mMsg','Loopback test...','info');
- j('/api/modbus/loopback',{method:'POST'}).then(function(r){
+ j('/api/modbus/loopback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({}))}).then(function(r){
   msg('mMsg',(r.ok?'✓ ':'✗ ')+(r.result||''),r.ok?'ok':'bad');
  }).catch(function(){msg('mMsg','Σφάλμα loopback','bad')});
 }
-function setR(i,on){j('/api/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({index:i,on:on})}).then(go)}
+function setR(i,on){j('/api/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({index:i,on:on}))}).then(go)}
 function bleScan(){E('ble').innerHTML='<small>scan...</small>';
- j('/api/ble/scan').then(function(r){
+ j('/api/ble/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({}))}).then(function(r){
   E('ble').innerHTML=(r.devices||[]).map(function(d){
    return '<div class="dev" onclick="bleConn(\''+d.mac+'\',\''+(d.name||'')+'\',\''+(d.bms_type||'auto')+'\')">'+(d.name||'(no name)')+' <small>'+(d.bms_label||d.bms_type||'?')+' · '+d.mac+' '+(d.rssi||'')+'</small></div>'
   }).join('')||'<small>Καμία συσκευή</small>';
  })}
-function bleConn(mac,name,type){j('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mac:mac,name:name,type:type||'auto'})}).then(go)}
-function bleDisc(){if(confirm('Διαγραφή αποθηκευμένου BMS;'))j('/api/ble/disconnect',{method:'POST'}).then(go)}
+function bleConn(mac,name,type){j('/api/ble/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({mac:mac,name:name,type:type||'auto'}))}).then(go)}
+function bleDisc(){if(confirm('Διαγραφή αποθηκευμένου BMS;'))j('/api/ble/disconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(auth({}))}).then(go)}
 function ota(){var fl=E('bin').files[0];if(!fl){msg('oMsg','Διάλεξε .bin','bad');return}
  msg('oMsg','Ανέβασμα...','info');var fd=new FormData();fd.append('firmware',fl);
  fetch('/api/ota',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(){msg('oMsg','OK - reboot','ok')}).catch(function(){msg('oMsg','Σφάλμα','bad')});

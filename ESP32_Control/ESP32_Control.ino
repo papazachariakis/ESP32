@@ -501,11 +501,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       return;
     }
     const char* action = doc["genset"];
-    if (action && genMgr.runGensetCmd(action)) {
-      genMgr.pollOnce();
-      publishGensetMqtt();
-      publishStatus();
+    bool ok = action && genMgr.runGensetCmd(action);
+    if (!ok) {
+      Serial.printf("MQTT: genset cmd '%s' failed: %s\n",
+                    action ? action : "?", genMgr.data.lastError.c_str());
+    } else {
+      Serial.printf("MQTT: genset cmd '%s' ok\n", action);
     }
+    genMgr.pollOnce();
+    publishGensetMqtt();
+    publishStatus();
   }
 
   if (doc.containsKey("modbus_cfg")) {

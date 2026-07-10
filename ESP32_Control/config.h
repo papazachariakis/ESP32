@@ -22,7 +22,7 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.5"
+#define FIRMWARE_VERSION "3.0.6"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -50,4 +50,4 @@
 #define BLE_SESSION_REFRESH_MS 0
 #define BLE_WRITE_RETRY 2
 
-#define MODBUS_POLL_INTERVAL_MS 3000
+#define MODBUS_POLL_INTERVAL_MS 1500

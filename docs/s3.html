@@ -1248,12 +1248,14 @@
 
     function renderGenset(g) {
       const valid = g && g.valid;
+      const stale = g && !valid && Number(g.age_sec) < 90 && g.genset_state != null;
+      const show = valid || stale;
       const box = document.getElementById('genStatusBox');
       const isEntes = g && String(g.profile || '').includes('ENTES');
 
       syncModbusCfg(g);
 
-      if (!valid) {
+      if (!show) {
         document.getElementById('genState').textContent = g && g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων...';
         document.getElementById('genMode').textContent = '—';
         box.className = 'gen-hero off';
@@ -1299,6 +1301,7 @@
       box.className = 'gen-hero ' + (running ? 'run' : warn ? 'warn' : 'off');
 
       const chips = [];
+      if (stale) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
       if (running) chips.push({ t: 'ΛΕΙΤΟΥΡΓΕΙ', cls: 'ok' });
       else if (crank) chips.push({ t: 'CRANK', cls: 'warn' });
       else chips.push({ t: state.toUpperCase(), cls: '' });
@@ -1394,9 +1397,12 @@
       if (j.ota_error) toast('OTA σφάλμα: ' + j.ota_error, 5000);
     }
 
+    let pendingGenCmd = '';
+
     function genCmd(action) {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Εντολή γεννήτριας: ' + action + ';')) return;
+      pendingGenCmd = action;
       pubCmd({ genset: action });
       toast('Εντολή στάλθηκε: ' + action);
     }
@@ -1742,6 +1748,11 @@
           }
           if (t.endsWith('/genset')) {
             msgStats.genset++;
+            if (pendingGenCmd && j.last_cmd === pendingGenCmd) {
+              if (j.last_cmd_ok) toast(j.error || ('OK: ' + pendingGenCmd), j.error ? 7000 : 3000);
+              else toast('Αποτυχία ' + pendingGenCmd + ': ' + (j.error || '?'), 6000);
+              pendingGenCmd = '';
+            }
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
           }

@@ -93,6 +93,8 @@ struct GenData {
   float runtimeHours = 0;
   String lastError;
   String lastScan;
+  String lastCmd;
+  bool lastCmdOk = false;
 };
 
 // PS0600 abnormal-state sentinels: unsigned 65531..65535, signed 32763..32767.
@@ -221,6 +223,14 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["runtime_hours"] = g.runtimeHours;
   if (g.lastError.length()) o["error"] = g.lastError;
   if (g.lastScan.length()) o["scan_result"] = g.lastScan;
+  if (g.lastCmd.length()) {
+    o["last_cmd"] = g.lastCmd;
+    o["last_cmd_ok"] = g.lastCmdOk;
+  }
+  if (g.lastUpdate) {
+    o["last_update_ms"] = g.lastUpdate;
+    o["age_sec"] = (millis() - g.lastUpdate) / 1000;
+  }
 }
 
 struct GenManager {
@@ -234,6 +244,21 @@ struct GenManager {
   unsigned long lastPoll = 0;
   uint16_t pollIntervalMs = 3000;
   uint8_t pollStep = 0;
+  uint8_t pollFailStreak = 0;
+  static const uint8_t kPollStepsPerLoop = 4;
+
+  bool refreshStatusBlock() {
+    uint16_t a[5];
+    if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) return false;
+    data.controllerType = (uint8_t)a[0];
+    data.opMode = (uint8_t)a[1];
+    data.gensetState = (uint8_t)a[2];
+    data.activeFault = a[3];
+    data.faultType = (uint8_t)a[4];
+    data.lastUpdate = millis();
+    data.valid = true;
+    return true;
+  }
 
   void load(Preferences& prefs) {
     enabled = prefs.getBool("modbus_en", MODBUS_DEFAULT_ENABLED);
@@ -356,17 +381,50 @@ struct GenManager {
 
   bool cmdStart() { return writeHold(CUMMINS_CMD_START, 1); }
   bool cmdStop() { return writeHold(CUMMINS_CMD_START, 0); }
-  bool cmdFaultReset() { return writeHold(CUMMINS_CMD_RESET, 1); }
+  bool cmdFaultReset() {
+    if (!writeHold(CUMMINS_CMD_RESET, 1)) return false;
+    delay(80);
+    return writeHold(CUMMINS_CMD_RESET, 0);
+  }
   bool cmdEstop(bool active) { return writeHold(CUMMINS_CMD_ESTOP, active ? 1 : 0); }
 
   bool runGensetCmd(const char* action) {
-    if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) return false;
-    if (strcmp(action, "start") == 0) return cmdStart();
-    if (strcmp(action, "stop") == 0) return cmdStop();
-    if (strcmp(action, "reset") == 0) return cmdFaultReset();
-    if (strcmp(action, "estop_on") == 0) return cmdEstop(true);
-    if (strcmp(action, "estop_off") == 0) return cmdEstop(false);
-    return false;
+    data.lastCmd = action ? action : "";
+    data.lastCmdOk = false;
+    if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) {
+      data.lastError = "genset cmd unavailable (enable PS0600 profile)";
+      return false;
+    }
+    bool ok = false;
+    if (strcmp(action, "start") == 0) {
+      ok = cmdStart();
+      if (!ok) data.lastError = "start write 40300 failed";
+    } else if (strcmp(action, "stop") == 0) {
+      ok = cmdStop();
+      if (!ok) data.lastError = "stop write 40300 failed";
+    } else if (strcmp(action, "reset") == 0) {
+      ok = cmdFaultReset();
+      if (!ok) data.lastError = "fault reset write 40301 failed";
+    } else if (strcmp(action, "estop_on") == 0) {
+      ok = cmdEstop(true);
+      if (!ok) data.lastError = "estop write 40302 failed";
+    } else if (strcmp(action, "estop_off") == 0) {
+      ok = cmdEstop(false);
+      if (!ok) data.lastError = "estop release write 40302 failed";
+    } else {
+      data.lastError = "unknown genset cmd";
+      return false;
+    }
+    data.lastCmdOk = ok;
+    if (ok) {
+      delay(120);
+      refreshStatusBlock();
+      if (strcmp(action, "start") == 0 && data.opMode != 2)
+        data.lastError = "start sent — switch panel must be MANUAL for Modbus start";
+      else
+        data.lastError = "";
+    }
+    return ok;
   }
 
   void pollReset() { pollStep = 0; }
@@ -412,8 +470,10 @@ struct GenManager {
         if (!readBlock(CUMMINS_REG_CONTROLLER, 5, a)) {
           data.lastError = "modbus 40009 - check TX/RX crossover (TX2→RXD, RX2→TXD) and RS485";
           pollStep = 0;
+          if (++pollFailStreak >= 3) data.valid = false;
           return false;
         }
+        pollFailStreak = 0;
         data.controllerType = (uint8_t)a[0];
         data.opMode = (uint8_t)a[1];
         data.gensetState = (uint8_t)a[2];
@@ -425,8 +485,8 @@ struct GenManager {
       case 1: {
         uint16_t f[2];
         if (!readBlock(CUMMINS_REG_NFPA_FAULT, 2, f)) {
-          data.lastError = "modbus 40016";
-          pollStep = 0;
+          data.lastError = "modbus 40016 (optional, skipped)";
+          pollStep = 2;
           return false;
         }
         data.nfpaFault = ((uint32_t)f[0] << 16) | f[1];
@@ -437,7 +497,7 @@ struct GenManager {
         uint16_t v[3];
         if (!readBlock(CUMMINS_REG_VOLT_L1N, 3, v)) {
           data.lastError = "modbus 40018";
-          pollStep = 0;
+          pollStep = 3;
           return false;
         }
         data.voltL1N = cumminsNaU(v[0]) ? 0 : (float)v[0];
@@ -450,7 +510,7 @@ struct GenManager {
         uint16_t ll[3];
         if (!readBlock(CUMMINS_REG_VOLT_L1L2, 3, ll)) {
           data.lastError = "modbus 40022";
-          pollStep = 0;
+          pollStep = 4;
           return false;
         }
         data.voltL1L2 = cumminsNaU(ll[0]) ? 0 : (float)ll[0];
@@ -463,7 +523,7 @@ struct GenManager {
         uint16_t c[3];
         if (!readBlock(CUMMINS_REG_CURR_L1, 3, c)) {
           data.lastError = "modbus 40026";
-          pollStep = 0;
+          pollStep = 5;
           return false;
         }
         data.currL1 = cumminsNaU(c[0]) ? 0 : (float)c[0];
@@ -478,7 +538,7 @@ struct GenManager {
         uint16_t k[4];
         if (!readBlock(CUMMINS_REG_KW_L1, 4, k)) {
           data.lastError = "modbus 40031";
-          pollStep = 0;
+          pollStep = 6;
           return false;
         }
         data.kwL1 = cumminsNaS((int16_t)k[0]) ? 0 : (int16_t)k[0];
@@ -492,7 +552,7 @@ struct GenManager {
         uint16_t p[5];
         if (!readBlock(CUMMINS_REG_KVA_L1, 5, p)) {
           data.lastError = "modbus 40040";
-          pollStep = 0;
+          pollStep = 7;
           return false;
         }
         data.kvaL1 = cumminsNaU(p[0]) ? 0 : (float)p[0];
@@ -507,7 +567,7 @@ struct GenManager {
         uint16_t l[3];
         if (!readBlock(CUMMINS_REG_LOAD_L1, 3, l)) {
           data.lastError = "modbus 40058";
-          pollStep = 0;
+          pollStep = 8;
           return false;
         }
         data.loadL1Pct = cumminsNaU(l[0]) ? 0 : l[0] * 0.1f;
@@ -520,7 +580,7 @@ struct GenManager {
         uint16_t e[2];
         if (!readBlock(CUMMINS_REG_BATTERY_V, 2, e)) {
           data.lastError = "modbus 40061";
-          pollStep = 0;
+          pollStep = 9;
           return false;
         }
         data.batteryV = cumminsNaU(e[0]) ? 0 : e[0] * 0.001f;
@@ -533,7 +593,7 @@ struct GenManager {
         uint16_t t[1];
         if (!readBlock(CUMMINS_REG_COOLANT_F, 1, t)) {
           data.lastError = "modbus 40064";
-          pollStep = 0;
+          pollStep = 10;
           return false;
         }
         // Coolant register is degF x0.1 (int16); convert to degC.
@@ -558,6 +618,7 @@ struct GenManager {
         data.valid = true;
         data.lastUpdate = millis();
         data.lastError = "";
+        pollFailStreak = 0;
         pollStep = 0;
         return true;
       }
@@ -569,11 +630,10 @@ struct GenManager {
 
   bool pollOnce() {
     pollReset();
-    data.valid = false;
     if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
-    for (uint8_t i = 0; i < 20; i++) {
+    for (uint8_t i = 0; i < 24; i++) {
       if (pollStepOnce()) return true;
-      if (pollStep == 0 && i < 19) return false;
+      modbusPump();
     }
     return data.valid;
   }
@@ -587,10 +647,17 @@ struct GenManager {
       return;
     }
     if (pollStep == 0 && millis() - lastPoll < pollIntervalMs) return;
-    if (pollStep == 0) {
-      data.valid = false;
-      lastPoll = millis();
+    if (pollStep == 0) lastPoll = millis();
+
+    for (uint8_t n = 0; n < kPollStepsPerLoop; n++) {
+      if (pollStepOnce()) break;
+      modbusPump();
+      if (pollStep == 0 && pollFailStreak > 0) break;
     }
-    pollStepOnce();
+
+    if (data.valid && data.lastUpdate && millis() - data.lastUpdate > 45000) {
+      data.valid = false;
+      data.lastError = "modbus timeout";
+    }
   }
 };

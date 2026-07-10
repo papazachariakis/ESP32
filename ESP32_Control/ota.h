@@ -19,6 +19,14 @@
 #define OTA_REMOTE_PATH "/papazachariakis/ESP32/master/docs/firmware.bin"
 #endif
 
+#ifndef OTA_FIRMWARE_FILE
+#define OTA_FIRMWARE_FILE "firmware.bin"
+#endif
+
+#ifndef OTA_CDN_PREFIX
+#define OTA_CDN_PREFIX "/gh/papazachariakis/ESP32@master/docs/"
+#endif
+
 typedef void (*OtaHookFn)();
 
 inline OtaHookFn& otaPrepHook() {
@@ -107,20 +115,60 @@ inline bool remoteOtaPasswordOk(const char* pw) {
   return pw && strcmp(pw, OTA_PASSWORD) == 0;
 }
 
+inline uint8_t otaExpectedChipId() {
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
+  return 9;  // ESP_CHIP_ID_ESP32S3
+#else
+  return 0;  // ESP_CHIP_ID_ESP32
+#endif
+}
+
+inline bool otaValidateFirmwareHeader(const uint8_t* data, size_t len) {
+  if (len < 13) return false;
+  if (data[0] != 0xE9) return false;
+  return data[12] == otaExpectedChipId();
+}
+
+inline bool otaSourceAllowsFirmwareFile(const char* pathOrUrl) {
+  if (!pathOrUrl || !pathOrUrl[0]) return false;
+  return strstr(pathOrUrl, OTA_FIRMWARE_FILE) != nullptr;
+}
+
+inline bool otaAbortWrongImage(const char* phase) {
+  Update.abort();
+  otaInProgress() = false;
+  mqttOtaActive() = false;
+  mqttOtaExpected() = 0;
+  mqttOtaReceived() = 0;
+  otaSetError(phase, "wrong firmware image for this board");
+  return false;
+}
+
 inline void setupArduinoOta() {
   Serial.println("OTA: web /api/ota + MQTT remote/https/http/chunks");
 }
 
 inline void handleOtaUpload(WebServer& server) {
+  static bool headerChecked = false;
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
+    headerChecked = false;
     otaInProgress() = true;
-    Serial.printf("Web OTA: %s\n", upload.filename.c_str());
+    Serial.printf("Web OTA: %s (expect %s)\n", upload.filename.c_str(), OTA_FIRMWARE_FILE);
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
       Update.printError(Serial);
       otaInProgress() = false;
     }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!headerChecked) {
+      if (!otaValidateFirmwareHeader(upload.buf, upload.currentSize)) {
+        Serial.printf("Web OTA rejected: chip_id=%u expected=%u\n",
+                      upload.currentSize >= 13 ? upload.buf[12] : 255, otaExpectedChipId());
+        otaAbortWrongImage("upload");
+        return;
+      }
+      headerChecked = true;
+    }
     if (upload.totalSize > 1966080) {
       Update.abort();
       otaInProgress() = false;
@@ -131,6 +179,7 @@ inline void handleOtaUpload(WebServer& server) {
     }
   } else if (upload.status == UPLOAD_FILE_END) {
     otaInProgress() = false;
+    headerChecked = false;
     if (upload.totalSize < 500000 || upload.totalSize > 1966080) {
       Update.abort();
     } else if (Update.end(true)) {
@@ -140,6 +189,7 @@ inline void handleOtaUpload(WebServer& server) {
     }
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     otaInProgress() = false;
+    headerChecked = false;
     Update.abort();
   }
 }
@@ -195,14 +245,38 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     otaSetError("download", "bad firmware size");
     return false;
   }
+
+  uint8_t header[16];
+  int hdrRead = 0;
+  unsigned long hdrStart = millis();
+  while (hdrRead < 16 && millis() - hdrStart < 30000) {
+    int avail = client.available();
+    if (avail <= 0) {
+      if (!client.connected()) break;
+      delay(5);
+      yield();
+      continue;
+    }
+    int n = client.read(header + hdrRead, avail < (16 - hdrRead) ? avail : (16 - hdrRead));
+    if (n > 0) hdrRead += n;
+  }
+  if (hdrRead < 13 || !otaValidateFirmwareHeader(header, hdrRead)) {
+    otaSetError("download", "wrong firmware image for this board");
+    return false;
+  }
+
   if (!Update.begin(contentLen)) {
     Update.printError(Serial);
     otaSetError("download", "Update.begin failed");
     return false;
   }
+  if (Update.write(header, hdrRead) != (size_t)hdrRead) {
+    otaSetError("download", "write failed");
+    return false;
+  }
 
   uint8_t buf[1024];
-  int total = 0;
+  int total = hdrRead;
   unsigned long lastData = millis();
   while (total < contentLen && millis() - lastData < 180000) {
     int avail = client.available();
@@ -331,6 +405,10 @@ inline bool otaParseHttpUrl(const char* url, String& host, String& path, uint16_
 }
 
 inline bool performHttpOta(const char* url) {
+  if (!otaSourceAllowsFirmwareFile(url)) {
+    otaSetError("http", "URL must point to " OTA_FIRMWARE_FILE);
+    return false;
+  }
   String host, path;
   uint16_t port = 80;
   if (!otaParseHttpUrl(url, host, path, port)) {
@@ -352,11 +430,13 @@ inline bool performRemoteOta() {
   otaInProgress() = true;
   otaPrepareFlash();
 
+  Serial.printf("Remote OTA: board expects %s\n", OTA_FIRMWARE_FILE);
   if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH, true)) {
     otaInProgress() = false;
     return true;
   }
-  if (performRemoteOtaFromHost("cdn.jsdelivr.net", "/gh/papazachariakis/ESP32@master/docs/firmware.bin", true)) {
+  String cdnPath = String(OTA_CDN_PREFIX) + OTA_FIRMWARE_FILE;
+  if (performRemoteOtaFromHost("cdn.jsdelivr.net", cdnPath.c_str(), true)) {
     otaInProgress() = false;
     return true;
   }
@@ -411,6 +491,12 @@ inline void mqttOtaAbort(const char* why) {
 
 inline bool mqttOtaFeedChunk(const uint8_t* data, size_t len) {
   if (!mqttOtaActive() || len == 0) return false;
+  if (mqttOtaReceived() == 0) {
+    if (len < 13 || !otaValidateFirmwareHeader(data, len)) {
+      mqttOtaAbort("wrong firmware image for this board");
+      return false;
+    }
+  }
   if (mqttOtaReceived() + (int)len > mqttOtaExpected()) {
     mqttOtaAbort("overflow");
     return false;

@@ -730,6 +730,7 @@
     const LS = { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
+    const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const BOARD_PAGE = 's3';
     let client = null, scanClient = null, scanTimer = null, cmdTopic = '';
     let outputs = [], connected = false, lastStatus = {}, lastUpdate = 0;
@@ -1365,11 +1366,17 @@
 
     function remoteOta() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const s = lastStatus || {};
+      if (s.board && s.board !== BOARD_EXPECT) {
+        toast('Λάθος συσκευή — χρησιμοποίησε το σωστό dashboard (S3 vs Classic)', 6000);
+        return;
+      }
+      const fw = s.ota_firmware_file || OTA_FIRMWARE_FILE;
       const pw = prompt('Κωδικός OTA:', 'esp32ota');
       if (!pw) return;
-      if (!confirm('Απομακρυσμένη ενημέρωση firmware;\nReboot ~2 λεπτά.')) return;
+      if (!confirm(`Απομακρυσμένη OTA: ${fw}\nΜόνο για ${BOARD_LABEL}.\nReboot ~2 λεπτά.`)) return;
       client.publish(cmdTopic, JSON.stringify({ ota: pw }));
-      toast('OTA εντολή στάλθηκε — περίμενε ~2 λεπτά');
+      toast(`OTA ${fw} — περίμενε ~2 λεπτά`);
       closeDrawer();
     }
 

@@ -203,6 +203,9 @@ String buildStatusJson() {
   doc["board"] = BOARD_ID;
   doc["board_label"] = BOARD_LABEL;
 
+  doc["ota_firmware_file"] = OTA_FIRMWARE_FILE;
+  doc["ota_remote_path"] = OTA_REMOTE_PATH;
+
   doc["ip"] = WiFi.localIP().toString();
 
   doc["wifi_ssid"] = WiFi.SSID();

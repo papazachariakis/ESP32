@@ -12,3 +12,6 @@ static const char* RELAY_LABELS[RELAY_COUNT] = { "LED / D2", "Relay D4", "Relay 
 #define MODBUS_RX_PIN 16
 #define MODBUS_TX_PIN 17
 #define MODBUS_DE_PIN -1
+
+#define OTA_FIRMWARE_FILE "firmware.bin"
+#define OTA_REMOTE_PATH "/papazachariakis/ESP32/master/docs/firmware.bin"

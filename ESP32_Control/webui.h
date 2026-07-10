@@ -110,7 +110,7 @@ pre{white-space:pre-wrap;font-size:11px;max-height:40vh;overflow:auto;background
 <input type="file" id="bin" accept=".bin">
 <button onclick="ota()">Ανέβασμα .bin</button>
 <div id="oMsg" class="msg"></div>
-<small>Ή απομακρυσμένα από GitHub Pages dashboard.</small>
+<small>Μόνο <b>firmware.bin</b> (Classic) ή <b>firmware-s3.bin</b> (S3) — το ESP32 απορρίπτει λάθος πλακέτα.</small>
 </div>
 
 <details><summary>Πλήρες JSON κατάστασης</summary><pre id="raw">...</pre></details>

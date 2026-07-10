@@ -349,11 +349,17 @@
     }
     @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-    pre.alarms{
+    pre.alarms,.alarms{
       background:var(--surface2);padding:12px;border-radius:10px;
-      font-size:.75rem;white-space:pre-wrap;max-height:160px;overflow:auto;
+      font-size:.75rem;white-space:pre-wrap;max-height:220px;overflow:auto;
       border:1px solid var(--border);color:var(--muted);
     }
+    .alarm-group{margin-bottom:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,.15)}
+    .alarm-group.bad{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.08)}
+    .alarm-group.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
+    .alarm-title{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+    .alarm-group ul{margin:0;padding-left:18px;font-size:.82rem;line-height:1.45;color:var(--text)}
+    .alarm-group li{margin:2px 0}
     .fault-list{margin:0;padding-left:18px;font-size:.78rem;color:#fca5a5}
     .fault-list li{margin:4px 0}
     .muted{color:var(--muted)}
@@ -481,10 +487,13 @@
         </div>
         <div class="card">
           <div class="card-title">Θερμοκρασίες</div>
+          <div class="small muted" style="margin-bottom:6px">BMS (πακέτο / περιβάλλον / MOSFET)</div>
+          <div class="temps" id="tempCore"></div>
+          <div class="small muted" style="margin:10px 0 6px">Αισθητήρες NTC</div>
           <div class="temps" id="temps"></div>
           <div style="height:14px"></div>
-          <div class="card-title">Συναγερμοί</div>
-          <pre class="alarms" id="alarms">—</pre>
+          <div class="card-title">Συναγερμοί &amp; προστασίες</div>
+          <div class="alarms" id="alarms">—</div>
         </div>
       </div>
     </div>
@@ -786,6 +795,7 @@
 
   <div class="toast-wrap" id="toasts"></div>
 
+  <script src="bms-decode.js"></script>
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const LS = { id: 'esp32_classic_device_id', broker: 'esp32_classic_broker' };
@@ -1121,7 +1131,15 @@
       else if (temp >= 40) { items.push(`Ζεστή μπαταρία (${f2(temp, 1)}°C)`); level = 'warn'; }
       if (b.charging) items.push(`Φόρτιση ${f2(b.current, 1)}A`);
       if (b.discharging) items.push(`Εκφόρτιση ${f2(Math.abs(b.current), 1)}A`);
-      if (b.error_mask) { items.push(`Σφάλμα BMS ${hex(b.error_mask)}`); level = 'warn'; }
+      if (b.limiting_current) { items.push('Περιορισμός ρεύματος ενεργός'); level = 'warn'; }
+      const amb = Number(b.ambient_temp), mos = Number(b.mosfet_temp);
+      if (amb > 0 && amb < 50) items.push(`Περιβάλλον ${f2(amb, 1)}°C`);
+      if (mos > 0 && mos < 80) items.push(`MOSFET ${f2(mos, 1)}°C`);
+      else if (mos >= 55) { items.push(`MOSFET ζεστό (${f2(mos, 1)}°C)`); level = 'warn'; }
+      if (b.error_mask && window.BmsDecode) {
+        const errs = BmsDecode.buildBmsAlarmSections(b).find(s => s.title === 'Σφάλματα BMS');
+        if (errs && errs.items.length) { items.push(...errs.items); level = 'warn'; }
+      } else if (b.error_mask) { items.push(`Σφάλμα BMS ${hex(b.error_mask)}`); level = 'warn'; }
       if (cap > 0) items.push(`~${f1(rem)} / ${f1(cap)} Ah (${f0(soc)}%)`);
       return { level, title: level === 'good' ? 'Η μπαταρία φαίνεται υγιής' : 'Υπάρχουν σημεία προσοχής', items };
     }
@@ -1156,6 +1174,7 @@
       if (valid) {
         if (b.charging) chips.push({ t: 'ΦΟΡΤΙΣΗ', cls: 'ok' });
         if (b.discharging) chips.push({ t: 'ΕΚΦΟΡΙΣΗ', cls: 'ok' });
+        if (b.limiting_current) chips.push({ t: 'LIMIT', cls: 'warn' });
         if (b.balancing) chips.push({ t: 'BALANCING', cls: 'warn' });
         if (!b.charging && !b.discharging) chips.push({ t: 'ΑΝΕΝΕΡΓΗ', cls: '' });
       }
@@ -1184,19 +1203,16 @@
         : '<div class="small muted">Δεν υπάρχουν δεδομένα κελιών.</div>';
 
       const temps = valid && Array.isArray(b.temps) ? b.temps.slice(0, 8) : [];
+      document.getElementById('tempCore').innerHTML = window.BmsDecode
+        ? BmsDecode.renderCoreTempsHtml(b, f2) : '—';
       document.getElementById('temps').innerHTML = temps.some(t => Number(t) !== 0)
         ? temps.map((t, i) => Number(t) !== 0
           ? `<div class="temp"><div class="n">T${i + 1}</div><div class="tv">${f2(t, 1)}°C</div></div>` : '').join('')
         : '<div class="small muted">—</div>';
 
-      const al = [];
-      if (valid) {
-        if (b.error_mask) al.push('Σφάλματα: ' + hex(b.error_mask));
-        if (b.voltage_prot_mask) al.push('Προστασία τάσης: ' + hex(b.voltage_prot_mask));
-        if (b.current_prot_mask) al.push('Προστασία ρεύματος: ' + hex(b.current_prot_mask));
-        if (!al.length) al.push('Κανένας ενεργός συναγερμός.');
-      } else al.push('—');
-      document.getElementById('alarms').textContent = al.join('\n');
+      document.getElementById('alarms').innerHTML = valid && window.BmsDecode
+        ? BmsDecode.renderBmsAlarmsHtml(b)
+        : '<div class="small muted">—</div>';
 
       const h = assessHealth(b);
       const box = document.getElementById('healthBox');

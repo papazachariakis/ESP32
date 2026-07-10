@@ -20,6 +20,32 @@
 #define WIFI_STORE_KEY "wifi_list"
 #endif
 
+#ifndef WIFI_LAST_SSID_KEY
+#define WIFI_LAST_SSID_KEY "wifi_last_ssid"
+#endif
+
+inline void wifiStoreRememberSsid(Preferences& prefs, const String& ssid) {
+  if (ssid.length() > 0) prefs.putString(WIFI_LAST_SSID_KEY, ssid);
+}
+
+inline String wifiStoreCurrentSsid(Preferences& prefs) {
+  String ssid = WiFi.SSID();
+  ssid.trim();
+  if (ssid.length() > 0) return ssid;
+
+  String last = prefs.getString(WIFI_LAST_SSID_KEY, "");
+  if (last.length() > 0) return last;
+
+  StaticJsonDocument<1536> doc;
+  if (!deserializeJson(doc, prefs.getString(WIFI_STORE_KEY, "[]")) && doc.is<JsonArray>()) {
+    for (JsonObject item : doc.as<JsonArray>()) {
+      String s = item["ssid"] | "";
+      if (s.length() > 0) return s;
+    }
+  }
+  return "";
+}
+
 inline bool wifiWaitConnected(uint32_t timeoutMs = 12000) {
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
@@ -65,6 +91,7 @@ inline void wifiStoreUpsert(Preferences& prefs, const String& ssid, const String
   serializeJson(narr, serialized);
   prefs.putString(WIFI_STORE_KEY, serialized);
   Serial.printf("WiFi saved: %s (%u networks)\n", ssid.c_str(), narr.size());
+  if (WiFi.status() == WL_CONNECTED) wifiStoreRememberSsid(prefs, ssid);
 }
 
 inline size_t wifiStoreAddToJson(Preferences& prefs, JsonArray& outArr) {
@@ -104,7 +131,9 @@ inline bool wifiStoreConnect(Preferences& prefs, const String& ssid, String pass
   delay(200);
   Serial.printf("WiFi connect: %s\n", ssid.c_str());
   WiFi.begin(ssid.c_str(), pass.c_str());
-  return wifiWaitConnected(15000);
+  bool ok = wifiWaitConnected(15000);
+  if (ok) wifiStoreRememberSsid(prefs, ssid);
+  return ok;
 }
 
 inline bool wifiStoreTryConnect(Preferences& prefs) {
@@ -139,7 +168,9 @@ inline bool wifiStoreTryConnect(Preferences& prefs) {
     if (ssid.length() == 0) return false;
     Serial.printf("WiFi connect: %s (RSSI %d)\n", ssid.c_str(), bestRssi);
     WiFi.begin(ssid.c_str(), pass.c_str());
-    return wifiWaitConnected(12000);
+    if (!wifiWaitConnected(12000)) return false;
+    wifiStoreRememberSsid(prefs, ssid);
+    return true;
   };
 
   if (bestSaved >= 0 && tryIdx(bestSaved)) return true;
@@ -156,6 +187,7 @@ inline bool wifiStoreTryConnect(Preferences& prefs) {
 
 inline void wifiStoreClear(Preferences& prefs) {
   prefs.remove(WIFI_STORE_KEY);
+  prefs.remove(WIFI_LAST_SSID_KEY);
 }
 
 inline void wifiStoreSeedDefaults(Preferences& prefs) {

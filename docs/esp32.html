@@ -59,6 +59,13 @@
     .brand h1{font-size:1rem;font-weight:700;white-space:nowrap}
     .brand .sub{font-size:.7rem;color:var(--muted);margin-top:1px}
     .topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .wifi-chip{
+      display:none;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;
+      font-size:.72rem;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);
+      color:#93c5fd;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .wifi-chip.show{display:inline-flex}
+    .wifi-chip b{color:#dbeafe;font-weight:600}
     .conn-dot{
       width:8px;height:8px;border-radius:50%;background:var(--muted);
       box-shadow:0 0 0 3px rgba(148,163,184,.2);
@@ -423,6 +430,7 @@
       </div>
     </div>
     <div class="topbar-right">
+      <span class="wifi-chip" id="topWifi" title="WiFi δίκτυο ESP32">📡 <b>—</b></span>
       <div class="conn-dot" id="connDot"></div>
       <span class="badge off" id="badge">Offline</span>
       <button class="icon-btn" onclick="openDrawer()" title="Ρυθμίσεις">⚙</button>
@@ -1074,7 +1082,7 @@
         diagRow('ESP32 MQTT', pill(mq.connected, 'Connected', '—', 'Disconnected')),
         diagRow('Broker', mq.broker || '—'),
         diagRow('Port', mq.port ?? '—'),
-        diagRow('WiFi SSID', s.wifi_ssid || '—'),
+        diagRow('WiFi SSID', wifiSsidDisplay(s) || (s.wifi_connected ? '(συνδεδεμένο)' : '—')),
         diagRow('IP', s.ip || '—'),
         diagRow('RSSI', s.rssi != null ? s.rssi + ' dBm' : '—'),
         diagRow('Topic status', mq.topic_status || '—'),
@@ -1101,11 +1109,26 @@
       renderDiagBanner(s);
     }
 
+    function wifiSsidDisplay(s) {
+      if (!s) return '';
+      if (s.wifi_ssid) return String(s.wifi_ssid);
+      if (Array.isArray(s.wifi_saved) && s.wifi_saved.length) return String(s.wifi_saved[0]);
+      return s.wifi_connected ? '' : '';
+    }
+
     function updateStatusBar(s) {
       if (!s) return;
-      document.getElementById('sbWifi').textContent = s.wifi_ssid || '—';
+      const ssid = wifiSsidDisplay(s);
+      document.getElementById('sbWifi').textContent = ssid || (s.wifi_connected ? '(συνδεδεμένο)' : '—');
       document.getElementById('sbIp').textContent = s.ip || '—';
       document.getElementById('sbRssi').textContent = s.rssi != null ? s.rssi + ' dBm' : '—';
+      const topWifi = document.getElementById('topWifi');
+      if (topWifi) {
+        const show = ssid || s.wifi_connected;
+        topWifi.classList.toggle('show', !!show);
+        topWifi.querySelector('b').textContent = ssid || (s.wifi_connected ? 'WiFi OK' : '—');
+        topWifi.title = ssid ? `WiFi: ${ssid}` : 'WiFi ESP32';
+      }
       const bleR = s.ble && s.ble.rssi != null ? s.ble.rssi : null;
       const bleEl = document.getElementById('sbBleRssi');
       if (bleEl) {
@@ -1420,7 +1443,7 @@
       renderDiagnostics(j);
       const wSsid = document.getElementById('wifiCurrentSsid');
       const wIp = document.getElementById('wifiCurrentIp');
-      if (wSsid) wSsid.textContent = j.wifi_ssid || '—';
+      if (wSsid) wSsid.textContent = wifiSsidDisplay(j) || (j.wifi_connected ? '(συνδεδεμένο)' : '—');
       if (wIp) wIp.textContent = j.ip || '—';
       const bleName = document.getElementById('bleCurrentName');
       const bleMac = document.getElementById('bleCurrentMac');
@@ -1695,7 +1718,7 @@
           const id = (j.device_id || parseDeviceFromTopic(t) || '').toUpperCase();
           if (!id) return;
           foundDevices.set(id, {
-            id, ip: j.ip || '', ssid: j.wifi_ssid || '', rssi: j.rssi,
+            id, ip: j.ip || '', ssid: wifiSsidDisplay(j) || j.wifi_ssid || '', rssi: j.rssi,
             board: j.board || '', board_label: j.board_label || '',
             firmware: j.firmware || '', lastSeen: Date.now()
           });

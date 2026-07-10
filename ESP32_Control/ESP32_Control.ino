@@ -208,7 +208,7 @@ String buildStatusJson() {
 
   doc["ip"] = WiFi.localIP().toString();
 
-  doc["wifi_ssid"] = WiFi.SSID();
+  doc["wifi_ssid"] = wifiStoreCurrentSsid(prefs);
 
   doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
 
@@ -337,7 +337,7 @@ void publishWifiScan() {
   JsonArray saved = doc.createNestedArray("saved");
   wifiStoreAddToJson(prefs, saved);
   doc["connected"] = WiFi.status() == WL_CONNECTED;
-  doc["current"] = WiFi.SSID();
+  doc["current"] = wifiStoreCurrentSsid(prefs);
   doc["ip"] = WiFi.localIP().toString();
   String out;
   serializeJson(doc, out);
@@ -350,7 +350,7 @@ void publishWifiResult(bool ok, const char* errorMsg = nullptr) {
   StaticJsonDocument<256> doc;
   doc["ok"] = ok;
   if (ok) {
-    doc["current"] = WiFi.SSID();
+    doc["current"] = wifiStoreCurrentSsid(prefs);
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
   } else if (errorMsg) {
@@ -747,7 +747,8 @@ void setupWiFi() {
 
   }
 
-  wifiStoreUpsert(prefs, WiFi.SSID(), wm.getWiFiPass(false));
+  wifiStoreUpsert(prefs, wm.getWiFiSSID(), wm.getWiFiPass(false));
+  wifiStoreRememberSsid(prefs, wm.getWiFiSSID());
 
   Serial.print("WiFi OK: ");
 

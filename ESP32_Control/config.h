@@ -17,7 +17,7 @@
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
 
-#define FIRMWARE_VERSION "3.0.3"
+#define FIRMWARE_VERSION "3.0.4"
 
 // Fresh install defaults (factory / first boot)
 #define MODBUS_DEFAULT_ENABLED true

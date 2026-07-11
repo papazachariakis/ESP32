@@ -249,7 +249,11 @@ struct BmsManager {
     String saveMac = devMac.length() ? devMac : mac;
     dropLink();
     if (t == BmsType::None) t = bmsDetectFromName(saveName);
+#if defined(ESP32_SLIM_BUILD)
+    if (t == BmsType::None) t = BmsType::Basen;
+#else
     if (t == BmsType::None) t = BmsType::Jk;
+#endif
 
     type = t;
     name = saveName;

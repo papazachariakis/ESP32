@@ -78,6 +78,15 @@ inline BmsType bmsTypeFromString(const String& s) {
   return BmsType::None;
 }
 
+inline bool bmsNameLooksLikeJkSerial(const String& name) {
+  // JK-PB / Jikong often advertise as a hex serial only (e.g. 50514652C101132).
+  if (name.length() < 12 || name.length() > 24) return false;
+  for (unsigned i = 0; i < name.length(); i++) {
+    if (!isxdigit((unsigned char)name.charAt(i))) return false;
+  }
+  return true;
+}
+
 inline BmsType bmsDetectFromName(const String& name) {
   String n = name;
   n.toUpperCase();
@@ -85,6 +94,8 @@ inline BmsType bmsDetectFromName(const String& name) {
   if (n.startsWith("JK_") || n.startsWith("JK-")) return BmsType::Jk;
   if (n.indexOf("-B2A") >= 0 || n.indexOf("_B2A") >= 0) return BmsType::Jk;
   if (n.indexOf("_BD") >= 0 || n.indexOf("-BD") >= 0) return BmsType::Jk;
+  if (n.indexOf("PB2A") >= 0 || n.indexOf("PB1A") >= 0) return BmsType::Jk;
+  if (bmsNameLooksLikeJkSerial(n)) return BmsType::Jk;
   if (n.startsWith("TP_") || n.startsWith("TP-")) return BmsType::Basen;
   if (n.indexOf("BSTBD") >= 0 || n.indexOf("LT55") >= 0 || n.indexOf("TIANPOWER") >= 0) return BmsType::Basen;
   if (n.indexOf("BASEN") >= 0) return BmsType::Basen;
@@ -105,20 +116,19 @@ inline bool bmsHasService(BLEAdvertisedDevice& d, const char* uuid16) {
 }
 
 inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
-  BmsType byName = bmsDetectFromName(name);
-  if (byName != BmsType::None) return byName;
-
-  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
-    return BmsType::Jk;
-  }
-
+  // Service UUID is more reliable than BLE name (Basen/JK often use hex serials).
   if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
     return BmsType::Basen;
   }
-
+  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
+    return BmsType::Jk;
+  }
   if (bmsMfgMatch(d, 0x4B4A) || bmsMfgMatch(d, 0x0B65)) {
     return BmsType::Jk;
   }
+
+  BmsType byName = bmsDetectFromName(name);
+  if (byName != BmsType::None) return byName;
 
   return BmsType::None;
 }

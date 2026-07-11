@@ -4,6 +4,9 @@
 #define BOARD_ID "esp32"
 #define BOARD_LABEL "ESP32 Dev + external RS485"
 
+// Smaller image for min_spiffs OTA (<= 1.96 MB). Drops HTTPS OTA + ENTES profile.
+#define ESP32_SLIM_BUILD 1
+
 #define RELAY_COUNT 4
 static const int RELAY_PINS[RELAY_COUNT] = { 2, 4, 5, 18 };
 static const char* RELAY_LABELS[RELAY_COUNT] = { "LED / D2", "Relay D4", "Relay D5", "Relay D18" };

@@ -4,7 +4,9 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
+#ifndef ESP32_SLIM_BUILD
 #include <WiFiClientSecure.h>
+#endif
 #include "mbedtls/base64.h"
 #include "config.h"
 
@@ -360,56 +362,70 @@ inline void otaPrepareFlash() {
 
 inline bool performRemoteOtaFromHost(const char* host, const char* path, bool tls) {
   int contentLen = -1;
+#if defined(ESP32_SLIM_BUILD)
   if (tls) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(90000);
+    otaSetError("https", "disabled on classic slim build");
+    return false;
+  }
+  WiFiClient client;
+  client.setTimeout(90000);
+  Serial.printf("Remote OTA: http://%s%s\n", host, path);
+  otaPhase() = "http_connect";
+  otaNotifyStatus();
+  if (!client.connect(host, 80)) {
+    otaSetError("http", "connect failed");
+    return false;
+  }
+  client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
+               "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
+  if (!otaReadHttpHeaders(client, contentLen)) {
+    otaSetError("http", "HTTP not 200");
+    client.stop();
+    return false;
+  }
+  otaPhase() = "http_download";
+  otaNotifyStatus();
+  if (!otaDownloadBody(client, contentLen)) {
+    client.stop();
+    return false;
+  }
+  client.stop();
+#else
+  WiFiClientSecure secureClient;
+  WiFiClient plainClient;
+  Client* transport = nullptr;
+  if (tls) {
+    secureClient.setInsecure();
+    secureClient.setTimeout(90000);
+    transport = &secureClient;
     Serial.printf("Remote OTA: https://%s%s\n", host, path);
     otaPhase() = "https_connect";
-    otaNotifyStatus();
-    if (!client.connect(host, 443)) {
-      otaSetError("https", "connect failed");
-      return false;
-    }
-    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
-                 "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
-    if (!otaReadHttpHeaders(client, contentLen)) {
-      otaSetError("https", "HTTP not 200");
-      client.stop();
-      return false;
-    }
-    otaPhase() = "https_download";
-    otaNotifyStatus();
-    if (!otaDownloadBody(client, contentLen)) {
-      client.stop();
-      return false;
-    }
-    client.stop();
   } else {
-    WiFiClient client;
-    client.setTimeout(90000);
+    plainClient.setTimeout(90000);
+    transport = &plainClient;
     Serial.printf("Remote OTA: http://%s%s\n", host, path);
     otaPhase() = "http_connect";
-    otaNotifyStatus();
-    if (!client.connect(host, 80)) {
-      otaSetError("http", "connect failed");
-      return false;
-    }
-    client.print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
-                 "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
-    if (!otaReadHttpHeaders(client, contentLen)) {
-      otaSetError("http", "HTTP not 200");
-      client.stop();
-      return false;
-    }
-    otaPhase() = "http_download";
-    otaNotifyStatus();
-    if (!otaDownloadBody(client, contentLen)) {
-      client.stop();
-      return false;
-    }
-    client.stop();
   }
+  otaNotifyStatus();
+  if (!transport->connect(host, tls ? 443 : 80)) {
+    otaSetError(tls ? "https" : "http", "connect failed");
+    return false;
+  }
+  transport->print(String("GET ") + path + " HTTP/1.1\r\nHost: " + host +
+                   "\r\nUser-Agent: ESP32-Control\r\nConnection: close\r\n\r\n");
+  if (!otaReadHttpHeaders(*transport, contentLen)) {
+    otaSetError(tls ? "https" : "http", "HTTP not 200");
+    transport->stop();
+    return false;
+  }
+  otaPhase() = tls ? "https_download" : "http_download";
+  otaNotifyStatus();
+  if (!otaDownloadBody(*transport, contentLen)) {
+    transport->stop();
+    return false;
+  }
+  transport->stop();
+#endif
 
   Serial.printf("Remote OTA OK: %d bytes from %s\n", contentLen, host);
   otaPhase() = "rebooting";
@@ -470,6 +486,12 @@ inline bool performRemoteOta() {
   otaPrepareFlash();
 
   Serial.printf("Remote OTA: board expects %s\n", OTA_FIRMWARE_FILE);
+#if defined(ESP32_SLIM_BUILD)
+  if (performRemoteOtaFromHost(OTA_REMOTE_HOST, OTA_REMOTE_PATH, false)) {
+    otaInProgress() = false;
+    return true;
+  }
+#else
   String cdnPath = String(OTA_CDN_PREFIX) + OTA_FIRMWARE_FILE;
   if (performRemoteOtaFromHost("cdn.jsdelivr.net", cdnPath.c_str(), true)) {
     otaInProgress() = false;
@@ -479,6 +501,7 @@ inline bool performRemoteOta() {
     otaInProgress() = false;
     return true;
   }
+#endif
 
   otaInProgress() = false;
   otaSetError("failed", "GitHub/jsDelivr download failed");

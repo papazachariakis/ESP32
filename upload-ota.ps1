@@ -2,7 +2,7 @@ param([string]$OtaHost = "esp32.local")
 
 $cli = "$env:LOCALAPPDATA\arduino-cli\arduino-cli.exe"
 $sketch = Join-Path $PSScriptRoot "ESP32_Control"
-$fqbn = "esp32:esp32:esp32:PartitionScheme=min_spiffs,FlashSize=4M"
+$fqbn = "esp32:esp32:esp32:PartitionScheme=huge_app,FlashSize=4M"
 
 Write-Host "=== ESP32 OTA Upload (WiFi) ===" -ForegroundColor Cyan
 Write-Host "Target: $OtaHost (password: esp32ota)"
@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  1. ESP32 is on and connected to home WiFi"
     Write-Host "  2. You are on the same WiFi network"
     Write-Host "  3. OTA firmware was flashed at least once via USB"
-    Write-Host "  4. Try IP instead: upload-ota.ps1 -Host 192.168.99.63"
+    Write-Host "  4. Try IP instead: upload-ota.ps1 -OtaHost 192.168.99.64"
     exit $LASTEXITCODE
 }
 

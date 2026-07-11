@@ -1,4 +1,4 @@
-param([string]$OtaHost = "192.168.99.63")
+param([string]$OtaHost = "192.168.99.64")
 
 $cli = "$env:LOCALAPPDATA\arduino-cli\arduino-cli.exe"
 $sketch = Join-Path $PSScriptRoot "ESP32_Control"

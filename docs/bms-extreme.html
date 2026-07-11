@@ -42,6 +42,15 @@
     }
     .brand{font-family:var(--display);font-weight:900;font-size:.95rem;letter-spacing:.12em;color:var(--ok)}
     .brand span{color:var(--muted);font-weight:500;font-size:.72rem;letter-spacing:.06em}
+    body.board-classic{
+      --ok:#3b82f6;--line:#1e2d4a;--panel:#0c1220;--panel2:#111a2e;--bg:#05080f;--muted:#6b7f9e;--dim:#3d4f6a;
+      --glow-ok:rgba(59,130,246,.45);
+    }
+    body.board-classic .brand{color:var(--ok)}
+    body.board-classic .panel::before{background:linear-gradient(90deg,transparent,var(--ok),transparent)}
+    body.board-classic .big-ah .num{color:var(--ok)}
+    body.board-classic .connect-box h2{color:var(--ok)}
+    body.board-classic .connect-box .go{background:linear-gradient(90deg,var(--ok),#2563eb)}
     .top-spacer{flex:1}
     .pill{
       padding:4px 10px;border-radius:4px;font-size:.68rem;font-weight:700;letter-spacing:.08em;
@@ -254,13 +263,14 @@
 
   <div class="cockpit" id="cockpit">
     <header class="top">
-      <div class="brand">BMS <span>EXTREME</span></div>
+      <div class="brand">BMS <span id="boardTag">EXTREME · S3</span></div>
       <span class="pill off" id="connPill"><span class="conn-dot" id="connDot"></span><span id="connText">OFFLINE</span></span>
       <span class="pill off" id="bmsPill">—</span>
       <span class="pill off" id="flowPill" style="display:none">—</span>
       <div class="top-spacer"></div>
       <span style="font-size:.68rem;color:var(--muted)" id="deviceLabel">—</span>
       <a href="s3.html" id="backLink">← Dashboard</a>
+      <a href="bms-extreme-classic.html" id="altBmsLink">Classic BMS</a>
       <a href="genset-extreme.html" id="genLink">Genset</a>
       <button type="button" class="btn-link" id="btnReconnect">⚙</button>
     </header>
@@ -355,7 +365,7 @@
 
   <div class="overlay" id="overlay">
     <div class="connect-box">
-      <h2>🔋 BMS EXTREME COCKPIT</h2>
+      <h2 id="connectTitle">🔋 BMS EXTREME COCKPIT</h2>
       <label>Device ID (MAC)</label>
       <input id="deviceId" placeholder="π.χ. 1CDBD47A3C50" autocomplete="off" />
       <label>MQTT Broker (WebSocket)</label>
@@ -370,20 +380,32 @@
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
-    const board = params.get('board') || 's3';
+    const board = params.get('board') === 'classic' ? 'classic' : 's3';
+    const BOARD_EXPECT = board === 'classic' ? 'esp32' : 'esp32s3-rs485';
+    const BOARD_LABEL = board === 'classic' ? 'ESP32 Classic' : 'ESP32-S3 RS485';
     const LS = board === 'classic'
       ? { id: 'esp32_classic_device_id', broker: 'esp32_classic_broker' }
       : { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
     const BACK_PAGE = board === 'classic' ? 'esp32.html' : 's3.html';
+    const ALT_BMS_PAGE = board === 'classic' ? 'bms-extreme.html' : 'bms-extreme-classic.html';
+    const ALT_BMS_LABEL = board === 'classic' ? 'S3 BMS' : 'Classic BMS';
     const SOC_ARC = 414;
 
+    document.body.classList.add('board-' + board);
+    document.title = board === 'classic' ? '🔋 BMS EXTREME · Classic' : '🔋 BMS EXTREME · S3';
+    document.getElementById('boardTag').textContent = board === 'classic' ? 'EXTREME · CLASSIC' : 'EXTREME · S3';
+    document.getElementById('connectTitle').textContent = board === 'classic' ? '🔋 BMS EXTREME · Classic' : '🔋 BMS EXTREME · S3';
     document.getElementById('backLink').href = BACK_PAGE;
+    document.getElementById('altBmsLink').href = ALT_BMS_PAGE;
+    document.getElementById('altBmsLink').textContent = ALT_BMS_LABEL;
     document.getElementById('genLink').href = 'genset-extreme.html' + (board === 'classic' ? '?board=classic' : '');
+    if (board === 'classic') document.getElementById('genLink').style.display = '';
 
     const savedId = localStorage.getItem(LS.id);
     const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');
     if (savedId) document.getElementById('deviceId').value = savedId;
     if (savedBroker) document.getElementById('broker').value = savedBroker;
+    document.getElementById('deviceId').placeholder = board === 'classic' ? '000401000000' : '1CDBD47A3C50';
 
     let client = null, connected = false, lastBms = null, lastStatus = {}, lastRxAt = 0;
     let socHistory = [], pwrHistory = [];
@@ -632,6 +654,9 @@
 
     function onStatus(j) {
       lastStatus = j;
+      if (j.board && j.board !== BOARD_EXPECT) {
+        toast(`Λάθος πλακέτα: ${j.board_label || j.board}. Χρησιμοποίησε ${ALT_BMS_LABEL}.`, 8000);
+      }
       if (j.firmware) document.getElementById('fwVer').textContent = 'v' + j.firmware;
       if (j.ble) renderBle(j.ble);
       if (j.bms && (!lastBms || !lastBms.valid)) onBms(j.bms);

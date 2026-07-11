@@ -648,9 +648,9 @@
             <div class="kpi"><div class="l">Σφάλμα</div><div class="v" style="font-size:.85rem" id="gFault">—</div></div>
           </div>
           <div style="height:12px"></div>
-          <div class="card-title" style="margin-bottom:6px">NFPA / Extended</div>
-          <ul class="fault-list" id="genNfpaList"><li class="muted">—</li></ul>
-          <pre class="alarms" id="genAlarms" style="margin-top:10px">—</pre>
+          <div class="card-title" style="margin-bottom:6px">Συναγερμοί / σφάλματα</div>
+          <div class="alarms" id="genAlarms">—</div>
+          <ul class="fault-list" id="genNfpaList" style="margin-top:10px"><li class="muted">—</li></ul>
         </div>
       </div>
     </div>
@@ -799,6 +799,7 @@
   </div>
 
   <script src="bms-decode.js"></script>
+  <script src="genset-decode.js"></script>
   <script src="charts.js"></script>
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
@@ -850,7 +851,10 @@
       if (faultBitsDb) return faultBitsDb;
       try {
         const r = await fetch('cummins_fault_bits.json');
-        if (r.ok) faultBitsDb = await r.json();
+        if (r.ok) {
+          faultBitsDb = await r.json();
+          if (window.GensetDecode) GensetDecode.setFaultDb(faultBitsDb);
+        }
       } catch (e) {}
       return faultBitsDb;
     }
@@ -947,7 +951,12 @@
 
       if (gen.enabled === false)
         hints.push('Modbus γεννήτριας <b>disabled</b> στο firmware/config.');
-      else if (!gen.valid && gen.error) {
+      else if (Number(gen.active_fault) > 0 && window.GensetDecode) {
+        const fh = GensetDecode.overviewFaultHint(gen);
+        if (fh) hints.push('<b>' + fh + '</b>');
+      } else if (Number(gen.active_fault) > 0) {
+        hints.push('<b>Ενεργό σφάλμα γεννήτριας #' + gen.active_fault + '</b>');
+      } else if (!gen.valid && gen.error) {
         if (String(gen.error).includes('40009'))
           hints.push('Modbus <b>40009</b>: έλεγξε RS485 — πρώτα <b>αντάλλαξε A↔B</b>, μετά slave ID/baud. Δες καρτέλα <b>Καλωδίωση</b>.');
         else
@@ -955,7 +964,7 @@
       } else if (!gen.valid)
         hints.push('Modbus poll σε εξέλιξη ή χωρίς απάντηση — έλεγξε baud (' + (gen.baud || '?') + ') και slave ID (' + (gen.slave_id || '?') + ').');
 
-      if (bms.valid && gen.valid)
+      if (bms.valid && gen.valid && !Number(gen.active_fault))
         hints.push('Όλα OK — BMS και γεννήτρια online.');
 
       return hints;
@@ -1027,6 +1036,16 @@
         diagRow('Op mode', (gen.op_mode_label_el || gen.op_mode_label || '—') + ' (' + (gen.op_mode ?? '—') + ')'),
         diagRow('40300 start reg', gen.remote_start_reg ?? '—'),
         diagRow('40302 estop reg', gen.network_shutdown_reg ?? '—'),
+        diagRow('Σφάλμα #', gen.active_fault
+          ? (window.GensetDecode
+            ? GensetDecode.formatActiveFaultShort(gen).replace(/\n/g, ' — ')
+            : '#' + gen.active_fault)
+          : '—'),
+        diagRow('NFPA 110', gen.nfpa_fault
+          ? (window.GensetDecode
+            ? GensetDecode.nfpaListItems(gen).join(' · ') || hex(gen.nfpa_fault)
+            : hex(gen.nfpa_fault))
+          : '—'),
         diagRow('Pins firmware', gen.modbus_rx != null
           ? `RX=GPIO${gen.modbus_rx} TX=GPIO${gen.modbus_tx} DE=${gen.modbus_de < 0 ? 'off' : 'GPIO' + gen.modbus_de}`
           : 'RX=GPIO16 TX=GPIO17 DE=off')
@@ -1157,8 +1176,9 @@
 
       const gState = gValid ? (g.genset_state_label_el || g.genset_state_label || '—') : '—';
       document.getElementById('heroGenState').textContent = gState;
+      const genFaultHint = gValid && window.GensetDecode ? GensetDecode.overviewFaultHint(g) : null;
       document.getElementById('heroGenDetail').textContent = gValid
-        ? `${g.op_mode_label_el || g.op_mode_label || '—'} • ${f2(g.frequency, 1)} Hz • ${f0(g.kw_total)} kW`
+        ? (genFaultHint || `${g.op_mode_label_el || g.op_mode_label || '—'} • ${f2(g.frequency, 1)} Hz • ${f0(g.kw_total)} kW`)
         : (g && g.error ? g.error : 'Αναμονή Modbus...');
       const running = gValid && (g.running === true || Number(g.genset_state) === 8);
       const gChip = document.getElementById('heroGenChip');
@@ -1375,8 +1395,9 @@
       document.getElementById('gCtrl').textContent = g.controller_type ?? '—';
       document.getElementById('gRuns').textContent = g.total_runs ?? '—';
       document.getElementById('gHours').textContent = (g.runtime_hours != null ? f2(g.runtime_hours, 1) : '—') + ' h';
-      document.getElementById('gFault').textContent = Number(g.active_fault)
-        ? '#' + g.active_fault + ' (' + (g.fault_type_label || '') + ')' : 'Κανένα';
+      document.getElementById('gFault').textContent = window.GensetDecode
+        ? GensetDecode.formatActiveFaultShort(g)
+        : (Number(g.active_fault) ? '#' + g.active_fault + ' (' + (g.fault_type_label || '') + ')' : 'Κανένα');
 
       const phases = [
         { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kw: g.kw_l1, kva: g.kva_l1, load: g.load_l1_pct },
@@ -1385,16 +1406,20 @@
       ];
       document.getElementById('genPhases').innerHTML = phases.map(p => phaseHtml(p, true)).join('');
 
-      const al = [];
-      if (g.nfpa_fault) al.push('NFPA 110: ' + hex(g.nfpa_fault));
-      if (g.active_fault) al.push('Σφάλμα #' + g.active_fault);
-      if (!al.length) al.push('Κανένας ενεργός συναγερμός.');
-      document.getElementById('genAlarms').textContent = al.join('\n');
-
-      const nfpa = Array.isArray(g.nfpa_bits) ? g.nfpa_bits : [];
-      document.getElementById('genNfpaList').innerHTML = nfpa.length
-        ? nfpa.map(x => `<li>${x}</li>`).join('')
-        : '<li class="muted">Κανένα ενεργό bit</li>';
+      if (window.GensetDecode) {
+        document.getElementById('genAlarms').innerHTML =
+          GensetDecode.renderAlarmHtml(GensetDecode.buildGensetAlarmSections(g));
+        const nfItems = GensetDecode.nfpaListItems(g);
+        document.getElementById('genNfpaList').innerHTML = nfItems.length
+          ? nfItems.map(x => `<li>${x}</li>`).join('')
+          : '<li class="muted">Κανένα ενεργό NFPA/Extended bit</li>';
+      } else {
+        const al = [];
+        if (g.nfpa_fault) al.push('NFPA 110: ' + hex(g.nfpa_fault));
+        if (g.active_fault) al.push('Σφάλμα #' + g.active_fault);
+        document.getElementById('genAlarms').textContent = al.length ? al.join('\n') : 'Κανένας ενεργός συναγερμός.';
+        document.getElementById('genNfpaList').innerHTML = '<li class="muted">—</li>';
+      }
       if (window.ChartHub) ChartHub.recordGenset(g);
     }
 

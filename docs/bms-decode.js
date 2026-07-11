@@ -125,7 +125,15 @@
     return rows.length ? rows.join('') : '<div class="small muted">—</div>';
   }
 
+  function resolveFlow(b) {
+    const a = Number(b && b.current);
+    if (Number.isFinite(a) && Math.abs(a) > 0.05) {
+      return { charging: a > 0, discharging: a < 0 };
+    }
+    return { charging: !!(b && b.charging), discharging: !!(b && b.discharging) };
+  }
+
   global.BmsDecode = {
-    decodeBitmask, buildBmsAlarmSections, renderBmsAlarmsHtml, renderCoreTempsHtml, isBasenType
+    decodeBitmask, buildBmsAlarmSections, renderBmsAlarmsHtml, renderCoreTempsHtml, isBasenType, resolveFlow
   };
 })(typeof window !== 'undefined' ? window : globalThis);

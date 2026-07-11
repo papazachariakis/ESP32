@@ -448,6 +448,7 @@
       const dv = Number(b.delta_cell_v), soh = Number(b.soh), temp = Number(b.avg_temp);
       const soc = Number(b.soc), cap = Number(b.capacity_ah);
       const rem = cap > 0 && soc > 0 ? cap * soc / 100 : Number(b.remaining_ah);
+      const flow = window.BmsDecode ? BmsDecode.resolveFlow(b) : { charging: !!b.charging, discharging: !!b.discharging };
       if (dv > 0 && dv <= 0.03) items.push('Εξαιρετική ισορροπία κελιών (ΔV ≤ 0.03V)');
       else if (dv <= 0.05) items.push('Καλή ισορροπία κελιών');
       else { items.push('Αυξημένη διαφορά κελιών'); level = 'warn'; }
@@ -456,8 +457,8 @@
       else if (soh > 0) { items.push(`Χαμηλό SOH ${f0(soh)}%`); level = 'warn'; }
       if (temp > 0 && temp < 40) items.push(`Θερμοκρασία OK ${f1(temp)}°C`);
       else if (temp >= 40) { items.push(`Ζεστή μπαταρία ${f1(temp)}°C`); level = 'warn'; }
-      if (b.charging) items.push(`Φόρτιση ${f1(b.current)}A`);
-      if (b.discharging) items.push(`Εκφόρτιση ${f1(Math.abs(b.current))}A`);
+      if (flow.charging) items.push(`Φόρτιση ${f1(b.current)}A`);
+      if (flow.discharging) items.push(`Εκφόρτιση ${f1(Math.abs(b.current))}A`);
       if (b.limiting_current) { items.push('Περιορισμός ρεύματος'); level = 'warn'; }
       if (b.balancing) items.push('Balancing ενεργό');
       if (cap > 0) items.push(`${f1(rem)} / ${f1(cap)} Ah (${f0(soc)}%)`);
@@ -524,11 +525,13 @@
       bmsPill.textContent = valid ? 'BMS OK' : (ble && ble.connected ? 'BLE' : 'NO DATA');
       bmsPill.className = 'pill ' + (valid ? 'ok' : ble && ble.connected ? 'warn' : 'off');
 
+      const flow = valid && window.BmsDecode ? BmsDecode.resolveFlow(b) : { charging: !!(b && b.charging), discharging: !!(b && b.discharging) };
+
       const flowPill = document.getElementById('flowPill');
-      if (valid && (b.charging || b.discharging || b.balancing)) {
+      if (valid && (flow.charging || flow.discharging || b.balancing)) {
         flowPill.style.display = '';
-        if (b.charging) { flowPill.textContent = 'CHARGE'; flowPill.className = 'pill charge'; }
-        else if (b.discharging) { flowPill.textContent = 'DISCHARGE'; flowPill.className = 'pill discharge'; }
+        if (flow.charging) { flowPill.textContent = 'CHARGE'; flowPill.className = 'pill charge'; }
+        else if (flow.discharging) { flowPill.textContent = 'DISCHARGE'; flowPill.className = 'pill discharge'; }
         else { flowPill.textContent = 'BALANCE'; flowPill.className = 'pill warn'; }
       } else {
         flowPill.style.display = 'none';
@@ -538,10 +541,10 @@
       if (!valid) {
         banner.textContent = ble && ble.connected ? 'BLE — ΑΝΑΜΟΝΗ' : 'OFFLINE';
         banner.className = 'state-banner idle';
-      } else if (b.charging) {
+      } else if (flow.charging) {
         banner.textContent = 'ΦΟΡΤΙΣΗ';
         banner.className = 'state-banner charge';
-      } else if (b.discharging) {
+      } else if (flow.discharging) {
         banner.textContent = 'ΕΚΦΟΡΙΣΗ';
         banner.className = 'state-banner discharge';
       } else if (b.balancing) {
@@ -560,7 +563,9 @@
 
       document.getElementById('socNum').textContent = valid ? f0(soc) : '—';
       document.getElementById('socSub').textContent = valid && cap > 0 ? f1(rem) + ' / ' + f1(cap) + ' Ah' : '—';
-      const socColor = soc > 60 ? '#22c55e' : soc > 20 ? '#f59e0b' : '#ef4444';
+      const socColor = board === 'classic'
+        ? (soc > 60 ? '#3b82f6' : soc > 20 ? '#f59e0b' : '#ef4444')
+        : (soc > 60 ? '#22c55e' : soc > 20 ? '#f59e0b' : '#ef4444');
       setArc(document.getElementById('socArc'), valid ? soc : 0, socColor);
 
       document.getElementById('vLed').textContent = valid ? f2(b.voltage) : '—';

@@ -289,8 +289,14 @@ inline bool basenParseFrame(const uint8_t* f, size_t len, BmsData& bms, BmsProto
     }
     case 0x85: {
       uint16_t mos = bmsU16BE(f, 3);
-      bms.charging = (mos & (1 << 1)) != 0;
-      bms.discharging = (mos & (1 << 2)) != 0;
+      // MOS status bits can stay set while current is opposite — trust amps when flowing.
+      if (fabsf(bms.current) > 0.05f) {
+        bms.charging = bms.current > 0;
+        bms.discharging = bms.current < 0;
+      } else {
+        bms.charging = (mos & (1 << 1)) != 0;
+        bms.discharging = (mos & (1 << 2)) != 0;
+      }
       bms.limitingCurrent = (mos & (1 << 4)) != 0 || (mos & (1 << 5)) != 0;
       bms.balancingMask = bmsU16BE(f, 13);
       bms.balancing = bms.balancingMask != 0;

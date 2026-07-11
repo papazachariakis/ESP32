@@ -1539,6 +1539,7 @@
       const dv = Number(b.delta_cell_v), soh = Number(b.soh), temp = Number(b.avg_temp);
       const soc = Number(b.soc), cap = Number(b.capacity_ah);
       const rem = cap > 0 && soc > 0 ? cap * soc / 100 : Number(b.remaining_ah);
+      const flow = window.BmsDecode ? BmsDecode.resolveFlow(b) : { charging: !!b.charging, discharging: !!b.discharging };
 
       if (dv > 0 && dv <= 0.03) items.push('Εξαιρετική ισορροπία κελιών (ΔV ≤ 0.03V)');
       else if (dv <= 0.05) items.push('Καλή ισορροπία κελιών');
@@ -1548,8 +1549,8 @@
       else if (soh > 0) { items.push(`Χαμηλό SOH (${f0(soh)}%)`); level = 'warn'; }
       if (temp > 0 && temp < 40) items.push(`Θερμοκρασία OK (${f2(temp, 1)}°C)`);
       else if (temp >= 40) { items.push(`Ζεστή μπαταρία (${f2(temp, 1)}°C)`); level = 'warn'; }
-      if (b.charging) items.push(`Φόρτιση ${f2(b.current, 1)}A`);
-      if (b.discharging) items.push(`Εκφόρτιση ${f2(Math.abs(b.current), 1)}A`);
+      if (flow.charging) items.push(`Φόρτιση ${f2(b.current, 1)}A`);
+      if (flow.discharging) items.push(`Εκφόρτιση ${f2(Math.abs(b.current), 1)}A`);
       if (b.limiting_current) { items.push('Περιορισμός ρεύματος ενεργός'); level = 'warn'; }
       const amb = Number(b.ambient_temp), mos = Number(b.mosfet_temp);
       if (amb > 0 && amb < 50) items.push(`Περιβάλλον ${f2(amb, 1)}°C`);
@@ -1591,11 +1592,12 @@
 
       const chips = [];
       if (valid) {
-        if (b.charging) chips.push({ t: 'ΦΟΡΤΙΣΗ', cls: 'ok' });
-        if (b.discharging) chips.push({ t: 'ΕΚΦΟΡΙΣΗ', cls: 'ok' });
+        const flow = window.BmsDecode ? BmsDecode.resolveFlow(b) : { charging: !!b.charging, discharging: !!b.discharging };
+        if (flow.charging) chips.push({ t: 'ΦΟΡΤΙΣΗ', cls: 'ok' });
+        if (flow.discharging) chips.push({ t: 'ΕΚΦΟΡΙΣΗ', cls: 'ok' });
         if (b.limiting_current) chips.push({ t: 'LIMIT', cls: 'warn' });
         if (b.balancing) chips.push({ t: 'BALANCING', cls: 'warn' });
-        if (!b.charging && !b.discharging) chips.push({ t: 'ΑΝΕΝΕΡΓΗ', cls: '' });
+        if (!flow.charging && !flow.discharging) chips.push({ t: 'ΑΝΕΝΕΡΓΗ', cls: '' });
       }
       document.getElementById('chips').innerHTML = chips.map(c =>
         `<span class="chip ${c.cls}">${c.t}</span>`).join('') || '<span class="chip">—</span>';

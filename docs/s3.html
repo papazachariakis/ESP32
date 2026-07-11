@@ -612,6 +612,7 @@
     <button class="active" data-view="overview" onclick="switchView('overview')">Αρχική</button>
     <button data-view="bms" onclick="switchView('bms')">Μπαταρία</button>
     <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
+    <button onclick="location.href='meter.html'">⚡ Μετρητής</button>
     <button data-view="relays" onclick="switchView('relays')">Relays</button>
     <button data-view="wiring" onclick="switchView('wiring')">Καλωδίωση</button>
     <button data-view="diag" onclick="switchView('diag')">Διαγνωστικά</button>
@@ -841,7 +842,9 @@
       </div>
 
       <div class="card meter-panel" id="meterCard">
-        <div class="card-title"><span class="dot meter"></span>Μετρητής ενέργειας ENTES MPR-46S <span class="chart-hint">δίκτυο / σκάφος</span></div>
+        <div class="card-title"><span class="dot meter"></span>Μετρητής ενέργειας ENTES MPR-46S
+          <a href="meter.html" style="float:right;font-size:.72rem;color:var(--accent);text-decoration:none;font-weight:700" title="Πλήρης οθόνη μετρητή">⚡ ΠΛΗΡΗΣ ΟΘΟΝΗ →</a>
+        </div>
         <p class="small muted" id="meterMeta" style="margin-bottom:10px">Slave ID — · αναμονή δεδομένων...</p>
         <div class="grid-2">
           <div>
@@ -1121,7 +1124,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.20';
-    const DASHBOARD_BUILD = '2026-07-11-meter1';
+    const DASHBOARD_BUILD = '2026-07-11-meter2';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';

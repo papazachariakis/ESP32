@@ -259,6 +259,17 @@
       background:linear-gradient(145deg,rgba(245,158,11,.07) 0%,var(--surface) 50%);
       border-color:rgba(245,158,11,.18);
     }
+    .meter-panel{
+      background:linear-gradient(145deg,rgba(59,130,246,.08) 0%,var(--surface) 50%);
+      border-color:rgba(59,130,246,.22);
+    }
+    .meter-panel .card-title .dot.meter{background:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,.5)}
+    .meter-kwh{
+      text-align:center;padding:14px 10px;margin-bottom:10px;
+      background:rgba(0,0,0,.25);border-radius:10px;border:1px solid var(--border);
+    }
+    .meter-kwh .num{font-family:var(--display,Inter);font-size:2rem;font-weight:800;color:#60a5fa;line-height:1}
+    .meter-kwh .lbl{font-size:.72rem;color:var(--muted);margin-top:4px}
     .gen-gauges{
       display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:16px;
     }
@@ -829,6 +840,46 @@
         </div>
       </div>
 
+      <div class="card meter-panel" id="meterCard">
+        <div class="card-title"><span class="dot meter"></span>Μετρητής ενέργειας ENTES MPR-46S <span class="chart-hint">δίκτυο / σκάφος</span></div>
+        <p class="small muted" id="meterMeta" style="margin-bottom:10px">Slave ID — · αναμονή δεδομένων...</p>
+        <div class="grid-2">
+          <div>
+            <div class="meter-kwh">
+              <div class="num" id="mKwh">—</div>
+              <div class="lbl">kWh καταναλωθέντα (σύνολο)</div>
+            </div>
+            <div class="stats">
+              <div class="kpi chartable" data-chart-key="meter.kw_total" data-chart-label="kW δικτύου" data-chart-unit="kW" data-chart-dec="1"><div class="l">kW τώρα</div><div class="v" id="mKw">—</div></div>
+              <div class="kpi chartable" data-chart-key="meter.kva_total" data-chart-label="kVA δικτύου" data-chart-unit="kVA" data-chart-dec="1"><div class="l">kVA</div><div class="v" id="mKva">—</div></div>
+              <div class="kpi chartable" data-chart-key="meter.frequency" data-chart-label="Hz δικτύου" data-chart-unit="Hz" data-chart-dec="1"><div class="l">Hz</div><div class="v" id="mHz">—</div></div>
+              <div class="kpi chartable" data-chart-key="meter.volt_avg_ll" data-chart-label="Τάση δικτύου L-L" data-chart-unit="V" data-chart-dec="0"><div class="l">Τάση L-L</div><div class="v"><span id="mVll">—</span><span class="u">V</span></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="card-title" style="padding:0 0 8px">Φάσεις δικτύου</div>
+            <div class="gen-load-grid" style="margin-bottom:0">
+              <div class="gen-load-phase l1">
+                <div class="ph">L1</div>
+                <div class="extra" id="mL1" style="margin:4px 0">— A · — kW</div>
+              </div>
+              <div class="gen-load-phase l2">
+                <div class="ph">L2</div>
+                <div class="extra" id="mL2" style="margin:4px 0">— A · — kW</div>
+              </div>
+              <div class="gen-load-phase l3">
+                <div class="ph">L3</div>
+                <div class="extra" id="mL3" style="margin:4px 0">— A · — kW</div>
+              </div>
+            </div>
+            <div class="stats" style="margin-top:10px">
+              <div class="kpi"><div class="l">kWh γεννήτριας</div><div class="v" id="mKwhGen">—</div></div>
+              <div class="kpi"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="mCurr">—</span><span class="u">A</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-title">Έλεγχος &amp; Modbus</div>
         <p class="small muted" style="margin-bottom:12px">Απομακρυσμένος έλεγχος μέσω MQTT Modbus — χρησιμοποίησε με προσοχή.</p>
@@ -878,11 +929,17 @@
               <label>Slave ID
                 <input type="number" id="cfgSlave" min="1" max="247" value="1" />
               </label>
+              <label>Μετρητής slave
+                <input type="number" id="cfgMeterSlave" min="1" max="247" value="2" />
+              </label>
               <label>Probe register
                 <input type="number" id="cfgProbe" min="1" value="40009" />
               </label>
               <label class="cfg-en" style="grid-column:1/-1">
-                <input type="checkbox" id="cfgEnabled" checked /> Ενεργό
+                <input type="checkbox" id="cfgEnabled" checked /> Modbus γεννήτριας ενεργό
+              </label>
+              <label class="cfg-en" style="grid-column:1/-1">
+                <input type="checkbox" id="cfgMeterEnabled" checked /> Μετρητής ENTES (παράλληλα)
               </label>
             </div>
             <div class="gen-actions" style="margin-top:10px">
@@ -1063,8 +1120,8 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.18';
-    const DASHBOARD_BUILD = '2026-07-11-extreme1';
+    const EXPECTED_FIRMWARE = '3.0.20';
+    const DASHBOARD_BUILD = '2026-07-11-meter1';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
@@ -1077,7 +1134,7 @@
     let outputs = [], connected = false, lastStatus = {}, lastUpdate = 0;
     const foundDevices = new Map();
     let faultBitsDb = null;
-    const msgStats = { status: 0, bms: 0, genset: 0, connectedAt: 0 };
+    const msgStats = { status: 0, bms: 0, genset: 0, meter: 0, connectedAt: 0 };
     let wifiPick = '';
     let blePick = null;
     let lastSeenFirmware = '';
@@ -1641,6 +1698,35 @@
       setGenArc('genBattArc', batt, 30, battOk ? '#22c55e' : battLow ? '#ef4444' : '#a855f7');
     }
 
+    function renderMeter(m, statusMeter) {
+      const sm = statusMeter || (lastStatus && lastStatus.meter) || {};
+      const enabled = sm.enabled !== false;
+      const slave = sm.slave_id != null ? sm.slave_id : '—';
+      const meta = document.getElementById('meterMeta');
+      if (meta) {
+        meta.textContent = enabled
+          ? `Slave ID ${slave} · ENTES MPR-46S · topic /meter`
+          : 'Μετρητής απενεργοποιημένο — ενεργοποίηση από ρυθμίσεις Modbus';
+      }
+      if (!m || (!m.valid && !m.kwh_consumed)) {
+        if (meta && enabled) meta.textContent += m && m.error ? ' · ' + m.error : ' · αναμονή...';
+        return;
+      }
+      document.getElementById('mKwh').textContent = Number.isFinite(+m.kwh_consumed) ? f1(m.kwh_consumed) : '—';
+      document.getElementById('mKw').textContent = f0(m.kw_total);
+      document.getElementById('mKva').textContent = f0(m.kva_total);
+      document.getElementById('mHz').textContent = f1(m.frequency);
+      document.getElementById('mVll').textContent = f0(m.volt_avg_ll);
+      document.getElementById('mCurr').textContent = f1(m.curr_avg);
+      document.getElementById('mKwhGen').textContent = Number.isFinite(+m.kwh_generator) ? f1(m.kwh_generator) : '—';
+      const ph = (a, kw) => (Number.isFinite(+a) ? f1(a) + ' A' : '— A') + ' · ' + (Number.isFinite(+kw) ? f0(kw) + ' kW' : '— kW');
+      document.getElementById('mL1').textContent = ph(m.curr_l1, m.kw_l1);
+      document.getElementById('mL2').textContent = ph(m.curr_l2, m.kw_l2);
+      document.getElementById('mL3').textContent = ph(m.curr_l3, m.kw_l3);
+      if (meta && m.age_sec != null) meta.textContent = `Slave ID ${slave} · ενημέρωση πριν ${m.age_sec}s`;
+      if (window.ChartHub) ChartHub.recordMeter(m);
+    }
+
     function renderGenset(g) {
       if (!g) return;
       if (g.poll_complete) gensetStable = Object.assign({}, g);
@@ -1800,6 +1886,7 @@
       if (j.outputs) { outputs = j.outputs; renderRelays(); }
       if (j.bms) renderBms(j.bms);
       if (j.genset && Date.now() - lastGensetTopicAt > 4000) renderGenset(j.genset);
+      if (j.meter) renderMeter(j.meter, j.meter);
       renderOverview(j.bms, j.genset);
       renderDiagnostics(j);
       const wSsid = document.getElementById('wifiCurrentSsid');
@@ -1886,7 +1973,9 @@
         profile: document.getElementById('cfgProfile').value,
         baud: +document.getElementById('cfgBaud').value,
         slave_id: +document.getElementById('cfgSlave').value,
-        probe_reg: +document.getElementById('cfgProbe').value
+        probe_reg: +document.getElementById('cfgProbe').value,
+        meter_enabled: document.getElementById('cfgMeterEnabled').checked,
+        meter_slave_id: +document.getElementById('cfgMeterSlave').value
       };
       pubCmd({ modbus_cfg: cfg });
       pendingBaud = cfg.baud;
@@ -1932,6 +2021,9 @@
         if (sl) sl.textContent = String(g.slave_id);
       }
       if (g.probe_reg != null) set('cfgProbe', g.probe_reg);
+      const stMeter = lastStatus.meter || {};
+      if (stMeter.slave_id != null) set('cfgMeterSlave', stMeter.slave_id);
+      if (stMeter.enabled != null) set('cfgMeterEnabled', stMeter.enabled);
       const pr = String(g.profile || '').toLowerCase();
       if (pr) set('cfgProfile', pr.includes('entes') ? 'entes' : 'ps0600');
       const sr = document.getElementById('scanResult');
@@ -2528,12 +2620,13 @@
       client.on('connect', () => {
         setBadge('MQTT OK', 'ok');
         connected = true;
-        msgStats.status = 0; msgStats.bms = 0; msgStats.genset = 0;
+        msgStats.status = 0; msgStats.bms = 0; msgStats.genset = 0; msgStats.meter = 0;
         msgStats.connectedAt = Date.now();
         lastUpdate = 0;
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
+        client.subscribe(`home/${id}/meter`);
         client.subscribe(`home/${id}/wifi`);
         client.subscribe(`home/${id}/ble`);
         document.getElementById('statusLine').textContent = `home/${id}/status — αναμονή δεδομένων...`;
@@ -2586,6 +2679,7 @@
               hint.textContent = j.last_cmd_detail;
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
+            if (lastStatus.meter) renderMeter(lastStatus.meter);
             if (pendingBaud && Number(j.baud) === pendingBaud) {
               toast('Baud εφαρμόστηκε: ' + j.baud, 5000);
               pendingBaud = 0;
@@ -2593,6 +2687,11 @@
             if (j.scan_result && j.scan_result.startsWith('CFG')) {
               toast(j.scan_result, j.scan_result.startsWith('CFG OK') ? 5000 : 8000);
             }
+          }
+          if (t.endsWith('/meter')) {
+            msgStats.meter++;
+            lastStatus.meter = j;
+            renderMeter(j);
           }
           if (t.endsWith('/wifi')) {
             if (j.networks) renderWifiScan(j);

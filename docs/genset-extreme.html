@@ -353,6 +353,17 @@
             <div class="metric"><div class="l">Power Factor</div><div class="v" id="mPf">—</div></div>
             <div class="metric"><div class="l">Φόρτιση max</div><div class="v" id="mLoadMax">—</div></div>
           </div>
+          <div class="panel-title" style="padding:8px 0 4px;color:#60a5fa">⚡ Μετρητής ENTES (δίκτυο)</div>
+          <div class="big-kw" style="border-color:rgba(59,130,246,.35)">
+            <div class="num" id="gridKwh" style="color:#60a5fa">—</div>
+            <div class="unit">kWh ΔΙΚΤΥΟΥ (σύνολο)</div>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric"><div class="l">kW δικτύου</div><div class="v ok" id="gridKw">—</div></div>
+            <div class="metric"><div class="l">Hz δικτύου</div><div class="v" id="gridHz">—</div></div>
+            <div class="metric"><div class="l">kVA δικτύου</div><div class="v" id="gridKva">—</div></div>
+            <div class="metric"><div class="l">Meter slave</div><div class="v" id="gridSlave">—</div></div>
+          </div>
           <div class="panel-title" style="padding:0">Ιστορικό kW (session)</div>
           <canvas id="kwSpark" height="56"></canvas>
         </div>
@@ -507,6 +518,14 @@
       ctx.fill();
     }
 
+    function renderMeter(m) {
+      if (!m) return;
+      document.getElementById('gridKwh').textContent = Number.isFinite(+m.kwh_consumed) ? f1(m.kwh_consumed) : '—';
+      document.getElementById('gridKw').textContent = f0(m.kw_total);
+      document.getElementById('gridHz').textContent = f1(m.frequency);
+      document.getElementById('gridKva').textContent = f0(m.kva_total);
+    }
+
     function render(d) {
       if (!d) return;
       const valid = d.valid || d.genset_state != null;
@@ -640,6 +659,11 @@
     function onStatus(j) {
       lastStatus = j;
       if (j.firmware) document.getElementById('fwVer').textContent = 'v' + j.firmware;
+      if (j.meter) {
+        const sl = document.getElementById('gridSlave');
+        if (sl) sl.textContent = j.meter.slave_id != null ? String(j.meter.slave_id) : '—';
+        renderMeter(j.meter);
+      }
       if (j.genset && Date.now() - lastRxAt > 5000) onGenset(j.genset);
     }
 
@@ -686,6 +710,7 @@
         setConn(true, 'MQTT OK');
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/genset`);
+        client.subscribe(`home/${id}/meter`);
         toast('Συνδέθηκε — αναμονή δεδομένων...');
       });
       client.on('offline', () => { connected = false; setConn(false, 'OFFLINE'); });
@@ -695,6 +720,7 @@
           const j = JSON.parse(msg.toString());
           if (t.endsWith('/genset')) onGenset(j);
           else if (t.endsWith('/status')) onStatus(j);
+          else if (t.endsWith('/meter')) renderMeter(j);
         } catch (e) {}
       });
     }

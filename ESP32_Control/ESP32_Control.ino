@@ -47,6 +47,9 @@
 #include "ota.h"
 #include "mqtt_auth.h"
 #include "cummins_gen.h"
+#ifndef ESP32_SLIM_BUILD
+#include "entes_meter.h"
+#endif
 
 
 
@@ -60,6 +63,9 @@ Preferences prefs;
 
 BmsManager bmsMgr;
 GenManager genMgr;
+#ifndef ESP32_SLIM_BUILD
+MeterManager meterMgr;
+#endif
 
 
 
@@ -69,7 +75,7 @@ String mqttBroker = MQTT_DEFAULT_BROKER;
 
 uint16_t mqttPort = MQTT_DEFAULT_PORT;
 
-String topicStatus, topicCmd, topicBms, topicGenset, topicWifi, topicBle;
+String topicStatus, topicCmd, topicBms, topicGenset, topicMeter, topicWifi, topicBle;
 
 String bleScanJson = "[]";
 
@@ -188,6 +194,20 @@ void publishGensetMqtt() {
   mqtt.publish(topicGenset.c_str(), payload);
 }
 
+#ifndef ESP32_SLIM_BUILD
+void publishMeterMqtt() {
+  if (!mqtt.connected() || !meterMgr.enabled) return;
+  StaticJsonDocument<1536> doc;
+  JsonObject root = doc.to<JsonObject>();
+  meterFillJson(root, meterMgr.data);
+  root["enabled"] = meterMgr.enabled;
+  root["slave_id"] = meterMgr.slaveId;
+  char payload[1536];
+  serializeJson(doc, payload);
+  mqtt.publish(topicMeter.c_str(), payload);
+}
+#endif
+
 void publishBmsMqtt() {
 
   if (!mqtt.connected() || !bmsMgr.bms.valid) return;
@@ -301,6 +321,10 @@ String buildStatusJson() {
 
   mq["topic_genset"] = topicGenset;
 
+#ifndef ESP32_SLIM_BUILD
+  mq["topic_meter"] = topicMeter;
+#endif
+
   mq["topic_wifi"] = topicWifi;
 
   mq["topic_ble"] = topicBle;
@@ -314,6 +338,13 @@ String buildStatusJson() {
   genset["modbus_rx"] = MODBUS_RX_PIN;
   genset["modbus_tx"] = MODBUS_TX_PIN;
   genset["modbus_de"] = MODBUS_DE_PIN;
+
+#ifndef ESP32_SLIM_BUILD
+  JsonObject meter = doc.createNestedObject("meter");
+  meterFillJson(meter, meterMgr.data);
+  meter["enabled"] = meterMgr.enabled;
+  meter["slave_id"] = meterMgr.slaveId;
+#endif
 
 
 
@@ -544,10 +575,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     genMgr.save(prefs);
     genMgr.applyBaud();
+#ifndef ESP32_SLIM_BUILD
+    if (cfg.containsKey("meter_enabled")) meterMgr.enabled = cfg["meter_enabled"].as<bool>();
+    if (cfg.containsKey("meter_slave_id")) meterMgr.slaveId = (uint8_t)(cfg["meter_slave_id"].as<int>());
+    meterMgr.save(prefs);
+#endif
     genMgr.data.lastScan = "CFG OK baud=" + String(genMgr.baud) + " slave=" + String(genMgr.slaveId);
     Serial.printf("MQTT: modbus cfg baud=%u id=%u\n", genMgr.baud, genMgr.slaveId);
     if (genMgr.enabled) genMgr.pollOnce();
+#ifndef ESP32_SLIM_BUILD
+    if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600) meterMgr.poll();
+#endif
     publishGensetMqtt();
+#ifndef ESP32_SLIM_BUILD
+    publishMeterMqtt();
+#endif
     publishStatus();
   }
 
@@ -780,6 +822,9 @@ void loadSettings() {
 
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
+#ifndef ESP32_SLIM_BUILD
+  meterMgr.load(prefs);
+#endif
 
   for (int i = 0; i < RELAY_COUNT; i++) {
 
@@ -1156,6 +1201,12 @@ void handleModbusSave() {
 
   genMgr.applyBaud();
 
+#ifndef ESP32_SLIM_BUILD
+  if (doc.containsKey("meter_enabled")) meterMgr.enabled = doc["meter_enabled"] | true;
+  if (doc.containsKey("meter_slave_id")) meterMgr.slaveId = (uint8_t)(doc["meter_slave_id"] | MODBUS_DEFAULT_METER_SLAVE_ID);
+  meterMgr.save(prefs);
+#endif
+
   if (genMgr.enabled) genMgr.pollOnce();
 
   server.send(200, "application/json", "{\"ok\":true}");
@@ -1345,6 +1396,10 @@ void setup() {
 
   topicGenset = "home/" + deviceId + "/genset";
 
+#ifndef ESP32_SLIM_BUILD
+  topicMeter = "home/" + deviceId + "/meter";
+#endif
+
   topicWifi = "home/" + deviceId + "/wifi";
   topicBle = "home/" + deviceId + "/ble";
 
@@ -1356,6 +1411,9 @@ void setup() {
   setupWiFi();
 
   genMgr.begin();
+#ifndef ESP32_SLIM_BUILD
+  meterMgr.attach(&Serial2, MODBUS_DE_PIN);
+#endif
   if (genMgr.enabled) genMgr.pollOnce();
 
 
@@ -1511,6 +1569,11 @@ void loop() {
 
   genMgr.poll();
 
+#ifndef ESP32_SLIM_BUILD
+  if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600)
+    meterMgr.poll();
+#endif
+
   static unsigned long lastGenMqtt = 0;
 
   if (genMgr.enabled && (genMgr.takePublishPending()
@@ -1518,6 +1581,16 @@ void loop() {
     lastGenMqtt = millis();
     publishGensetMqtt();
   }
+
+#ifndef ESP32_SLIM_BUILD
+  static unsigned long lastMeterMqtt = 0;
+  if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600
+      && (meterMgr.takePublishPending()
+          || (meterMgr.data.pollComplete && millis() - lastMeterMqtt > 5000))) {
+    lastMeterMqtt = millis();
+    publishMeterMqtt();
+  }
+#endif
 
 }
 

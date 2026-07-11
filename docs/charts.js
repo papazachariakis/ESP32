@@ -259,6 +259,15 @@
       });
   }
 
+  function recordMeter(m) {
+    if (!m || !m.valid) return;
+    record('meter.kw_total', m.kw_total, 'kW δικτύου', 'kW', 1);
+    record('meter.kva_total', m.kva_total, 'kVA δικτύου', 'kVA', 1);
+    record('meter.frequency', m.frequency, 'Hz δικτύου', 'Hz', 1);
+    record('meter.volt_avg_ll', m.volt_avg_ll, 'Τάση δικτύου', 'V', 0);
+    record('meter.kwh_consumed', m.kwh_consumed, 'kWh καταναλωθέντα', 'kWh', 1);
+  }
+
   function init() {
     KPI_BINDINGS.forEach(b => bindById(b.id, b.key, b.label, b.unit, b.dec));
 
@@ -291,5 +300,5 @@
     window.addEventListener('resize', () => { if (activeKey) redraw(); });
   }
 
-  global.ChartHub = { init, record, recordBms, recordGenset, openChart, closeChart, bindClickable };
+  global.ChartHub = { init, record, recordBms, recordGenset, recordMeter, openChart, closeChart, bindClickable };
 })(typeof window !== 'undefined' ? window : globalThis);

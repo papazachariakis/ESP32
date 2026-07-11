@@ -28,6 +28,24 @@
       --gen: #f59e0b;
       --radius: 14px;
       --shadow: 0 4px 24px rgba(0,0,0,.35);
+      --page-gutter: clamp(10px, 2.5vw, 32px);
+      --content-max: calc(100vw - 2 * var(--page-gutter));
+    }
+    @media (min-width: 640px) {
+      :root { --content-max: min(calc(100vw - 2 * var(--page-gutter)), 960px); }
+    }
+    @media (min-width: 900px) {
+      :root { --content-max: min(calc(100vw - 2 * var(--page-gutter)), 1200px); }
+    }
+    @media (min-width: 1200px) {
+      :root { --content-max: min(calc(100vw - 2 * var(--page-gutter)), 1500px); }
+    }
+    @media (min-width: 1600px) {
+      :root { --content-max: min(calc(100vw - 2 * var(--page-gutter)), 1800px); }
+    }
+    .layout-wrap{
+      width:100%;max-width:var(--content-max);margin-inline:auto;
+      padding-inline:var(--page-gutter);box-sizing:border-box;
     }
     *{box-sizing:border-box;margin:0;padding:0}
     html{width:100%}
@@ -47,7 +65,9 @@
       background:rgba(17,24,39,.92);
       backdrop-filter:blur(12px);
       border-bottom:1px solid var(--border);
-      padding:12px clamp(14px,3vw,24px);
+      padding-block:12px;
+    }
+    .topbar-inner{
       display:flex;align-items:center;justify-content:space-between;gap:12px;
     }
     .brand{display:flex;align-items:center;gap:10px;min-width:0}
@@ -108,10 +128,12 @@
 
     /* Nav tabs */
     nav.tabs{
-      display:flex;gap:4px;padding:8px clamp(14px,3vw,24px);
-      overflow-x:auto;-webkit-overflow-scrolling:touch;
       border-bottom:1px solid var(--border);
       background:var(--surface);
+      padding-block:8px;
+    }
+    .tabs-inner{
+      display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;
     }
     nav.tabs button{
       flex:1;min-width:72px;padding:10px 8px;border:0;border-radius:10px;
@@ -122,7 +144,11 @@
     nav.tabs button.active{background:var(--accent);color:#fff}
     nav.tabs button:not(.active):hover{background:var(--surface2);color:var(--text)}
 
-    main{padding:clamp(12px,2vw,20px) clamp(14px,3vw,24px) 80px;max-width:1400px;margin:0 auto}
+    main{
+      width:100%;max-width:var(--content-max);margin-inline:auto;
+      padding:clamp(12px,2vw,20px) var(--page-gutter) 80px;
+      box-sizing:border-box;
+    }
     .view{display:none}.view.active{display:block}
 
     /* Cards */
@@ -177,6 +203,7 @@
     .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
     @media(min-width:500px){.stats{grid-template-columns:repeat(3,1fr)}}
     @media(min-width:900px){.stats{grid-template-columns:repeat(4,1fr)}}
+    @media(min-width:1200px){.overview-stats{grid-template-columns:repeat(4,1fr)}}
     .kpi{
       background:var(--surface2);border:1px solid var(--border);
       border-radius:12px;padding:12px;
@@ -381,6 +408,7 @@
     .small{font-size:.75rem;color:var(--muted)}
     .grid-2{display:grid;gap:12px}
     @media(min-width:768px){.grid-2{grid-template-columns:1fr 1fr}}
+    @media(min-width:1400px){.grid-2{gap:16px}}
     .hidden{display:none!important}
 
     /* Charts */
@@ -430,6 +458,7 @@
 </head>
 <body>
   <header class="topbar">
+    <div class="layout-wrap topbar-inner">
     <div class="brand">
       <div class="brand-icon">⚡</div>
       <div>
@@ -444,15 +473,18 @@
       <span class="badge off" id="badge">Offline</span>
       <button class="icon-btn" onclick="openDrawer()" title="Ρυθμίσεις">⚙</button>
     </div>
+    </div>
   </header>
 
   <nav class="tabs">
+    <div class="layout-wrap tabs-inner">
     <button class="active" data-view="overview" onclick="switchView('overview')">Αρχική</button>
     <button data-view="bms" onclick="switchView('bms')">Μπαταρία</button>
     <button data-view="gen" onclick="switchView('gen')">Γεννήτρια</button>
     <button data-view="relays" onclick="switchView('relays')">Relays</button>
     <button data-view="wiring" onclick="switchView('wiring')">Καλωδίωση</button>
     <button data-view="diag" onclick="switchView('diag')">Διαγνωστικά</button>
+    </div>
   </nav>
 
   <main>
@@ -486,7 +518,7 @@
       </div>
       <div class="card">
         <div class="card-title">Γρήγορη επισκόπηση</div>
-        <div class="stats" id="overviewStats">
+        <div class="stats overview-stats" id="overviewStats">
           <div class="kpi chartable" data-chart-key="bms.voltage" data-chart-label="Τάση μπαταρίας" data-chart-unit="V" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Τάση μπαταρίας</div><div class="v"><span id="ovV">—</span><span class="u">V</span></div></div>
           <div class="kpi chartable" data-chart-key="bms.current" data-chart-label="Ρεύμα μπαταρίας" data-chart-unit="A" data-chart-dec="2" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα</div><div class="v"><span id="ovA">—</span><span class="u">A</span></div></div>
           <div class="kpi chartable" data-chart-key="bms.power" data-chart-label="Ισχύς μπαταρίας" data-chart-unit="W" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Ισχύς</div><div class="v"><span id="ovW">—</span><span class="u">W</span></div></div>

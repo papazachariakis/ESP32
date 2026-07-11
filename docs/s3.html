@@ -626,13 +626,13 @@
       <div class="card">
         <div class="card-title">Έλεγχος γεννήτριας</div>
         <p class="small muted" style="margin-bottom:8px">Απομακρυσμένος έλεγχος μέσω MQTT Modbus. Χρησιμοποίησε με προσοχή.</p>
-        <div class="gen-mode-label">Λειτουργία (Off / Auto / Manual) — register 40010</div>
+        <div class="gen-mode-label">Λειτουργία (Off / Auto / Manual) — register 40010 <span class="muted">(ανάγνωση κατάστασης)</span></div>
         <div class="gen-actions" style="margin-top:0">
           <button class="sec mode-btn" id="modeOff" onclick="genSetMode(0)">Off</button>
           <button class="sec mode-btn" id="modeAuto" onclick="genSetMode(1)">Auto</button>
           <button class="sec mode-btn" id="modeManual" onclick="genSetMode(2)">Manual</button>
         </div>
-        <p class="small muted" style="margin:6px 0 10px">Αν αποτύχει: ο διακόπτης στο panel PS0600 μπορεί να είναι read-only μέσω Modbus.</p>
+        <p class="small muted" id="genModeHint" style="margin:6px 0 10px">Το 40010 δείχνει τη θέση του φυσικού διακόπτη στο panel PS0600 — συνήθως <b>δεν αλλάζει</b> απομακρυσμένα. Για εκκίνηση χρησιμοποίησε <b>Manual</b> στο panel + κουμπί Εκκίνηση.</p>
         <div class="gen-actions">
           <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
           <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
@@ -850,8 +850,8 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.16';
-    const DASHBOARD_BUILD = '2026-07-11-gen1';
+    const EXPECTED_FIRMWARE = '3.0.17';
+    const DASHBOARD_BUILD = '2026-07-11-mode1';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
@@ -2262,10 +2262,13 @@
             msgStats.genset++;
             lastGensetTopicAt = Date.now();
             if (pendingGenCmd && j.last_cmd === pendingGenCmd) {
-              const msg = j.error || (j.last_cmd_ok ? ('OK: ' + pendingGenCmd) : ('Αποτυχία ' + pendingGenCmd));
-              toast(msg, j.last_cmd_ok && !j.error ? 4000 : 8000);
+              const msg = j.last_cmd_detail || j.error || (j.last_cmd_ok ? ('OK: ' + pendingGenCmd) : ('Αποτυχία ' + pendingGenCmd));
+              toast(msg, j.last_cmd_ok && !j.error ? 4000 : 10000);
               pendingGenCmd = '';
             }
+            const hint = document.getElementById('genModeHint');
+            if (hint && j.last_cmd && j.last_cmd.startsWith('mode_') && j.last_cmd_detail)
+              hint.textContent = j.last_cmd_detail;
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
           }

@@ -95,6 +95,7 @@ struct GenData {
   String lastError;
   String lastScan;
   String lastCmd;
+  String lastCmdDetail;
   bool lastCmdOk = false;
   uint16_t remoteStartReg = 0;
   uint16_t networkShutdownReg = 0;
@@ -230,6 +231,7 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   if (g.lastCmd.length()) {
     o["last_cmd"] = g.lastCmd;
     o["last_cmd_ok"] = g.lastCmdOk;
+    if (g.lastCmdDetail.length()) o["last_cmd_detail"] = g.lastCmdDetail;
   }
   o["remote_start_reg"] = g.remoteStartReg;
   o["network_shutdown_reg"] = g.networkShutdownReg;
@@ -505,7 +507,7 @@ struct GenManager {
     if (!refreshStatusBlock()) return false;
     if (data.opMode != mode) {
       data.lastError = "mode readback=" + String(data.opMode) + " expected " + String(mode) +
-                       " (40010 read-only? physical switch)";
+                       " — το 40010 είναι κατάσταση διακόπτη panel (read-only)";
       return false;
     }
     data.lastError = String("mode OK • ") + cumminsOpModeLabelEl(mode);
@@ -515,6 +517,7 @@ struct GenManager {
   bool runGensetCmd(const char* action) {
     data.lastCmd = action ? action : "";
     data.lastCmdOk = false;
+    data.lastCmdDetail = "";
     if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) {
       data.lastError = "genset cmd unavailable (enable PS0600 profile)";
       return false;
@@ -562,6 +565,9 @@ struct GenManager {
     refreshStatusBlock();
     readCmdRegs();
     data.lastCmdOk = ok;
+    data.lastCmdDetail = data.lastError;
+    if (!ok && data.lastCmdDetail.length() == 0)
+      data.lastCmdDetail = "εντολή απέτυχε";
     publishPending = true;
     pollPaused = false;
     return ok;

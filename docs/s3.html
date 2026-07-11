@@ -840,7 +840,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.14';
-    const DASHBOARD_BUILD = '2026-07-11-ota4';
+    const DASHBOARD_BUILD = '2026-07-11-ota5';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1631,12 +1631,33 @@
       return exp === totalBytes;
     }
 
+    function isStaleOtaFailure(s) {
+      if (!s) return false;
+      return s.ota_phase === 'mqtt' && !!s.ota_error;
+    }
+
+    async function otaRebootAndWait(pw) {
+      client.publish(cmdTopic, JSON.stringify({ reboot: pw }), { qos: 1 });
+      lastOtaErrorToast = '';
+      lastOtaPhaseToast = '';
+      toast('Reboot ESP32… περίμενε ~45s', 7000);
+      await sleepMs(18000);
+      for (let i = 0; i < 35; i++) {
+        await sleepMs(2000);
+        const s = lastStatus || {};
+        if (s.wifi_connected && s.firmware && !s.ota_error && !s.ota_phase) return true;
+        if (s.wifi_connected && s.firmware && !isStaleOtaFailure(s)) return true;
+      }
+      return !!(lastStatus && lastStatus.wifi_connected && lastStatus.firmware);
+    }
+
     async function waitForOtaSessionBegin(totalBytes, maxWaitMs) {
       const deadline = Date.now() + maxWaitMs;
       while (Date.now() < deadline) {
         await sleepMs(300);
         const s = lastStatus || {};
-        if (s.ota_error && !otaSessionMatches(totalBytes)) return false;
+        if (isStaleOtaFailure(s)) continue;
+        if (s.ota_error && otaSessionMatches(totalBytes)) return false;
         if (!otaSessionMatches(totalBytes)) continue;
         const rx = parseOtaRx(s.ota_mqtt_rx);
         if (rx <= 512) return true;
@@ -1686,8 +1707,8 @@
       const etaMin = Math.ceil((buf.length / CHUNK) * GAP_MS / 60000);
       toast(`v3.0.12: αργό MQTT push ~${etaMin} λεπτά — ΜΗΝ κλείσεις το tab`, 10000);
       client.publish(cmdTopic, JSON.stringify({ ota_mqtt: pw, size: buf.length }), { qos: 1 });
-      if (!await waitForOtaSessionBegin(buf.length, 30000)) {
-        toast('ESP32 δεν ξεκίνησε OTA session', 8000);
+      if (!await waitForOtaSessionBegin(buf.length, 45000)) {
+        toast('ESP32 δεν ξεκίνησε OTA session — δοκίμασε ξανά μετά reboot', 8000);
         return false;
       }
       let sent = 0;
@@ -1797,13 +1818,15 @@
     async function remoteOtaEspPull(pw) {
       client.publish(cmdTopic, JSON.stringify({ ota: pw }), { qos: 1 });
       toast('ESP32 κατεβάζει firmware (HTTPS) — 2–5 λεπτά', 8000);
+      let sawPull = false;
       for (let i = 0; i < 100; i++) {
         await sleepMs(3000);
         const s = lastStatus || {};
-        if (s.ota_phase && s.ota_phase.indexOf('http') >= 0) {
+        if (s.ota_phase === 'queued' || (s.ota_phase && s.ota_phase.indexOf('http') >= 0)) {
+          sawPull = true;
           toast('OTA: ' + s.ota_phase, 2500);
         }
-        if (s.ota_error && s.ota_phase !== 'rebooting') {
+        if (sawPull && s.ota_error && s.ota_phase !== 'rebooting') {
           toast('ESP pull σφάλμα: ' + s.ota_error, 7000);
           return false;
         }
@@ -1811,7 +1834,7 @@
           toast('ESP pull OK — reboot…', 5000);
           return true;
         }
-        if (i > 25 && !s.ota_phase) {
+        if (i > 25 && !sawPull && !isStaleOtaFailure(s)) {
           toast('ESP32 δεν ξεκίνησε download — δοκιμή browser push…', 6000);
           return false;
         }
@@ -1831,10 +1854,16 @@
       if (!pw) return;
       const legacy = isLegacyOtaFirmware(s.firmware);
       const msg = legacy
-        ? `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\n1) ESP pull (HTTPS) — δοκιμάζεται πρώτα (~5 λεπτά)\n2) Browser push — αργό mode ~3–4 ώρες\n\n⚠ ΜΗΝ κλείσεις το browser tab\n\nΣυνέχεια;`
-        : `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n1) ESP pull (HTTPS)\n2) Browser push\n\nΣυνέχεια;`;
+        ? `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\n• Αυτόματο reboot ESP32 πρώτα (καθαρισμός παλιού σφάλματος)\n• ESP pull (HTTPS) ~5 λεπτά\n• Browser push ~3–4 ώρες αν αποτύχει\n\n⚠ ΜΗΝ κλείσεις το tab\n\nΣυνέχεια;`
+        : `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n1) Reboot + ESP pull\n2) Browser push\n\nΣυνέχεια;`;
       if (!confirm(msg)) return;
       closeDrawer();
+      if (legacy || isStaleOtaFailure(s) || s.ota_error) {
+        if (!await otaRebootAndWait(pw)) {
+          toast('ESP32 δεν επανήλθε μετά reboot — έλεγξε MQTT', 8000);
+          return;
+        }
+      }
       await otaPrepareDeviceQuiet();
       if (await remoteOtaEspPull(pw)) return;
       toast('ESP pull απέτυχε — browser push…', 6000);

@@ -1367,6 +1367,14 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED && mqtt.connected()) {
     mqtt.loop();
+    if (mqttOtaActive()) {
+      for (int i = 0; i < 16; i++) mqtt.loop();
+      if (millis() - lastMqttPublish > 400) {
+        lastMqttPublish = millis();
+        publishStatus();
+      }
+      return;
+    }
   }
 
   if (remoteOtaPending() && !otaInProgress()) {

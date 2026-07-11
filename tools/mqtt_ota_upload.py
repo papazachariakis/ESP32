@@ -18,7 +18,6 @@ except ImportError:
 
 BROKER = "broker.hivemq.com"
 PORT = 1883
-CHUNK = 512
 PASSWORD = "esp32ota"
 
 
@@ -73,20 +72,63 @@ def main():
     sent = 0
     seq = 0
     t0 = time.time()
+    CHUNK = 384
+    BATCH = 4
     while sent < size:
-        piece = data[sent : sent + CHUNK]
-        b64 = base64.b64encode(piece).decode("ascii")
-        payload = json.dumps({"ota_chunk": b64})
-        client.publish(cmd, payload, qos=0)
-        sent += len(piece)
-        seq += 1
-        if seq % 40 == 0:
-            rx = last_status.get("ota_mqtt_rx", "?")
-            pct = sent * 100 // size
-            print(f"  {pct}% ({sent}/{size}) device_rx={rx}")
-            time.sleep(0.05)
-        if seq % 200 == 0:
-            time.sleep(0.2)
+        batch_end = min(sent + CHUNK * BATCH, size)
+        off = sent
+        while off < batch_end:
+            piece = data[off : off + CHUNK]
+            b64 = base64.b64encode(piece).decode("ascii")
+            payload = json.dumps({"ota_chunk": b64})
+            client.publish(cmd, payload, qos=1)
+            off += len(piece)
+            seq += 1
+        sent = batch_end
+        pct = sent * 100 // size
+        deadline = time.time() + 25
+        want_rx = max(0, sent - CHUNK)
+        while time.time() < deadline:
+            time.sleep(0.3)
+            err = last_status.get("ota_error")
+            if err:
+                print("ERROR during upload:", err)
+                client.loop_stop()
+                return 1
+            rx_s = last_status.get("ota_mqtt_rx", "")
+            rx = 0
+            if "/" in rx_s:
+                try:
+                    rx = int(rx_s.split("/", 1)[0])
+                except ValueError:
+                    pass
+            if rx >= want_rx:
+                break
+        rx_s = last_status.get("ota_mqtt_rx", "?")
+        print(f"  {pct}% ({sent}/{size}) device_rx={rx_s}")
+
+    print("Waiting for device to receive all bytes...")
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        time.sleep(0.5)
+        err = last_status.get("ota_error")
+        if err:
+            print("ERROR:", err)
+            client.loop_stop()
+            return 1
+        rx_s = last_status.get("ota_mqtt_rx", "")
+        rx = 0
+        if "/" in rx_s:
+            try:
+                rx = int(rx_s.split("/", 1)[0])
+            except ValueError:
+                pass
+        if rx >= size:
+            break
+    else:
+        print("ERROR: timeout waiting for full transfer", last_status.get("ota_mqtt_rx"))
+        client.loop_stop()
+        return 1
 
     print("Finalizing...")
     client.publish(cmd, json.dumps({"ota_end": PASSWORD}), qos=1)

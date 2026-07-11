@@ -813,7 +813,7 @@
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.12</span></b> · esp32ota · browser push ~2 λεπτά</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.13</span></b> · esp32ota · browser push ~2 λεπτά</p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -839,7 +839,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.12';
+    const EXPECTED_FIRMWARE = '3.0.13';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1033,7 +1033,9 @@
         diagRow('BMS data', pill(bms.valid, 'Valid', 'Partial', 'No data')),
         diagRow('Genset data', pill(gen.valid, 'Valid', 'Polling', 'No data')),
         diagRow('Τελευταίο status', sec == null ? '—' : (sec < 3 ? 'τώρα' : 'πριν ' + sec + 's')),
-        diagRow('OTA', s.ota_phase ? (s.ota_phase + (s.ota_error ? ' — ' + s.ota_error : '')) : '—')
+        diagRow('OTA', s.ota_phase
+          ? (s.ota_phase + (s.ota_mqtt_rx ? ' (' + s.ota_mqtt_rx + ')' : '') + (s.ota_error ? ' — ' + s.ota_error : ''))
+          : (s.ota_error || '—'))
       ].join('');
 
       document.getElementById('diagBle').innerHTML = [
@@ -1593,6 +1595,24 @@
       return null;
     }
 
+    function parseOtaRx(s) {
+      if (!s) return 0;
+      const m = String(s).match(/^(\d+)\/(\d+)$/);
+      return m ? parseInt(m[1], 10) : 0;
+    }
+
+    async function waitDeviceOtaRx(minBytes, maxWaitMs) {
+      const deadline = Date.now() + maxWaitMs;
+      while (Date.now() < deadline) {
+        await sleepMs(300);
+        if (lastStatus && lastStatus.ota_error) return -1;
+        if (lastStatus && lastStatus.ota_phase === 'rebooting') return minBytes;
+        const rx = parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx);
+        if (rx >= minBytes) return rx;
+      }
+      return parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx);
+    }
+
     async function remoteOtaBrowserPush(pw) {
       const buf = await fetchOtaFirmware();
       if (!buf) {
@@ -1606,19 +1626,46 @@
         toast('OTA σφάλμα: ' + lastStatus.ota_error, 7000);
         return false;
       }
-      const CHUNK = 512;
-      for (let off = 0; off < buf.length; off += CHUNK) {
-        const slice = buf.subarray(off, Math.min(off + CHUNK, buf.length));
-        client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }));
-        if (off === 0 || off % (CHUNK * 50) === 0) {
-          toast('OTA ' + Math.round((off + slice.length) / buf.length * 100) + '%', 1200);
-          await sleepMs(40);
-        } else {
-          await sleepMs(12);
+      const CHUNK = 384;
+      const BATCH = 4;
+      let sent = 0;
+      while (sent < buf.length) {
+        const batchEnd = Math.min(sent + CHUNK * BATCH, buf.length);
+        for (let off = sent; off < batchEnd; off += CHUNK) {
+          const slice = buf.subarray(off, Math.min(off + CHUNK, buf.length));
+          client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }), { qos: 1 });
+        }
+        sent = batchEnd;
+        toast('OTA ' + Math.round(sent / buf.length * 100) + '%', 1500);
+        const wantRx = Math.max(0, sent - CHUNK);
+        const rx = await waitDeviceOtaRx(wantRx, 25000);
+        if (rx < 0) {
+          toast('OTA σφάλμα: ' + (lastStatus.ota_error || '?'), 7000);
+          return false;
+        }
+        if (rx < wantRx && sent < buf.length) {
+          await sleepMs(1500);
         }
       }
+      toast('OTA finalize — αναμονή ESP32…', 3000);
+      const finalRx = await waitDeviceOtaRx(buf.length, 60000);
+      if (finalRx < buf.length) {
+        toast(`OTA timeout: ESP32 ${finalRx}/${buf.length} bytes`, 8000);
+        return false;
+      }
       client.publish(cmdTopic, JSON.stringify({ ota_end: pw }), { qos: 1 });
-      toast('OTA ολοκληρώθηκε — reboot ESP32 ~30s', 6000);
+      for (let i = 0; i < 45; i++) {
+        await sleepMs(2000);
+        if (lastStatus && lastStatus.ota_error) {
+          toast('OTA σφάλμα: ' + lastStatus.ota_error, 7000);
+          return false;
+        }
+        if (lastStatus && lastStatus.ota_phase === 'rebooting') {
+          toast('OTA OK — reboot ESP32…', 5000);
+          return true;
+        }
+      }
+      toast('OTA ολοκληρώθηκε — έλεγξε firmware μετά το reboot', 6000);
       return true;
     }
 

@@ -559,7 +559,9 @@ inline bool mqttOtaFeedChunkJson(const char* payload, unsigned int length) {
 inline bool mqttOtaFinish() {
   if (!mqttOtaActive()) return false;
   if (mqttOtaReceived() != mqttOtaExpected()) {
-    mqttOtaAbort("size mismatch");
+    char msg[48];
+    snprintf(msg, sizeof(msg), "size mismatch %d/%d", mqttOtaReceived(), mqttOtaExpected());
+    mqttOtaAbort(msg);
     return false;
   }
   if (!Update.end(true)) {

@@ -254,22 +254,136 @@
     .health ul{margin:0;padding-left:18px;font-size:.8rem;color:var(--muted)}
     .health li{margin:4px 0}
 
-    /* Genset */
-    .gen-hero{
-      padding:16px;border-radius:12px;background:var(--surface2);
-      border:1px solid var(--border);margin-bottom:12px;
+    /* Genset — modern dashboard */
+    .gen-panel{
+      background:linear-gradient(145deg,rgba(245,158,11,.07) 0%,var(--surface) 50%);
+      border-color:rgba(245,158,11,.18);
     }
-    .gen-hero.run{border-color:#14532d;background:linear-gradient(135deg,#052e16 0%,var(--surface2) 100%)}
-    .gen-hero.warn{border-color:#713f12}
-    .gen-hero .state{font-size:1.25rem;font-weight:700}
-    .gen-hero .mode{font-size:.8rem;color:var(--muted);margin-top:4px}
-    .phases{display:grid;gap:10px}
+    .gen-gauges{
+      display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:16px;
+    }
+    .gen-gauge{
+      position:relative;width:100px;height:100px;flex-shrink:0;
+    }
+    .gen-gauge svg{transform:rotate(-90deg);display:block;margin:0 auto}
+    .gen-gauge .val{
+      position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;pointer-events:none;
+    }
+    .gen-gauge .val .num{font-size:1.12rem;font-weight:700;line-height:1.1}
+    .gen-gauge .val .lbl{font-size:.62rem;color:var(--muted);margin-top:2px}
+    .gen-gauge.chartable{cursor:pointer;border-radius:50%}
+    .gen-gauge.chartable:hover{box-shadow:0 0 0 3px rgba(245,158,11,.45)}
+
+    .gen-hero{
+      padding:18px;border-radius:14px;background:var(--surface2);
+      border:1px solid var(--border);position:relative;overflow:hidden;
+    }
+    .gen-hero::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:3px;
+      background:var(--muted);transition:background .3s;
+    }
+    .gen-hero.run::before{background:linear-gradient(90deg,var(--ok),#4ade80);animation:genPulse 2s infinite}
+    .gen-hero.warn::before{background:var(--warn)}
+    .gen-hero.crank::before{background:linear-gradient(90deg,var(--warn),#fde047);animation:genPulse 1s infinite}
+    .gen-hero.run{
+      border-color:rgba(34,197,94,.35);
+      background:linear-gradient(135deg,rgba(5,46,22,.45) 0%,var(--surface2) 75%);
+      box-shadow:0 0 48px rgba(34,197,94,.1);
+    }
+    .gen-hero.warn{border-color:rgba(245,158,11,.4)}
+    @keyframes genPulse{0%,100%{opacity:1}50%{opacity:.45}}
+    .gen-status-head{display:flex;gap:14px;align-items:flex-start}
+    .gen-icon{
+      width:50px;height:50px;border-radius:13px;flex-shrink:0;
+      background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.08));
+      display:flex;align-items:center;justify-content:center;font-size:26px;
+      border:1px solid rgba(245,158,11,.2);
+    }
+    .gen-hero.run .gen-icon{animation:genSpin 6s linear infinite}
+    @keyframes genSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .gen-status-head .info{flex:1;min-width:0}
+    .gen-hero .state{font-size:1.35rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+    .gen-hero .mode{font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.45}
+
+    .gen-load-grid{display:grid;gap:12px}
+    @media(min-width:560px){.gen-load-grid{grid-template-columns:repeat(3,1fr)}}
+    .gen-load-phase{
+      background:var(--surface2);border-radius:13px;padding:16px 14px;
+      border:1px solid var(--border);text-align:center;
+    }
+    .gen-load-phase.l1{border-top:3px solid #f59e0b}
+    .gen-load-phase.l2{border-top:3px solid #22c55e}
+    .gen-load-phase.l3{border-top:3px solid #3b82f6}
+    .gen-load-phase .ph{font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+    .gen-load-phase .pct{font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums}
+    .gen-load-phase .bar{
+      height:7px;border-radius:999px;background:var(--border);
+      overflow:hidden;margin-top:12px;
+    }
+    .gen-load-phase .bar>div{height:100%;border-radius:999px;width:0%;transition:width .55s ease}
+    .gen-load-phase.l1 .bar>div{background:linear-gradient(90deg,#92400e,#f59e0b)}
+    .gen-load-phase.l2 .bar>div{background:linear-gradient(90deg,#14532d,#22c55e)}
+    .gen-load-phase.l3 .bar>div{background:linear-gradient(90deg,#1e3a8a,#3b82f6)}
+
+    .gen-engine-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    @media(min-width:560px){.gen-engine-row{grid-template-columns:repeat(4,1fr)}}
+    .gen-engine-item{
+      background:var(--surface2);border-radius:11px;padding:11px 12px;
+      border:1px solid var(--border);display:flex;align-items:center;gap:10px;
+    }
+    .gen-engine-item .ico{
+      width:38px;height:38px;border-radius:10px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-size:17px;
+      background:rgba(59,130,246,.12);
+    }
+    .gen-engine-item .ico.ok{background:rgba(34,197,94,.12)}
+    .gen-engine-item .ico.warn{background:rgba(245,158,11,.14)}
+    .gen-engine-item .ico.bad{background:rgba(239,68,68,.14)}
+    .gen-engine-item .txt{min-width:0}
+    .gen-engine-item .txt .l{font-size:.66rem;color:var(--muted)}
+    .gen-engine-item .txt .v{font-size:.98rem;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+
+    .gen-cmd-grid{display:grid;gap:14px;margin-top:4px}
+    @media(min-width:720px){.gen-cmd-grid{grid-template-columns:1fr 1fr}}
+    .gen-cmd-panel{
+      background:var(--surface2);border-radius:13px;padding:16px;
+      border:1px solid var(--border);
+    }
+    .gen-cmd-panel h4{
+      font-size:.72rem;color:var(--muted);font-weight:600;
+      text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;
+    }
+    .gen-mode-btns{display:flex;gap:6px;margin-bottom:10px}
+    .gen-mode-btns button{flex:1;padding:10px 6px;font-size:.78rem}
+    .gen-cmd-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .gen-cmd-btns .full{grid-column:1/-1}
+
+    .phases{display:grid;gap:12px}
     @media(min-width:700px){.phases{grid-template-columns:repeat(3,1fr)}}
-    .phase{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px}
-    .phase h3{font-size:.8rem;color:var(--gen);margin-bottom:10px;font-weight:600}
-    .phase .row{display:flex;justify-content:space-between;font-size:.78rem;padding:5px 0;border-bottom:1px solid var(--border)}
-    .phase .row:last-child{border:0}
-    .phase .row span:last-child{font-weight:600}
+    .phase-v2{
+      background:var(--surface2);border:1px solid var(--border);
+      border-radius:14px;padding:16px;position:relative;overflow:hidden;
+    }
+    .phase-v2::after{
+      content:'';position:absolute;top:0;left:0;bottom:0;width:4px;background:var(--gen);
+    }
+    .phase-v2.l2::after{background:#22c55e}
+    .phase-v2.l3::after{background:#3b82f6}
+    .phase-v2 h3{
+      font-size:.82rem;margin-bottom:12px;display:flex;
+      justify-content:space-between;align-items:center;font-weight:600;
+    }
+    .phase-v2 h3 .load-tag{
+      font-size:.68rem;padding:2px 8px;border-radius:999px;
+      background:rgba(245,158,11,.15);color:#fde68a;font-weight:600;
+    }
+    .phase-v2 .phase-kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .phase-v2 .pk{background:rgba(0,0,0,.18);border-radius:9px;padding:8px 10px}
+    .phase-v2 .pk .l{font-size:.64rem;color:var(--muted)}
+    .phase-v2 .pk .v{font-size:.92rem;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+    .phase-v2 .pk.chartable{cursor:pointer;border:1px solid transparent}
+    .phase-v2 .pk.chartable:hover{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.08)}
 
     .gen-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
     .gen-actions button{
@@ -596,100 +710,169 @@
 
     <!-- GENSET -->
     <div id="view-gen" class="view">
-      <div class="card">
+      <div class="card gen-panel">
         <div class="card-title"><span class="dot gen"></span>Cummins C22D5 • PS0600</div>
         <div class="gen-hero off" id="genStatusBox">
-          <div class="state" id="genState">Αναμονή δεδομένων...</div>
-          <div class="mode" id="genMode">—</div>
-          <div class="chips" id="genChips" style="margin-top:10px"></div>
+          <div class="gen-status-head">
+            <div class="gen-icon" aria-hidden="true">⚙</div>
+            <div class="info">
+              <div class="state" id="genState">Αναμονή δεδομένων...</div>
+              <div class="mode" id="genMode">—</div>
+            </div>
+          </div>
+          <div class="chips" id="genChips" style="margin-top:12px"></div>
+        </div>
+        <div class="gen-gauges">
+          <div class="gen-gauge chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM κινητήρα" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα">
+            <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#243044" stroke-width="8"/>
+              <circle id="genRpmArc" cx="50" cy="50" r="42" fill="none" stroke="#f59e0b" stroke-width="8"
+                stroke-dasharray="264" stroke-dashoffset="264" stroke-linecap="round"/>
+            </svg>
+            <div class="val"><div class="num" id="genGaugeRpm">—</div><div class="lbl">RPM</div></div>
+          </div>
+          <div class="gen-gauge chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα">
+            <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#243044" stroke-width="8"/>
+              <circle id="genHzArc" cx="50" cy="50" r="42" fill="none" stroke="#3b82f6" stroke-width="8"
+                stroke-dasharray="264" stroke-dashoffset="264" stroke-linecap="round"/>
+            </svg>
+            <div class="val"><div class="num" id="genGaugeHz">—</div><div class="lbl">Hz</div></div>
+          </div>
+          <div class="gen-gauge chartable" data-chart-key="gen.kw_total" data-chart-label="kW γεννήτριας" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα">
+            <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#243044" stroke-width="8"/>
+              <circle id="genKwArc" cx="50" cy="50" r="42" fill="none" stroke="#22c55e" stroke-width="8"
+                stroke-dasharray="264" stroke-dashoffset="264" stroke-linecap="round"/>
+            </svg>
+            <div class="val"><div class="num" id="genGaugeKw">—</div><div class="lbl">kW</div></div>
+          </div>
         </div>
       </div>
+
       <div class="card">
         <div class="card-title">Φόρτιση ανά φάση</div>
-        <div class="load-row"><div class="lbl"><span>L1</span><span id="loadL1t">—</span></div><div class="load-bar"><div id="loadL1"></div></div></div>
-        <div class="load-row"><div class="lbl"><span>L2</span><span id="loadL2t">—</span></div><div class="load-bar"><div id="loadL2"></div></div></div>
-        <div class="load-row"><div class="lbl"><span>L3</span><span id="loadL3t">—</span></div><div class="load-bar"><div id="loadL3"></div></div></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Σύνοψη</div>
-        <div class="stats">
-          <div class="kpi chartable" data-chart-key="gen.volt_avg_ll" data-chart-label="Τάση L-L" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Τάση L-L</div><div class="v"><span id="gVll">—</span><span class="u">V</span></div></div>
-          <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">—</span><span class="u">Hz</span></div></div>
-          <div class="kpi chartable" data-chart-key="gen.kva_total" data-chart-label="kVA" data-chart-unit="kVA" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">kW / kVA</div><div class="v" id="gKva">—</div></div>
-          <div class="kpi chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">RPM</div><div class="v" id="gRpm">—</div></div>
-          <div class="kpi chartable" data-chart-key="gen.curr_avg" data-chart-label="Ρεύμα μέσο" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">—</span><span class="u">A</span></div></div>
-          <div class="kpi chartable" data-chart-key="gen.battery_v" data-chart-label="Μπαταρία γεννήτριας" data-chart-unit="V" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">—</span><span class="u">V</span></div></div>
-          <div class="kpi chartable" data-chart-key="gen.oil_kpa" data-chart-label="Πίεση λαδιού" data-chart-unit="kPa" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Λάδι</div><div class="v"><span id="gOil">—</span><span class="u">kPa</span></div></div>
-          <div class="kpi chartable" data-chart-key="gen.coolant_c" data-chart-label="Ψυκτικό" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ψύξη</div><div class="v"><span id="gCool">—</span><span class="u">°C</span></div></div>
+        <div class="gen-load-grid">
+          <div class="gen-load-phase l1">
+            <div class="ph">Φάση L1</div>
+            <div class="pct" id="loadL1t">—</div>
+            <div class="bar"><div id="loadL1"></div></div>
+          </div>
+          <div class="gen-load-phase l2">
+            <div class="ph">Φάση L2</div>
+            <div class="pct" id="loadL2t">—</div>
+            <div class="bar"><div id="loadL2"></div></div>
+          </div>
+          <div class="gen-load-phase l3">
+            <div class="ph">Φάση L3</div>
+            <div class="pct" id="loadL3t">—</div>
+            <div class="bar"><div id="loadL3"></div></div>
+          </div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-title">Έλεγχος γεννήτριας</div>
-        <p class="small muted" style="margin-bottom:8px">Απομακρυσμένος έλεγχος μέσω MQTT Modbus. Χρησιμοποίησε με προσοχή.</p>
-        <div class="gen-mode-label">Λειτουργία (Off / Auto / Manual) — register 40010 <span class="muted">(ανάγνωση κατάστασης)</span></div>
-        <div class="gen-actions" style="margin-top:0">
-          <button class="sec mode-btn" id="modeOff" onclick="genSetMode(0)">Off</button>
-          <button class="sec mode-btn" id="modeAuto" onclick="genSetMode(1)">Auto</button>
-          <button class="sec mode-btn" id="modeManual" onclick="genSetMode(2)">Manual</button>
-        </div>
-        <p class="small muted" id="genModeHint" style="margin:6px 0 10px">Το 40010 δείχνει τη θέση του φυσικού διακόπτη στο panel PS0600 — συνήθως <b>δεν αλλάζει</b> απομακρυσμένα. Για εκκίνηση: <b>Manual</b> στο panel + Εκκίνηση.</p>
-        <div class="gen-actions">
-          <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
-          <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
-          <button class="sec" onclick="genCmd('reset')">↻ Reset σφάλματος</button>
-          <button class="sec" onclick="genCmd('estop_on')">⛔ E-Stop ON</button>
-          <button class="sec" onclick="genCmd('estop_off')">E-Stop OFF</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Ρυθμίσεις Modbus (απομακρυσμένα)</div>
-        <p class="small muted" style="margin-bottom:10px">Πρέπει να ταιριάζουν με τον PS0600. Αποθηκεύονται στο ESP32 και επιβιώνουν reboot.</p>
-        <div class="cfg-grid">
-          <label>Profile
-            <select id="cfgProfile">
-              <option value="ps0600">PS0600 Genset</option>
-              <option value="entes">ENTES MPR-46S</option>
-            </select>
-          </label>
-          <label>Baud
-            <select id="cfgBaud">
-              <option>9600</option><option>19200</option><option>38400</option>
-              <option>57600</option><option>115200</option>
-            </select>
-          </label>
-          <label>Slave ID
-            <input type="number" id="cfgSlave" min="1" max="247" value="1" />
-          </label>
-          <label>Probe register
-            <input type="number" id="cfgProbe" min="1" value="40009" />
-          </label>
-          <label class="cfg-en">
-            <input type="checkbox" id="cfgEnabled" checked /> Ενεργό
-          </label>
-        </div>
-        <div class="gen-actions" style="margin-top:12px">
-          <button class="sec" onclick="saveModbusCfg()">Αποθήκευση Modbus</button>
-          <button class="sec" onclick="scanModbus()">🔍 Auto-scan baud/slave</button>
-          <button class="sec" onclick="loopbackModbus()">🔄 Loopback test</button>
-        </div>
-        <p class="small muted" style="margin-top:8px">Probe register: δέξου 4xxxx (π.χ. 40009) ή γυμνή διεύθυνση (π.χ. 8, 9). Loopback: ένωσε TX2-RX2 ή TXD-RXD.</p>
-        <p class="small muted" id="scanResult" style="margin-top:6px"></p>
-      </div>
+
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">Φάσεις L1 / L2 / L3</div>
+          <div class="card-title">Ηλεκτρικά <span class="chart-hint">κλικ → γράφημα</span></div>
+          <div class="stats">
+            <div class="kpi chartable" data-chart-key="gen.volt_avg_ll" data-chart-label="Τάση L-L" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Τάση L-L</div><div class="v"><span id="gVll">—</span><span class="u">V</span></div></div>
+            <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">—</span><span class="u">Hz</span></div></div>
+            <div class="kpi chartable" data-chart-key="gen.kva_total" data-chart-label="kVA" data-chart-unit="kVA" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">kW / kVA</div><div class="v" id="gKva">—</div></div>
+            <div class="kpi chartable" data-chart-key="gen.curr_avg" data-chart-label="Ρεύμα μέσο" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ρεύμα μέσο</div><div class="v"><span id="gCurr">—</span><span class="u">A</span></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Κινητήρας &amp; συντήρηση</div>
+          <div class="gen-engine-row">
+            <div class="gen-engine-item">
+              <div class="ico" id="gBattIco">🔋</div>
+              <div class="txt"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">—</span> V</div></div>
+            </div>
+            <div class="gen-engine-item">
+              <div class="ico" id="gOilIco">🛢</div>
+              <div class="txt"><div class="l">Λάδι</div><div class="v"><span id="gOil">—</span> kPa</div></div>
+            </div>
+            <div class="gen-engine-item">
+              <div class="ico" id="gCoolIco">🌡</div>
+              <div class="txt"><div class="l">Ψύξη</div><div class="v"><span id="gCool">—</span> °C</div></div>
+            </div>
+            <div class="gen-engine-item">
+              <div class="ico ok">⏱</div>
+              <div class="txt"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">—</div></div>
+            </div>
+          </div>
+          <div style="height:12px"></div>
+          <div class="stats">
+            <div class="kpi chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">RPM</div><div class="v" id="gRpm">—</div></div>
+            <div class="kpi"><div class="l">Controller</div><div class="v" style="font-size:.9rem" id="gCtrl">—</div></div>
+            <div class="kpi chartable" data-chart-key="gen.total_runs" data-chart-label="Εκκινήσεις" data-chart-unit="" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Εκκινήσεις</div><div class="v" id="gRuns">—</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Έλεγχος &amp; Modbus</div>
+        <p class="small muted" style="margin-bottom:12px">Απομακρυσμένος έλεγχος μέσω MQTT Modbus — χρησιμοποίησε με προσοχή.</p>
+        <div class="gen-cmd-grid">
+          <div class="gen-cmd-panel">
+            <h4>Λειτουργία &amp; εντολές</h4>
+            <div class="gen-mode-btns">
+              <button class="sec mode-btn" id="modeOff" onclick="genSetMode(0)">Off</button>
+              <button class="sec mode-btn" id="modeAuto" onclick="genSetMode(1)">Auto</button>
+              <button class="sec mode-btn" id="modeManual" onclick="genSetMode(2)">Manual</button>
+            </div>
+            <p class="small muted" id="genModeHint" style="margin-bottom:10px">Το register 40010 δείχνει τη θέση του φυσικού διακόπτη — συνήθως <b>δεν αλλάζει</b> απομακρυσμένα. Για εκκίνηση: <b>Manual</b> στο panel + Εκκίνηση.</p>
+            <div class="gen-cmd-btns">
+              <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
+              <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
+              <button class="sec" onclick="genCmd('reset')">↻ Reset</button>
+              <button class="sec" onclick="genCmd('estop_on')">⛔ E-Stop</button>
+              <button class="sec full" onclick="genCmd('estop_off')">E-Stop OFF</button>
+            </div>
+          </div>
+          <div class="gen-cmd-panel">
+            <h4>Ρυθμίσεις Modbus</h4>
+            <div class="cfg-grid" style="grid-template-columns:1fr 1fr">
+              <label>Profile
+                <select id="cfgProfile">
+                  <option value="ps0600">PS0600 Genset</option>
+                  <option value="entes">ENTES MPR-46S</option>
+                </select>
+              </label>
+              <label>Baud
+                <select id="cfgBaud">
+                  <option>9600</option><option>19200</option><option>38400</option>
+                  <option>57600</option><option>115200</option>
+                </select>
+              </label>
+              <label>Slave ID
+                <input type="number" id="cfgSlave" min="1" max="247" value="1" />
+              </label>
+              <label>Probe register
+                <input type="number" id="cfgProbe" min="1" value="40009" />
+              </label>
+              <label class="cfg-en" style="grid-column:1/-1">
+                <input type="checkbox" id="cfgEnabled" checked /> Ενεργό
+              </label>
+            </div>
+            <div class="gen-actions" style="margin-top:10px">
+              <button class="sec" onclick="saveModbusCfg()">💾 Αποθήκευση</button>
+              <button class="sec" onclick="scanModbus()">🔍 Scan</button>
+              <button class="sec" onclick="loopbackModbus()">🔄 Loopback</button>
+            </div>
+            <p class="small muted" id="scanResult" style="margin-top:8px"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Φάσεις L1 / L2 / L3 <span class="chart-hint">κλικ τιμή → γράφημα</span></div>
           <div class="phases" id="genPhases"></div>
         </div>
         <div class="card">
-          <div class="card-title">Λειτουργία & Σφάλματα</div>
-          <div class="stats">
-            <div class="kpi"><div class="l">Controller</div><div class="v" style="font-size:.9rem" id="gCtrl">—</div></div>
-            <div class="kpi chartable" data-chart-key="gen.total_runs" data-chart-label="Εκκινήσεις" data-chart-unit="" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Εκκινήσεις</div><div class="v" id="gRuns">—</div></div>
-            <div class="kpi chartable" data-chart-key="gen.runtime_hours" data-chart-label="Ώρες λειτουργίας" data-chart-unit="h" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">—</div></div>
-            <div class="kpi"><div class="l">Σφάλμα</div><div class="v" style="font-size:.85rem" id="gFault">—</div></div>
-          </div>
-          <div style="height:12px"></div>
-          <div class="card-title" style="margin-bottom:6px">Συναγερμοί / σφάλματα</div>
+          <div class="card-title">Σφάλματα &amp; συναγερμοί</div>
+          <div class="kpi" style="margin-bottom:10px"><div class="l">Ενεργό σφάλμα</div><div class="v" style="font-size:.88rem" id="gFault">—</div></div>
           <div class="alarms" id="genAlarms">—</div>
           <ul class="fault-list" id="genNfpaList" style="margin-top:10px"><li class="muted">—</li></ul>
         </div>
@@ -893,7 +1076,7 @@
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.9</span></b> · esp32ota · ~2 λεπτά reboot</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.17</span></b> · esp32ota · ~2 λεπτά reboot</p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -919,7 +1102,7 @@
     const BOARD_EXPECT = 'esp32';
     const BOARD_LABEL = 'ESP32 Classic';
     const OTA_FIRMWARE_FILE = 'firmware.bin';
-    const EXPECTED_FIRMWARE = '3.0.9';
+    const EXPECTED_FIRMWARE = '3.0.17';
     const MQTT_CMD_PW = 'esp32ota';
 
     function pubCmd(obj) {
@@ -1421,8 +1604,46 @@
 
     function setLoadBar(id, txtId, pct) {
       const p = clamp(Number(pct) || 0, 0, 120);
-      document.getElementById(id).style.width = Math.min(p, 100) + '%';
-      document.getElementById(txtId).textContent = Number.isFinite(+pct) ? f2(p, 1) + '%' : '—';
+      const el = document.getElementById(id);
+      if (el) el.style.width = Math.min(p, 100) + '%';
+      const txt = document.getElementById(txtId);
+      if (txt) txt.textContent = Number.isFinite(+pct) ? f2(p, 1) + '%' : '—';
+    }
+
+    const GEN_ARC_LEN = 264;
+    function setGenArc(arcId, value, max, color) {
+      const arc = document.getElementById(arcId);
+      if (!arc) return;
+      const v = Number(value);
+      const pct = Number.isFinite(v) && max > 0 ? clamp(v / max, 0, 1) : 0;
+      arc.setAttribute('stroke-dashoffset', String(GEN_ARC_LEN * (1 - pct)));
+      if (color) arc.setAttribute('stroke', color);
+    }
+
+    function setEngineIco(id, value, okMin, okMax, warnLow, warnHigh) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const v = Number(value);
+      el.className = 'ico';
+      if (!Number.isFinite(v)) return;
+      if (v >= okMin && v <= okMax) el.classList.add('ok');
+      else if (v < warnLow || v > warnHigh) el.classList.add('bad');
+      else el.classList.add('warn');
+    }
+
+    function updateGenGauges(d, running) {
+      const rpm = d.engine_rpm;
+      const hz = d.frequency;
+      const kw = d.kw_total;
+      const rpmMax = 2200;
+      const hzMax = 65;
+      const kwMax = 22;
+      document.getElementById('genGaugeRpm').textContent = Number.isFinite(+rpm) ? f0(rpm) : '—';
+      document.getElementById('genGaugeHz').textContent = Number.isFinite(+hz) ? f2(hz, 1) : '—';
+      document.getElementById('genGaugeKw').textContent = Number.isFinite(+kw) ? f0(kw) : '—';
+      setGenArc('genRpmArc', rpm, rpmMax, running ? '#22c55e' : '#f59e0b');
+      setGenArc('genHzArc', hz, hzMax, Number(hz) >= 49 && Number(hz) <= 51 ? '#22c55e' : '#3b82f6');
+      setGenArc('genKwArc', kw, kwMax, '#22c55e');
     }
 
     function renderGenset(g) {
@@ -1442,6 +1663,7 @@
         box.className = 'gen-hero off';
         document.getElementById('genChips').innerHTML = '';
         syncGenModeButtons(-1);
+        updateGenGauges({}, false);
         return;
       }
 
@@ -1463,6 +1685,7 @@
         document.getElementById('gBatt').textContent = '—';
         document.getElementById('gOil').textContent = '—';
         document.getElementById('gCool').textContent = '—';
+        updateGenGauges(d, true);
         const phases = [
           { n: 'L1', vn: d.volt_l1n, vll: d.volt_l1l2, i: d.curr_l1, kva: d.kva_l1 },
           { n: 'L2', vn: d.volt_l2n, vll: d.volt_l2l3, i: d.curr_l2, kva: d.kva_l2 },
@@ -1482,7 +1705,7 @@
       const running = d.running === true || Number(d.genset_state) === 8;
       const crank = Number(d.genset_state) === 4;
       const warn = Number(d.active_fault) > 0 || Number(d.fault_type) === 2;
-      box.className = 'gen-hero ' + (running ? 'run' : warn ? 'warn' : 'off');
+      box.className = 'gen-hero ' + (running ? 'run' : crank ? 'crank' : warn ? 'warn' : 'off');
 
       const chips = [];
       if (!valid && hasData) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
@@ -1507,6 +1730,10 @@
       document.getElementById('gBatt').textContent = f2(d.battery_v, 1);
       document.getElementById('gOil').textContent = f0(d.oil_kpa);
       document.getElementById('gCool').textContent = f2(d.coolant_c, 1);
+      setEngineIco('gBattIco', d.battery_v, 24, 28, 22, 30);
+      setEngineIco('gOilIco', d.oil_kpa, 200, 600, 150, 700);
+      setEngineIco('gCoolIco', d.coolant_c, 70, 95, 60, 105);
+      updateGenGauges(d, running);
       document.getElementById('gCtrl').textContent = d.controller_type ?? '—';
       document.getElementById('gRuns').textContent = d.total_runs ?? '—';
       document.getElementById('gHours').textContent = (d.runtime_hours != null ? f2(d.runtime_hours, 1) : '—') + ' h';
@@ -1540,13 +1767,23 @@
 
     function phaseHtml(p, showKw) {
       const ph = p.n.toLowerCase();
-      return `<div class="phase"><h3>Φάση ${p.n}</h3>
-        <div class="row chartable" data-chart-key="gen.${ph}_v" data-chart-label="${p.n} τάση L-N" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><span>L-N</span><span>${f0(p.vn)} V</span></div>
-        <div class="row"><span>L-L</span><span>${f0(p.vll)} V</span></div>
-        <div class="row chartable" data-chart-key="gen.${ph}_a" data-chart-label="${p.n} ρεύμα" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>Ρεύμα</span><span>${f2(p.i, 1)} A</span></div>
-        ${showKw ? `<div class="row chartable" data-chart-key="gen.${ph}_kw" data-chart-label="${p.n} kW" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>kW</span><span>${f0(p.kw)}</span></div>` : ''}
-        <div class="row"><span>kVA</span><span>${f0(p.kva)}</span></div>
-        ${p.load != null ? `<div class="row chartable" data-chart-key="gen.load_${ph}_pct" data-chart-label="Φόρτιση ${p.n}" data-chart-unit="%" data-chart-dec="1" title="Κλικ για διάγραμμα"><span>Φόρτιση</span><span>${f2(p.load, 1)}%</span></div>` : ''}
+      const cls = ph === 'l2' ? 'l2' : ph === 'l3' ? 'l3' : '';
+      const loadTag = p.load != null ? `<span class="load-tag">${f2(p.load, 1)}%</span>` : '';
+      return `<div class="phase-v2 ${cls}">
+        <h3>Φάση ${p.n} ${loadTag}</h3>
+        <div class="phase-kpis">
+          <div class="pk chartable" data-chart-key="gen.${ph}_v" data-chart-label="${p.n} τάση L-N" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα">
+            <div class="l">L-N</div><div class="v">${f0(p.vn)} V</div>
+          </div>
+          <div class="pk"><div class="l">L-L</div><div class="v">${f0(p.vll)} V</div></div>
+          <div class="pk chartable" data-chart-key="gen.${ph}_a" data-chart-label="${p.n} ρεύμα" data-chart-unit="A" data-chart-dec="1" title="Κλικ για διάγραμμα">
+            <div class="l">Ρεύμα</div><div class="v">${f2(p.i, 1)} A</div>
+          </div>
+          ${showKw ? `<div class="pk chartable" data-chart-key="gen.${ph}_kw" data-chart-label="${p.n} kW" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα">
+            <div class="l">kW</div><div class="v">${f0(p.kw)}</div>
+          </div>` : ''}
+          <div class="pk"><div class="l">kVA</div><div class="v">${f0(p.kva)}</div></div>
+        </div>
       </div>`;
     }
 

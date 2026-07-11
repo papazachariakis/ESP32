@@ -840,7 +840,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.14';
-    const DASHBOARD_BUILD = '2026-07-11-ota2';
+    const DASHBOARD_BUILD = '2026-07-11-ota3';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1637,8 +1637,26 @@
       return otaSessionMatches(totalBytes) && parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx) <= 512;
     }
 
+    function firmwareNum(fw) {
+      if (!fw) return 0;
+      const p = String(fw).split('.').map(n => parseInt(n, 10) || 0);
+      return (p[0] || 0) * 10000 + (p[1] || 0) * 100 + (p[2] || 0);
+    }
+
+    function isLegacyOtaFirmware(fw) {
+      return firmwareNum(fw) < firmwareNum('3.0.13');
+    }
+
+    async function otaPrepareDeviceQuiet() {
+      toast('Προετοιμασία ESP32 (αποσύνδεση BLE / παύση Modbus)...', 4000);
+      pubCmd({ ble_disconnect: true });
+      pubCmd({ modbus_cfg: { enabled: false } });
+      await sleepMs(4000);
+    }
+
     async function waitDeviceOtaRx(targetAbs, totalBytes, maxWaitMs) {
       const deadline = Date.now() + maxWaitMs;
+      let best = 0;
       while (Date.now() < deadline) {
         await sleepMs(350);
         const s = lastStatus || {};
@@ -1646,11 +1664,10 @@
         if (s.ota_phase === 'rebooting') return targetAbs;
         if (!otaSessionMatches(totalBytes)) continue;
         const rx = parseOtaRx(s.ota_mqtt_rx);
+        if (rx > best) best = rx;
         if (rx >= targetAbs) return rx;
       }
-      return otaSessionMatches(totalBytes)
-        ? parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx)
-        : 0;
+      return best >= targetAbs ? best : -2;
     }
 
     async function remoteOtaBrowserPush(pw) {
@@ -1659,34 +1676,45 @@
         toast('Αποτυχία λήψης firmware — έλεγξε internet / GitHub', 7000);
         return false;
       }
+      const legacy = isLegacyOtaFirmware(lastStatus && lastStatus.firmware);
       otaExpectedTotal = buf.length;
       lastOtaErrorToast = '';
-      toast(`Firmware ${(buf.length / 1024 / 1024).toFixed(2)} MB (${buf.length} bytes) — αποστολή…`, 5000);
+      toast(`Firmware ${(buf.length / 1024 / 1024).toFixed(2)} MB — browser push${legacy ? ' (αργό, v3.0.12)' : ''}…`, 6000);
       client.publish(cmdTopic, JSON.stringify({ ota_mqtt: pw, size: buf.length }), { qos: 1 });
-      if (!await waitForOtaSessionBegin(buf.length, 20000)) {
-        toast('ESP32 δεν ξεκίνησε OTA — δοκίμασε USB flash ή reboot ESP32', 8000);
+      if (!await waitForOtaSessionBegin(buf.length, 25000)) {
+        toast('ESP32 δεν ξεκίνησε OTA session', 8000);
         return false;
       }
-      const CHUNK = 256;
+      const CHUNK = legacy ? 512 : 256;
+      const perChunkWait = legacy ? 45000 : 25000;
+      const minGap = legacy ? 2800 : 400;
       let sent = 0;
       while (sent < buf.length) {
         const slice = buf.subarray(sent, Math.min(sent + CHUNK, buf.length));
         client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }), { qos: 1 });
         sent += slice.length;
-        if (sent % (CHUNK * 20) === 0 || sent === buf.length) {
-          toast('OTA ' + Math.round(sent / buf.length * 100) + '%', 1500);
+        if (sent % (CHUNK * 10) === 0 || sent === buf.length) {
+          const rxNow = parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx);
+          toast(`OTA ${Math.round(sent / buf.length * 100)}% · ESP ${rxNow}/${buf.length}`, 2000);
         }
-        const rx = await waitDeviceOtaRx(sent, buf.length, 20000);
-        if (rx < 0) {
+        let rx = await waitDeviceOtaRx(sent, buf.length, perChunkWait);
+        if (rx === -1) {
           toast('OTA σφάλμα: ' + ((lastStatus && lastStatus.ota_error) || '?'), 7000);
           return false;
         }
-        if (rx < sent - CHUNK * 2) await sleepMs(800);
+        if (rx === -2 || rx < sent) {
+          toast(`OTA κόλλησε: ESP ${Math.max(0, rx)}/${sent} bytes — ξαναδοκίμασε`, 8000);
+          return false;
+        }
+        if (legacy) await sleepMs(minGap);
       }
       toast('OTA finalize — αναμονή ESP32…', 3000);
-      const finalRx = await waitDeviceOtaRx(buf.length, buf.length, 90000);
+      let finalRx = await waitDeviceOtaRx(buf.length, buf.length, 120000);
+      if (finalRx === -2 || finalRx < buf.length) {
+        finalRx = await waitDeviceOtaRx(buf.length, buf.length, 120000);
+      }
       if (finalRx < buf.length) {
-        toast(`OTA timeout: ESP32 ${finalRx}/${buf.length} bytes`, 8000);
+        toast(`OTA timeout: ESP32 ${Math.max(0, finalRx)}/${buf.length} bytes`, 8000);
         return false;
       }
       client.publish(cmdTopic, JSON.stringify({ ota_end: pw }), { qos: 1 });
@@ -1707,8 +1735,28 @@
 
     async function remoteOtaEspPull(pw) {
       client.publish(cmdTopic, JSON.stringify({ ota: pw }), { qos: 1 });
-      toast('ESP32 κατεβάζει από GitHub — περίμενε ~2 λεπτά', 6000);
-      return true;
+      toast('ESP32 κατεβάζει firmware (HTTPS) — 2–5 λεπτά', 8000);
+      for (let i = 0; i < 100; i++) {
+        await sleepMs(3000);
+        const s = lastStatus || {};
+        if (s.ota_phase && s.ota_phase.indexOf('http') >= 0) {
+          toast('OTA: ' + s.ota_phase, 2500);
+        }
+        if (s.ota_error && s.ota_phase !== 'rebooting') {
+          toast('ESP pull σφάλμα: ' + s.ota_error, 7000);
+          return false;
+        }
+        if (s.ota_phase === 'rebooting') {
+          toast('ESP pull OK — reboot…', 5000);
+          return true;
+        }
+        if (i > 25 && !s.ota_phase) {
+          toast('ESP32 δεν ξεκίνησε download — δοκιμή browser push…', 6000);
+          return false;
+        }
+      }
+      toast('ESP pull timeout', 6000);
+      return false;
     }
 
     async function remoteOta() {
@@ -1720,16 +1768,17 @@
       }
       const pw = prompt('Κωδικός OTA:', 'esp32ota');
       if (!pw) return;
-      if (!confirm(`Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n• OK = browser push (συνιστάται)\n• Άκυρο = ESP κατεβάζει μόνο του από GitHub\n\nΜόνο για ${BOARD_LABEL}.`)) {
-        closeDrawer();
-        await remoteOtaEspPull(pw);
-        return;
-      }
+      const legacy = isLegacyOtaFirmware(s.firmware);
+      const msg = legacy
+        ? `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\n1) ESP pull (HTTPS) — δοκιμάζεται πρώτα\n2) Browser push — fallback (~30–90 λεπτά στο v3.0.12)\n\nΣυνέχεια;`
+        : `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n1) ESP pull (HTTPS)\n2) Browser push\n\nΣυνέχεια;`;
+      if (!confirm(msg)) return;
       closeDrawer();
+      await otaPrepareDeviceQuiet();
+      if (await remoteOtaEspPull(pw)) return;
+      toast('ESP pull απέτυχε — browser push…', 6000);
       if (await remoteOtaBrowserPush(pw)) return;
-      if (confirm('Το browser push απέτυχε.\n\nΔοκιμή fallback: ESP κατεβάζει από GitHub;')) {
-        await remoteOtaEspPull(pw);
-      }
+      toast('OTA απέτυχε και τα δύο. Reboot ESP32 και ξαναδοκίμασε.', 8000);
     }
 
     function remoteReboot() {

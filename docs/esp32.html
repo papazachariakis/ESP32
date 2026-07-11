@@ -831,7 +831,18 @@
             </div>
           </div>
           <div class="gen-cmd-panel">
-            <h4>Ρυθμίσεις Modbus</h4>
+            <h4>Ρυθμίσεις Modbus / Baud γεννήτριας</h4>
+            <p class="small muted" style="margin:0 0 8px">Τρέχον RS485 baud: <b id="cfgBaudLive">—</b> · slave <b id="cfgSlaveLive">—</b></p>
+            <div class="gen-actions" style="margin:0 0 10px">
+              <select id="cfgBaudQuick" style="flex:1;min-width:90px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)">
+                <option value="9600">9600</option>
+                <option value="19200">19200</option>
+                <option value="38400">38400</option>
+                <option value="57600">57600</option>
+                <option value="115200">115200</option>
+              </select>
+              <button class="sec" onclick="applyBaudRemote()">⚡ Εφαρμογή baud</button>
+            </div>
             <div class="cfg-grid" style="grid-template-columns:1fr 1fr">
               <label>Profile
                 <select id="cfgProfile">
@@ -1824,6 +1835,7 @@
     }
 
     let pendingGenCmd = '';
+    let pendingBaud = 0;
 
     function genCmd(action) {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
@@ -1852,6 +1864,19 @@
       });
     }
 
+    function applyBaudRemote() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const quick = document.getElementById('cfgBaudQuick');
+      const baud = +(quick ? quick.value : document.getElementById('cfgBaud').value);
+      if (!baud) { toast('Επίλεξε baud'); return; }
+      if (!confirm('Αλλαγή Modbus baud γεννήτριας σε ' + baud + ';\n\nΠρέπει να ταιριάζει με τη ρύθμιση στο panel PS0600.')) return;
+      pendingBaud = baud;
+      const cfgBaud = document.getElementById('cfgBaud');
+      if (cfgBaud) cfgBaud.value = String(baud);
+      pubCmd({ modbus_cfg: { baud } });
+      toast('Baud ' + baud + ' στάλθηκε — περίμενε επιβεβαίωση...', 5000);
+    }
+
     function saveModbusCfg() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       const cfg = {
@@ -1862,6 +1887,7 @@
         probe_reg: +document.getElementById('cfgProbe').value
       };
       pubCmd({ modbus_cfg: cfg });
+      pendingBaud = cfg.baud;
       toast(`Modbus: baud ${cfg.baud}, ID ${cfg.slave_id} στάλθηκε`);
     }
 
@@ -1891,8 +1917,18 @@
         else el.value = val;
       };
       if (g.enabled != null) set('cfgEnabled', g.enabled);
-      if (g.baud != null) set('cfgBaud', String(g.baud));
-      if (g.slave_id != null) set('cfgSlave', g.slave_id);
+      if (g.baud != null) {
+        set('cfgBaud', String(g.baud));
+        const live = document.getElementById('cfgBaudLive');
+        if (live) live.textContent = String(g.baud);
+        const quick = document.getElementById('cfgBaudQuick');
+        if (quick && quick !== active) quick.value = String(g.baud);
+      }
+      if (g.slave_id != null) {
+        set('cfgSlave', g.slave_id);
+        const sl = document.getElementById('cfgSlaveLive');
+        if (sl) sl.textContent = String(g.slave_id);
+      }
       if (g.probe_reg != null) set('cfgProbe', g.probe_reg);
       const pr = String(g.profile || '').toLowerCase();
       if (pr) set('cfgProfile', pr.includes('entes') ? 'entes' : 'ps0600');
@@ -2204,6 +2240,13 @@
               hint.textContent = j.last_cmd_detail;
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
+            if (pendingBaud && Number(j.baud) === pendingBaud) {
+              toast('Baud εφαρμόστηκε: ' + j.baud, 5000);
+              pendingBaud = 0;
+            }
+            if (j.scan_result && j.scan_result.startsWith('CFG')) {
+              toast(j.scan_result, j.scan_result.startsWith('CFG OK') ? 5000 : 8000);
+            }
           }
           if (t.endsWith('/wifi')) {
             if (j.networks) renderWifiScan(j);

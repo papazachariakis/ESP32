@@ -519,6 +519,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       return;
     }
     JsonObject cfg = doc["modbus_cfg"];
+    if (cfg.containsKey("baud")) {
+      uint32_t b = cfg["baud"].as<uint32_t>();
+      if (!modbusBaudValid(b)) {
+        genMgr.data.lastScan = "CFG rejected: invalid baud " + String(b);
+        publishGensetMqtt();
+        publishStatus();
+        return;
+      }
+    }
     if (cfg.containsKey("enabled")) genMgr.enabled = cfg["enabled"].as<bool>();
     if (cfg.containsKey("slave_id")) genMgr.slaveId = (uint8_t)(cfg["slave_id"].as<int>());
     if (cfg.containsKey("baud")) genMgr.baud = cfg["baud"].as<uint32_t>();
@@ -532,6 +541,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     genMgr.save(prefs);
     genMgr.applyBaud();
+    genMgr.data.lastScan = "CFG OK baud=" + String(genMgr.baud) + " slave=" + String(genMgr.slaveId);
     Serial.printf("MQTT: modbus cfg baud=%u id=%u\n", genMgr.baud, genMgr.slaveId);
     if (genMgr.enabled) genMgr.pollOnce();
     publishGensetMqtt();
@@ -1110,6 +1120,10 @@ void handleModbusSave() {
   if (doc.containsKey("probe_reg")) genMgr.probeReg = (uint16_t)(doc["probe_reg"].as<int>());
 
   genMgr.baud = doc["baud"] | 9600;
+  if (!modbusBaudValid(genMgr.baud)) {
+    server.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid baud\"}");
+    return;
+  }
 
   if (doc.containsKey("profile")) {
     const char* p = doc["profile"];

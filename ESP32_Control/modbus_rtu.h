@@ -204,3 +204,7 @@ inline void modbusBusGap(uint16_t ms = 10) {
   modbusPump();
   delay(ms);
 }
+
+inline bool modbusBaudValid(uint32_t baud) {
+  return baud == 9600 || baud == 19200 || baud == 38400 || baud == 57600 || baud == 115200;
+}

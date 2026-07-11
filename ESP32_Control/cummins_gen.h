@@ -495,6 +495,23 @@ struct GenManager {
     return writeHold(CUMMINS_CMD_ESTOP, active ? 1 : 0, &exc);
   }
 
+  bool cmdSetOpMode(uint8_t mode) {
+    if (mode > 2) {
+      data.lastError = "invalid op mode";
+      return false;
+    }
+    if (!writeHoldRetry(CUMMINS_REG_OP_MODE, (uint16_t)mode)) return false;
+    modbusBusGap(300);
+    if (!refreshStatusBlock()) return false;
+    if (data.opMode != mode) {
+      data.lastError = "mode readback=" + String(data.opMode) + " expected " + String(mode) +
+                       " (40010 read-only? physical switch)";
+      return false;
+    }
+    data.lastError = String("mode OK • ") + cumminsOpModeLabelEl(mode);
+    return true;
+  }
+
   bool runGensetCmd(const char* action) {
     data.lastCmd = action ? action : "";
     data.lastCmdOk = false;
@@ -530,6 +547,12 @@ struct GenManager {
     } else if (strcmp(action, "estop_off") == 0) {
       ok = cmdEstop(false);
       if (!ok) data.lastError = "estop release write 40302 failed";
+    } else if (strcmp(action, "mode_off") == 0) {
+      ok = cmdSetOpMode(0);
+    } else if (strcmp(action, "mode_auto") == 0) {
+      ok = cmdSetOpMode(1);
+    } else if (strcmp(action, "mode_manual") == 0) {
+      ok = cmdSetOpMode(2);
     } else {
       pollPaused = false;
       data.lastError = "unknown genset cmd";

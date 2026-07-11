@@ -279,6 +279,8 @@
     .gen-actions .start{background:var(--ok);color:#fff}
     .gen-actions .stop{background:var(--bad);color:#fff}
     .gen-actions .sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .gen-actions .mode-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .gen-mode-label{font-size:.8rem;color:var(--muted);margin:10px 0 6px}
 
     .cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     @media(min-width:600px){.cfg-grid{grid-template-columns:repeat(4,1fr)}}
@@ -624,6 +626,13 @@
       <div class="card">
         <div class="card-title">Έλεγχος γεννήτριας</div>
         <p class="small muted" style="margin-bottom:8px">Απομακρυσμένος έλεγχος μέσω MQTT Modbus. Χρησιμοποίησε με προσοχή.</p>
+        <div class="gen-mode-label">Λειτουργία (Off / Auto / Manual) — register 40010</div>
+        <div class="gen-actions" style="margin-top:0">
+          <button class="sec mode-btn" id="modeOff" onclick="genSetMode(0)">Off</button>
+          <button class="sec mode-btn" id="modeAuto" onclick="genSetMode(1)">Auto</button>
+          <button class="sec mode-btn" id="modeManual" onclick="genSetMode(2)">Manual</button>
+        </div>
+        <p class="small muted" style="margin:6px 0 10px">Αν αποτύχει: ο διακόπτης στο panel PS0600 μπορεί να είναι read-only μέσω Modbus.</p>
         <div class="gen-actions">
           <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
           <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
@@ -1429,8 +1438,11 @@
         document.getElementById('genMode').textContent = '—';
         box.className = 'gen-hero off';
         document.getElementById('genChips').innerHTML = '';
+        syncGenModeButtons(-1);
         return;
       }
+
+      syncGenModeButtons(g.op_mode);
 
       if (isEntes) {
         document.getElementById('genState').textContent = 'ENTES MPR-46S';
@@ -1580,6 +1592,25 @@
       pendingGenCmd = action;
       pubCmd({ genset: action });
       toast('Εντολή στάλθηκε: ' + action);
+    }
+
+    function genSetMode(mode) {
+      const actions = ['mode_off', 'mode_auto', 'mode_manual'];
+      const labels = ['Off', 'Auto', 'Manual'];
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (mode < 0 || mode > 2) return;
+      if (!confirm('Αλλαγή λειτουργίας γεννήτριας σε ' + labels[mode] + ';')) return;
+      pendingGenCmd = actions[mode];
+      pubCmd({ genset: actions[mode] });
+      toast('Mode εντολή: ' + labels[mode]);
+    }
+
+    function syncGenModeButtons(opMode) {
+      const m = Number(opMode);
+      ['modeOff', 'modeAuto', 'modeManual'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('active', m === i);
+      });
     }
 
     function saveModbusCfg() {

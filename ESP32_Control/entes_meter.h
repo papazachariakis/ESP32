@@ -5,6 +5,7 @@
 #include <Preferences.h>
 #include <HardwareSerial.h>
 #include "modbus_rtu.h"
+#include "cummins_gen.h"
 
 #ifndef MODBUS_DEFAULT_METER_ENABLED
 #define MODBUS_DEFAULT_METER_ENABLED true
@@ -18,17 +19,6 @@
 #define ENTES_PWR_REG_COUNT 18
 #define ENTES_ENERGY_WH_REG 216
 #define ENTES_ENERGY_GEN_REG 534
-
-inline uint32_t entesU32(const uint16_t* r, uint8_t pairIdx) {
-  return ((uint32_t)r[pairIdx * 2] << 16) | r[pairIdx * 2 + 1];
-}
-
-inline float entesFloat(const uint16_t* r, uint8_t pairIdx) {
-  uint32_t u = entesU32(r, pairIdx);
-  float f;
-  memcpy(&f, &u, sizeof(f));
-  return f;
-}
 
 inline uint64_t entesU64(const uint16_t* r) {
   return ((uint64_t)r[0] << 48) | ((uint64_t)r[1] << 32) | ((uint64_t)r[2] << 16) | r[3];

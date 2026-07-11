@@ -2,6 +2,7 @@
 
 #include "bms_common.h"
 #include "bms_protocols.h"
+#include "ble_radio.h"
 #include "config.h"
 #include "ota.h"
 #include <BLEClient.h>
@@ -298,6 +299,7 @@ struct BmsManager {
     connected = true;
     connectedSinceMs = millis();
     bms.connected = true;
+    configureBleRadio();
     bleRssi = client->getRssi();
     lastNotifyMs = millis();
     prefs.putString("ble_mac", mac);

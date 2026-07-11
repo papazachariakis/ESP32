@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#05080f" />
+  <title>⚡ Genset EXTREME — Cummins C22D5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --bg:#05080f;--panel:#0c1220;--panel2:#111a2e;--line:#1e2d4a;
+      --text:#e8f0ff;--muted:#6b7f9e;--dim:#3d4f6a;
+      --l1:#f59e0b;--l2:#22c55e;--l3:#3b82f6;
+      --ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--accent:#a855f7;
+      --glow-ok:rgba(34,197,94,.45);--glow-warn:rgba(245,158,11,.5);--glow-bad:rgba(239,68,68,.55);
+      --mono:'JetBrains Mono',ui-monospace,monospace;
+      --display:'Orbitron',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden}
+    body{
+      font-family:var(--mono);background:var(--bg);color:var(--text);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 50% -30%,rgba(245,158,11,.08),transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%,rgba(59,130,246,.06),transparent),
+        linear-gradient(180deg,#05080f 0%,#080d18 100%);
+    }
+
+    .scanlines{
+      pointer-events:none;position:fixed;inset:0;z-index:9999;opacity:.04;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.4) 2px,rgba(0,0,0,.4) 4px);
+    }
+    .grid-bg{
+      pointer-events:none;position:fixed;inset:0;opacity:.12;
+      background-image:
+        linear-gradient(var(--line) 1px,transparent 1px),
+        linear-gradient(90deg,var(--line) 1px,transparent 1px);
+      background-size:48px 48px;
+    }
+
+    .cockpit{display:grid;grid-template-rows:auto 1fr auto;height:100vh;height:100dvh;position:relative;z-index:1}
+
+    /* TOP BAR */
+    .top{
+      display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      padding:10px 16px;border-bottom:1px solid var(--line);
+      background:rgba(8,12,22,.92);backdrop-filter:blur(8px);
+    }
+    .brand{font-family:var(--display);font-weight:900;font-size:.95rem;letter-spacing:.12em;color:var(--l1)}
+    .brand span{color:var(--muted);font-weight:500;font-size:.72rem;letter-spacing:.06em}
+    .top-spacer{flex:1}
+    .pill{
+      padding:4px 10px;border-radius:4px;font-size:.68rem;font-weight:700;letter-spacing:.08em;
+      border:1px solid var(--line);text-transform:uppercase;
+    }
+    .pill.ok{border-color:rgba(34,197,94,.5);color:var(--ok);box-shadow:0 0 12px var(--glow-ok)}
+    .pill.warn{border-color:rgba(245,158,11,.5);color:var(--warn);animation:blink 1.2s ease infinite}
+    .pill.bad{border-color:rgba(239,68,68,.6);color:var(--bad);animation:blink .7s ease infinite}
+    .pill.off{color:var(--muted)}
+    @keyframes blink{50%{opacity:.55}}
+
+    .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px}
+    .conn-dot.on{background:var(--ok);box-shadow:0 0 8px var(--glow-ok);animation:pulse-dot 2s ease infinite}
+    @keyframes pulse-dot{50%{transform:scale(1.3);opacity:.7}}
+
+    .top a{color:var(--muted);text-decoration:none;font-size:.72rem;padding:6px 10px;border:1px solid var(--line);border-radius:6px}
+    .top a:hover{color:var(--text);border-color:var(--l1)}
+
+    /* MAIN GRID */
+    .main{
+      display:grid;gap:10px;padding:10px;min-height:0;overflow:hidden;
+      grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,.9fr) minmax(220px,.75fr);
+      grid-template-rows:1fr auto;
+    }
+    @media(max-width:1100px){
+      .main{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto auto;overflow-y:auto}
+      html,body{overflow:auto}
+    }
+
+    .panel{
+      background:linear-gradient(145deg,var(--panel2),var(--panel));
+      border:1px solid var(--line);border-radius:10px;position:relative;overflow:hidden;
+    }
+    .panel::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,transparent,var(--l1),transparent);opacity:.5;
+    }
+    .panel-title{
+      font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--muted);padding:10px 12px 0;
+    }
+
+    /* PHASES */
+    .phases{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 10px 12px;height:100%;min-height:280px}
+    .phase{
+      display:flex;flex-direction:column;align-items:center;min-height:0;
+      background:rgba(0,0,0,.25);border-radius:8px;border:1px solid var(--line);padding:8px 6px;
+      transition:border-color .3s,box-shadow .3s;
+    }
+    .phase.l1{--ph:var(--l1)}.phase.l2{--ph:var(--l2)}.phase.l3{--ph:var(--l3)}
+    .phase.hot{border-color:var(--ph);box-shadow:0 0 20px color-mix(in srgb,var(--ph) 35%,transparent)}
+    .phase .name{font-family:var(--display);font-size:.75rem;font-weight:700;color:var(--ph);letter-spacing:.1em}
+    .phase .tower{
+      flex:1;width:100%;max-width:72px;margin:8px 0;
+      background:rgba(0,0,0,.5);border-radius:6px;border:1px solid var(--dim);
+      display:flex;align-items:flex-end;overflow:hidden;min-height:120px;
+    }
+    .phase .tower .fill{
+      width:100%;height:0%;border-radius:5px 5px 0 0;
+      background:linear-gradient(0deg,color-mix(in srgb,var(--ph) 60%,#000),var(--ph));
+      box-shadow:0 0 16px color-mix(in srgb,var(--ph) 50%,transparent);
+      transition:height .5s cubic-bezier(.2,.9,.2,1);
+    }
+    .phase .pct{font-family:var(--display);font-size:1.6rem;font-weight:900;line-height:1;color:var(--ph)}
+    .phase .row{font-size:.72rem;color:var(--muted);margin-top:3px;text-align:center;line-height:1.35}
+    .phase .row strong{color:var(--text);font-weight:700}
+
+    /* CENTER — RPM DIAL */
+    .center-zone{grid-row:span 1;display:flex;flex-direction:column;min-height:0}
+    .center-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;position:relative}
+    .state-banner{
+      font-family:var(--display);font-size:clamp(1rem,2.5vw,1.45rem);font-weight:900;
+      letter-spacing:.08em;text-align:center;margin-bottom:4px;
+      text-shadow:0 0 20px currentColor;
+    }
+    .state-banner.run{color:var(--ok);animation:glow-run 2s ease infinite}
+    .state-banner.crank{color:var(--warn);animation:glow-run 1s ease infinite}
+    .state-banner.fault{color:var(--bad)}
+    .state-banner.idle{color:var(--muted)}
+    @keyframes glow-run{50%{filter:brightness(1.3)}}
+
+    .mode-line{font-size:.72rem;color:var(--muted);margin-bottom:12px;text-align:center}
+    .rpm-wrap{position:relative;width:min(280px,90vw);aspect-ratio:1}
+    .rpm-wrap svg{width:100%;height:100%;transform:rotate(-135deg)}
+    .rpm-val{
+      position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;pointer-events:none;
+    }
+    .rpm-val .num{font-family:var(--display);font-size:clamp(2.2rem,6vw,3.2rem);font-weight:900;line-height:1}
+    .rpm-val .lbl{font-size:.7rem;color:var(--muted);letter-spacing:.12em;margin-top:4px}
+
+    .led-row{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;justify-content:center}
+    .led{
+      background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:8px;
+      padding:10px 16px;text-align:center;min-width:100px;
+    }
+    .led .v{font-family:var(--display);font-size:1.5rem;font-weight:700;line-height:1}
+    .led .l{font-size:.6rem;color:var(--muted);letter-spacing:.1em;margin-top:4px}
+    .led.hz .v{color:#60a5fa}
+    .led.kw .v{color:var(--ok)}
+    .led.kva .v{color:var(--l1)}
+
+    /* STATE STEPPER */
+    .stepper{padding:0 12px 10px}
+    .stepper-track{display:flex;gap:3px;overflow-x:auto;padding-bottom:4px}
+    .step{
+      flex:1;min-width:18px;height:6px;border-radius:2px;background:var(--dim);
+      transition:background .3s,box-shadow .3s;
+    }
+    .step.on{background:var(--ok);box-shadow:0 0 8px var(--glow-ok)}
+    .step.cur{background:var(--l1);box-shadow:0 0 10px var(--glow-warn);height:8px;margin-top:-1px}
+
+    /* POWER + MINI CHART */
+    .power-zone{display:flex;flex-direction:column;min-height:0}
+    .power-body{padding:8px 12px;flex:1;display:flex;flex-direction:column;gap:10px}
+    .big-kw{
+      text-align:center;padding:16px 8px;
+      background:rgba(0,0,0,.35);border-radius:8px;border:1px solid var(--line);
+    }
+    .big-kw .num{font-family:var(--display);font-size:clamp(2.5rem,5vw,3.5rem);font-weight:900;color:var(--ok);line-height:1}
+    .big-kw .unit{font-size:.8rem;color:var(--muted)}
+    .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .metric{
+      background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:6px;padding:8px;
+    }
+    .metric .l{font-size:.58rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+    .metric .v{font-size:1.05rem;font-weight:700;margin-top:2px}
+    .metric .v.ok{color:var(--ok)}.metric .v.warn{color:var(--warn)}.metric .v.bad{color:var(--bad)}
+    canvas#kwSpark{width:100%;height:56px;border-radius:6px;background:rgba(0,0,0,.35);border:1px solid var(--line)}
+
+    /* ENGINE STRIP */
+    .engine-strip{
+      grid-column:1/-1;display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;padding:0 10px 10px;
+    }
+    .eng{
+      display:flex;align-items:center;gap:10px;padding:10px 12px;
+      background:linear-gradient(135deg,var(--panel2),rgba(0,0,0,.3));
+      border:1px solid var(--line);border-radius:8px;
+    }
+    .eng .ico{font-size:1.3rem;opacity:.9}
+    .eng .l{font-size:.58rem;color:var(--muted);letter-spacing:.06em}
+    .eng .v{font-family:var(--display);font-size:1.1rem;font-weight:700}
+
+    /* SIDE PANEL */
+    .side{display:flex;flex-direction:column;min-height:0}
+    @media(max-width:1100px){.side{grid-column:1/-1}}
+    .side-scroll{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px;min-height:0}
+
+    .alarms{font-size:.72rem;line-height:1.45}
+    .alarm-block{border-left:3px solid var(--warn);padding:8px 10px;background:rgba(0,0,0,.3);border-radius:0 6px 6px 0;margin-bottom:6px}
+    .alarm-block.bad{border-color:var(--bad)}
+    .alarm-block .t{font-weight:700;margin-bottom:4px;font-size:.75rem}
+    .alarm-block ul{margin:0;padding-left:14px;color:var(--muted)}
+    .alarm-ok{color:var(--ok);font-size:.75rem;padding:8px}
+
+    .ctrl{padding:8px 10px 12px;border-top:1px solid var(--line)}
+    .ctrl-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .btn{
+      font-family:var(--display);font-weight:700;font-size:.78rem;letter-spacing:.06em;
+      padding:14px 8px;border-radius:8px;border:2px solid var(--line);
+      background:rgba(0,0,0,.4);color:var(--text);cursor:pointer;transition:all .15s;
+    }
+    .btn:hover{filter:brightness(1.15)}
+    .btn.start{border-color:var(--ok);color:var(--ok)}
+    .btn.start:hover{box-shadow:0 0 20px var(--glow-ok)}
+    .btn.stop{border-color:var(--bad);color:var(--bad)}
+    .btn.stop:hover{box-shadow:0 0 20px var(--glow-bad)}
+    .mode-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+    .btn.mode{font-size:.65rem;padding:10px 4px}
+    .btn.mode.active{background:var(--l1);color:#000;border-color:var(--l1)}
+
+    /* BOTTOM */
+    .bottom{
+      display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+      padding:6px 16px;border-top:1px solid var(--line);
+      font-size:.68rem;color:var(--muted);background:rgba(8,12,22,.95);
+    }
+    .bottom strong{color:var(--text)}
+
+    /* CONNECT OVERLAY */
+    .overlay{
+      position:fixed;inset:0;z-index:100;background:rgba(5,8,15,.94);
+      display:flex;align-items:center;justify-content:center;padding:20px;
+    }
+    .overlay.hide{display:none}
+    .connect-box{
+      width:min(400px,100%);background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:24px;
+    }
+    .connect-box h2{font-family:var(--display);font-size:1rem;margin-bottom:16px;color:var(--l1)}
+    .connect-box label{display:block;font-size:.72rem;color:var(--muted);margin:10px 0 4px}
+    .connect-box input{
+      width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);
+      background:#000;color:var(--text);font-family:var(--mono);font-size:.85rem;
+    }
+    .connect-box .go{
+      width:100%;margin-top:16px;padding:14px;border:none;border-radius:8px;
+      background:linear-gradient(90deg,var(--l1),#ea580c);color:#000;
+      font-family:var(--display);font-weight:900;letter-spacing:.1em;cursor:pointer;
+    }
+
+    body.running .main{animation:subtle-vibe 4s ease infinite}
+    @keyframes subtle-vibe{50%{filter:brightness(1.02)}}
+
+    .toast-wrap{position:fixed;bottom:48px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px}
+    .toast{padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:.75rem;animation:fadein .2s}
+    @keyframes fadein{from{opacity:0;transform:translateY(8px)}}
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="grid-bg"></div>
+
+  <div class="cockpit" id="cockpit">
+    <header class="top">
+      <div class="brand">GENSET <span>EXTREME</span></div>
+      <span class="pill off" id="connPill"><span class="conn-dot" id="connDot"></span><span id="connText">OFFLINE</span></span>
+      <span class="pill off" id="statePill">—</span>
+      <span class="pill off" id="faultPill" style="display:none">FAULT</span>
+      <div class="top-spacer"></div>
+      <span style="font-size:.68rem;color:var(--muted)" id="deviceLabel">—</span>
+      <a href="s3.html" id="backLink">← Dashboard</a>
+      <button type="button" class="btn mode" id="btnReconnect" style="padding:6px 10px">⚙</button>
+    </header>
+
+    <div class="main">
+      <!-- PHASES -->
+      <section class="panel center-zone" style="grid-row:span 1">
+        <div class="panel-title">Φόρτιση 3-φασης</div>
+        <div class="phases" id="phases">
+          <div class="phase l1" id="phL1">
+            <div class="name">L1</div>
+            <div class="tower"><div class="fill" id="towerL1"></div></div>
+            <div class="pct" id="pctL1">—</div>
+            <div class="row"><strong id="aL1">—</strong> A</div>
+            <div class="row"><strong id="kwL1">—</strong> kW · <span id="kvaL1">—</span> kVA</div>
+            <div class="row"><span id="vL1">—</span> V L-L</div>
+          </div>
+          <div class="phase l2" id="phL2">
+            <div class="name">L2</div>
+            <div class="tower"><div class="fill" id="towerL2"></div></div>
+            <div class="pct" id="pctL2">—</div>
+            <div class="row"><strong id="aL2">—</strong> A</div>
+            <div class="row"><strong id="kwL2">—</strong> kW · <span id="kvaL2">—</span> kVA</div>
+            <div class="row"><span id="vL2">—</span> V L-L</div>
+          </div>
+          <div class="phase l3" id="phL3">
+            <div class="name">L3</div>
+            <div class="tower"><div class="fill" id="towerL3"></div></div>
+            <div class="pct" id="pctL3">—</div>
+            <div class="row"><strong id="aL3">—</strong> A</div>
+            <div class="row"><strong id="kwL3">—</strong> kW · <span id="kvaL3">—</span> kVA</div>
+            <div class="row"><span id="vL3">—</span> V L-L</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CENTER RPM -->
+      <section class="panel center-zone">
+        <div class="center-body">
+          <div class="state-banner idle" id="stateBanner">ΑΝΑΜΟΝΗ</div>
+          <div class="mode-line" id="modeLine">—</div>
+          <div class="rpm-wrap">
+            <svg viewBox="0 0 200 200" aria-hidden="true">
+              <circle cx="100" cy="100" r="88" fill="none" stroke="#1a2540" stroke-width="10"/>
+              <circle cx="100" cy="100" r="88" fill="none" stroke="#2a3550" stroke-width="10"
+                stroke-dasharray="414" stroke-dashoffset="103" stroke-linecap="round"/>
+              <circle id="rpmArc" cx="100" cy="100" r="88" fill="none" stroke="#f59e0b" stroke-width="10"
+                stroke-dasharray="414" stroke-dashoffset="414" stroke-linecap="round"
+                style="filter:drop-shadow(0 0 6px rgba(245,158,11,.6))"/>
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#141c2e" stroke-width="1"/>
+            </svg>
+            <div class="rpm-val">
+              <div class="num" id="rpmNum">—</div>
+              <div class="lbl">RPM</div>
+            </div>
+          </div>
+          <div class="led-row">
+            <div class="led hz"><div class="v" id="hzLed">—</div><div class="l">Hz</div></div>
+            <div class="led kw"><div class="v" id="kwLed">—</div><div class="l">kW Σ</div></div>
+            <div class="led kva"><div class="v" id="kvaLed">—</div><div class="l">kVA Σ</div></div>
+          </div>
+        </div>
+        <div class="stepper">
+          <div class="panel-title" style="padding-top:0">Κατάσταση controller</div>
+          <div class="stepper-track" id="stepper"></div>
+        </div>
+      </section>
+
+      <!-- POWER -->
+      <section class="panel power-zone">
+        <div class="panel-title">Ισχύς &amp; δίκτυο</div>
+        <div class="power-body">
+          <div class="big-kw">
+            <div class="num" id="bigKw">—</div>
+            <div class="unit">kW OUTPUT</div>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric"><div class="l">Τάση L-L</div><div class="v" id="mVll">—</div></div>
+            <div class="metric"><div class="l">Ρεύμα μέσο</div><div class="v" id="mCurr">—</div></div>
+            <div class="metric"><div class="l">Power Factor</div><div class="v" id="mPf">—</div></div>
+            <div class="metric"><div class="l">Φόρτιση max</div><div class="v" id="mLoadMax">—</div></div>
+          </div>
+          <div class="panel-title" style="padding:0">Ιστορικό kW (session)</div>
+          <canvas id="kwSpark" height="56"></canvas>
+        </div>
+      </section>
+
+      <!-- SIDE -->
+      <aside class="panel side">
+        <div class="panel-title">Συναγερμοί &amp; έλεγχος</div>
+        <div class="side-scroll">
+          <div class="alarms" id="alarms"><div class="alarm-ok">Χωρίς ενεργό σφάλμα</div></div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-btns">
+            <button type="button" class="btn start" id="btnStart">▶ START</button>
+            <button type="button" class="btn stop" id="btnStop">■ STOP</button>
+          </div>
+          <div class="mode-row">
+            <button type="button" class="btn mode" data-mode="0">OFF</button>
+            <button type="button" class="btn mode" data-mode="1">AUTO</button>
+            <button type="button" class="btn mode" data-mode="2">MAN</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ENGINE STRIP -->
+      <div class="engine-strip">
+        <div class="eng"><div class="ico">🔋</div><div><div class="l">Μπαταρία γενν.</div><div class="v" id="eBatt">—</div></div></div>
+        <div class="eng"><div class="ico">🛢</div><div><div class="l">Λάδι</div><div class="v" id="eOil">—</div></div></div>
+        <div class="eng"><div class="ico">🌡</div><div><div class="l">Ψύξη</div><div class="v" id="eCool">—</div></div></div>
+        <div class="eng"><div class="ico">⏱</div><div><div class="l">Ώρες λειτ.</div><div class="v" id="eHours">—</div></div></div>
+        <div class="eng"><div class="ico">🔄</div><div><div class="l">Εκκινήσεις</div><div class="v" id="eRuns">—</div></div></div>
+        <div class="eng"><div class="ico">🎛</div><div><div class="l">Controller</div><div class="v" id="eCtrl">—</div></div></div>
+      </div>
+    </div>
+
+    <footer class="bottom">
+      <span>FW <strong id="fwVer">—</strong></span>
+      <span>Modbus <strong id="modbusAge">—</strong></span>
+      <span>Τελευταίο <strong id="lastRx">—</strong></span>
+      <span id="cmdFeedback" style="color:var(--muted)"></span>
+    </footer>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="connect-box">
+      <h2>⚡ GENSET EXTREME COCKPIT</h2>
+      <label>Device ID (MAC)</label>
+      <input id="deviceId" placeholder="π.χ. 1CDBD47A3C50" autocomplete="off" />
+      <label>MQTT Broker (WebSocket)</label>
+      <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
+      <button type="button" class="go" id="btnConnect">ΣΥΝΔΕΣΗ</button>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="genset-decode.js"></script>
+  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const board = params.get('board') || 's3';
+    const LS = board === 'classic'
+      ? { id: 'esp32_classic_device_id', broker: 'esp32_classic_broker' }
+      : { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
+    const BACK_PAGE = board === 'classic' ? 'esp32.html' : 's3.html';
+    const MQTT_CMD_PW = 'esp32ota';
+    const RPM_ARC = 414;
+    const STATE_LABELS = ['Off','Stop','Preheat','Precrank','Crank','Starter','PreRamp','Ramp','RUN','Fault','Prerun','Runtime','Factory','Powerdown'];
+
+    document.getElementById('backLink').href = BACK_PAGE;
+
+    const savedId = localStorage.getItem(LS.id);
+    const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');
+    if (savedId) document.getElementById('deviceId').value = savedId;
+    if (savedBroker) document.getElementById('broker').value = savedBroker;
+
+    let client = null, cmdTopic = '', connected = false;
+    let gensetStable = null, lastGenset = null, lastStatus = {};
+    let lastRxAt = 0, kwHistory = [];
+
+    const stepperEl = document.getElementById('stepper');
+    STATE_LABELS.forEach((_, i) => {
+      const s = document.createElement('div');
+      s.className = 'step';
+      s.title = STATE_LABELS[i];
+      s.dataset.state = i;
+      stepperEl.appendChild(s);
+    });
+
+    function toast(msg, ms = 3000) {
+      const w = document.getElementById('toasts');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      w.appendChild(t);
+      setTimeout(() => t.remove(), ms);
+    }
+
+    function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+    function f0(x) { return Number.isFinite(+x) ? Number(x).toFixed(0) : '—'; }
+    function f1(x) { return Number.isFinite(+x) ? Number(x).toFixed(1) : '—'; }
+    function f2(x) { return Number.isFinite(+x) ? Number(x).toFixed(2) : '—'; }
+
+    function pubCmd(obj) {
+      if (!client) return;
+      client.publish(cmdTopic, JSON.stringify(Object.assign({ password: MQTT_CMD_PW }, obj)));
+    }
+
+    function setArc(el, value, max, color) {
+      if (!el) return;
+      const v = Number(value);
+      const pct = Number.isFinite(v) && max > 0 ? clamp(v / max, 0, 1) : 0;
+      el.setAttribute('stroke-dashoffset', String(RPM_ARC * (1 - pct)));
+      if (color) el.setAttribute('stroke', color);
+    }
+
+    function setConn(ok, text) {
+      document.getElementById('connDot').classList.toggle('on', ok);
+      const pill = document.getElementById('connPill');
+      pill.className = 'pill ' + (ok ? 'ok' : 'off');
+      document.getElementById('connText').textContent = text || (ok ? 'MQTT OK' : 'OFFLINE');
+    }
+
+    function drawSparkline() {
+      const c = document.getElementById('kwSpark');
+      const ctx = c.getContext('2d');
+      const w = c.clientWidth || 300;
+      c.width = w * devicePixelRatio;
+      c.height = 56 * devicePixelRatio;
+      ctx.scale(devicePixelRatio, devicePixelRatio);
+      ctx.clearRect(0, 0, w, 56);
+      if (kwHistory.length < 2) return;
+      const vals = kwHistory.map(p => p.v);
+      const max = Math.max(22, ...vals) * 1.1;
+      const min = 0;
+      ctx.strokeStyle = '#22c55e';
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#22c55e';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      kwHistory.forEach((p, i) => {
+        const x = (i / (kwHistory.length - 1)) * (w - 4) + 2;
+        const y = 52 - ((p.v - min) / (max - min)) * 48;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(34,197,94,.12)';
+      ctx.lineTo(w - 2, 54);
+      ctx.lineTo(2, 54);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function render(d) {
+      if (!d) return;
+      const valid = d.valid || d.genset_state != null;
+      const running = d.running === true || Number(d.genset_state) === 8;
+      const crank = Number(d.genset_state) === 4;
+      const fault = Number(d.active_fault) > 0 || Number(d.fault_type) === 2 || Number(d.genset_state) === 9;
+
+      document.body.classList.toggle('running', running);
+
+      const stateEl = document.getElementById('stateBanner');
+      const stateLabel = d.genset_state_label_el || d.genset_state_label || '—';
+      stateEl.textContent = stateLabel.toUpperCase();
+      stateEl.className = 'state-banner ' + (running ? 'run' : crank ? 'crank' : fault ? 'fault' : 'idle');
+
+      document.getElementById('modeLine').textContent =
+        (d.op_mode_label_el || d.op_mode_label || '—') + ' · PS0600 · Controller ' + (d.controller_type ?? '—');
+
+      const statePill = document.getElementById('statePill');
+      statePill.textContent = running ? 'RUNNING' : valid ? 'READY' : 'OFFLINE';
+      statePill.className = 'pill ' + (running ? 'ok' : valid ? 'warn' : 'off');
+
+      const faultPill = document.getElementById('faultPill');
+      if (Number(d.active_fault) > 0) {
+        faultPill.style.display = '';
+        faultPill.textContent = 'FAULT #' + d.active_fault;
+        faultPill.className = 'pill bad';
+      } else {
+        faultPill.style.display = 'none';
+      }
+
+      // RPM
+      const rpm = d.engine_rpm;
+      document.getElementById('rpmNum').textContent = f0(rpm);
+      setArc(document.getElementById('rpmArc'), rpm, 2200, running ? '#22c55e' : crank ? '#f59e0b' : '#6b7280');
+
+      document.getElementById('hzLed').textContent = f1(d.frequency);
+      document.getElementById('kwLed').textContent = f0(d.kw_total);
+      document.getElementById('kvaLed').textContent = f0(d.kva_total);
+      document.getElementById('bigKw').textContent = f0(d.kw_total);
+
+      // Phases
+      const phases = [
+        { pct: d.load_l1_pct, a: d.curr_l1, kw: d.kw_l1, kva: d.kva_l1, vll: d.volt_l1l2, ids: ['towerL1','pctL1','aL1','kwL1','kvaL1','vL1','phL1'] },
+        { pct: d.load_l2_pct, a: d.curr_l2, kw: d.kw_l2, kva: d.kva_l2, vll: d.volt_l2l3, ids: ['towerL2','pctL2','aL2','kwL2','kvaL2','vL2','phL2'] },
+        { pct: d.load_l3_pct, a: d.curr_l3, kw: d.kw_l3, kva: d.kva_l3, vll: d.volt_l3l1, ids: ['towerL3','pctL3','aL3','kwL3','kvaL3','vL3','phL3'] }
+      ];
+      let maxLoad = 0;
+      phases.forEach(p => {
+        const pct = Number(p.pct);
+        if (Number.isFinite(pct)) maxLoad = Math.max(maxLoad, pct);
+        document.getElementById(p.ids[0]).style.height = (Number.isFinite(pct) ? clamp(pct, 0, 100) : 0) + '%';
+        document.getElementById(p.ids[1]).textContent = Number.isFinite(pct) ? f1(pct) + '%' : '—';
+        document.getElementById(p.ids[2]).textContent = f1(p.a);
+        document.getElementById(p.ids[3]).textContent = f0(p.kw);
+        document.getElementById(p.ids[4]).textContent = f0(p.kva);
+        document.getElementById(p.ids[5]).textContent = f0(p.vll);
+        document.getElementById(p.ids[6]).classList.toggle('hot', Number.isFinite(pct) && pct > 15);
+      });
+
+      document.getElementById('mVll').textContent = f0(d.volt_avg_ll) + ' V';
+      document.getElementById('mCurr').textContent = f1(d.curr_avg) + ' A';
+      const kw = Number(d.kw_total), kva = Number(d.kva_total);
+      document.getElementById('mPf').textContent = (kva > 0 && Number.isFinite(kw))
+        ? f2(kw / kva) : '—';
+      document.getElementById('mLoadMax').textContent = Number.isFinite(maxLoad) ? f1(maxLoad) + '%' : '—';
+
+      // Engine
+      const batt = d.battery_v;
+      document.getElementById('eBatt').textContent = f1(batt) + ' V';
+      document.getElementById('eBatt').className = 'v ' + (batt >= 24 && batt <= 28 ? 'ok' : batt < 22 && batt > 0 ? 'bad' : '');
+      document.getElementById('eOil').textContent = f0(d.oil_kpa) + ' kPa';
+      document.getElementById('eCool').textContent = f1(d.coolant_c) + ' °C';
+      document.getElementById('eHours').textContent = d.runtime_hours != null ? f1(d.runtime_hours) + ' h' : '—';
+      document.getElementById('eRuns').textContent = d.total_runs ?? '—';
+      document.getElementById('eCtrl').textContent = d.controller_type ?? '—';
+
+      // Stepper
+      const st = Number(d.genset_state);
+      stepperEl.querySelectorAll('.step').forEach(el => {
+        const n = Number(el.dataset.state);
+        el.classList.toggle('on', Number.isFinite(st) && n <= st && st < 9);
+        el.classList.toggle('cur', n === st);
+      });
+
+      // Alarms
+      const alEl = document.getElementById('alarms');
+      if (window.GensetDecode) {
+        const sections = GensetDecode.buildGensetAlarmSections(d);
+        if (!sections.length) {
+          alEl.innerHTML = '<div class="alarm-ok">✓ Χωρίς ενεργό σφάλμα</div>';
+        } else {
+          alEl.innerHTML = sections.map(s =>
+            `<div class="alarm-block ${s.level === 'bad' ? 'bad' : ''}"><div class="t">${s.title}</div><ul>${s.items.map(i => '<li>' + i + '</li>').join('')}</ul></div>`
+          ).join('');
+        }
+      } else if (Number(d.active_fault) > 0) {
+        alEl.innerHTML = `<div class="alarm-block bad"><div class="t">Σφάλμα #${d.active_fault}</div></div>`;
+      } else {
+        alEl.innerHTML = '<div class="alarm-ok">✓ Χωρίς ενεργό σφάλμα</div>';
+      }
+
+      // Mode buttons
+      const mode = Number(d.op_mode);
+      document.querySelectorAll('.btn.mode[data-mode]').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
+      });
+
+      // Sparkline
+      if (Number.isFinite(kw) && valid) {
+        kwHistory.push({ t: Date.now(), v: kw });
+        if (kwHistory.length > 120) kwHistory.shift();
+        drawSparkline();
+      }
+
+      // Footer
+      if (d.last_cmd) {
+        const ok = d.last_cmd_ok ? '✓' : '✗';
+        document.getElementById('cmdFeedback').textContent = ok + ' ' + d.last_cmd + (d.last_cmd_detail ? ' — ' + d.last_cmd_detail : '');
+      }
+      if (d.age_sec != null) document.getElementById('modbusAge').textContent = d.age_sec + 's';
+    }
+
+    function onGenset(j) {
+      if (j.poll_complete) gensetStable = Object.assign({}, j);
+      const d = (j.poll_complete || !gensetStable) ? j : gensetStable;
+      lastGenset = d;
+      lastRxAt = Date.now();
+      render(d);
+    }
+
+    function onStatus(j) {
+      lastStatus = j;
+      if (j.firmware) document.getElementById('fwVer').textContent = 'v' + j.firmware;
+      if (j.genset && Date.now() - lastRxAt > 5000) onGenset(j.genset);
+    }
+
+    function updateClock() {
+      if (!lastRxAt) {
+        document.getElementById('lastRx').textContent = '—';
+        return;
+      }
+      const sec = Math.round((Date.now() - lastRxAt) / 1000);
+      document.getElementById('lastRx').textContent = sec < 2 ? 'τώρα' : sec + 's πριν';
+    }
+    setInterval(updateClock, 1000);
+
+    async function loadFaultBits() {
+      try {
+        const r = await fetch('cummins_fault_bits.json');
+        if (r.ok && window.GensetDecode) GensetDecode.setFaultDb(await r.json());
+      } catch (e) {}
+    }
+    loadFaultBits();
+
+    function connect() {
+      const id = document.getElementById('deviceId').value.trim().toUpperCase();
+      const url = document.getElementById('broker').value.trim();
+      if (!id) { toast('Βάλε Device ID'); return; }
+      localStorage.setItem(LS.id, id);
+      localStorage.setItem(LS.broker, url);
+      document.getElementById('deviceLabel').textContent = id;
+      cmdTopic = `home/${id}/cmd`;
+      if (client) { client.removeAllListeners(); client.end(true); }
+
+      setConn(false, 'Σύνδεση...');
+      document.getElementById('overlay').classList.add('hide');
+
+      client = mqtt.connect(url, {
+        clientId: 'extreme-' + Math.random().toString(16).slice(2),
+        reconnectPeriod: 5000,
+        connectTimeout: 15000,
+        protocolVersion: 4
+      });
+
+      client.on('connect', () => {
+        connected = true;
+        setConn(true, 'MQTT OK');
+        client.subscribe(`home/${id}/status`);
+        client.subscribe(`home/${id}/genset`);
+        toast('Συνδέθηκε — αναμονή δεδομένων...');
+      });
+      client.on('offline', () => { connected = false; setConn(false, 'OFFLINE'); });
+      client.on('error', () => setConn(false, 'ΣΦΑΛΜΑ'));
+      client.on('message', (t, msg) => {
+        try {
+          const j = JSON.parse(msg.toString());
+          if (t.endsWith('/genset')) onGenset(j);
+          else if (t.endsWith('/status')) onStatus(j);
+        } catch (e) {}
+      });
+    }
+
+    document.getElementById('btnConnect').onclick = connect;
+    document.getElementById('btnReconnect').onclick = () => {
+      document.getElementById('overlay').classList.remove('hide');
+    };
+
+    document.getElementById('btnStart').onclick = () => {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Εκκίνηση γεννήτριας;')) return;
+      pubCmd({ genset: 'start' });
+      toast('START στάλθηκε');
+    };
+    document.getElementById('btnStop').onclick = () => {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Διακοπή γεννήτριας;')) return;
+      pubCmd({ genset: 'stop' });
+      toast('STOP στάλθηκε');
+    };
+    document.querySelectorAll('.btn.mode[data-mode]').forEach(btn => {
+      btn.onclick = () => {
+        const mode = +btn.dataset.mode;
+        const actions = ['mode_off', 'mode_auto', 'mode_manual'];
+        const labels = ['Off', 'Auto', 'Manual'];
+        if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+        if (!confirm('Mode → ' + labels[mode] + ';')) return;
+        pubCmd({ genset: actions[mode] });
+        toast('Mode: ' + labels[mode]);
+      };
+    });
+
+    window.addEventListener('resize', drawSparkline);
+
+    if (savedId) {
+      document.getElementById('overlay').classList.add('hide');
+      connect();
+    }
+  </script>
+</body>
+</html>

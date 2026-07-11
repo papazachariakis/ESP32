@@ -811,9 +811,11 @@
     <hr style="border:0;border-top:1px solid var(--border);margin:20px 0" />
     <div class="card-title" style="margin-bottom:8px">Συσκευή</div>
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
+    <button class="btn" style="margin-top:8px;background:#0d9488" onclick="openLocalOta()">🏠 Τοπικό OTA (πιο αξιόπιστο)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.14</span></b> · esp32ota · browser push ~3–5 λεπτά · build <span id="dashBuild">—</span></p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.14</span></b> · build <span id="dashBuild">—</span></p>
+    <p class="small muted" id="localOtaHint" style="margin-top:4px">Τοπικό OTA: ίδιο WiFi/VPN → <a id="localOtaLink" href="#" target="_blank" rel="noopener">http://ESP32-IP</a></p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -840,7 +842,8 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.14';
-    const DASHBOARD_BUILD = '2026-07-11-ota6';
+    const DASHBOARD_BUILD = '2026-07-11-ota7';
+    const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1039,7 +1042,9 @@
         diagRow('Τελευταίο status', sec == null ? '—' : (sec < 3 ? 'τώρα' : 'πριν ' + sec + 's')),
         diagRow('OTA', s.ota_phase
           ? (s.ota_phase + (s.ota_mqtt_rx ? ' (' + s.ota_mqtt_rx + ')' : '') + (s.ota_error ? ' — ' + s.ota_error : ''))
-          : (s.ota_error || '—'))
+          : (s.ota_error
+            ? (s.ota_error + ' <span class="muted">(reboot ή τοπικό OTA)</span>')
+            : '—'))
       ].join('');
 
       document.getElementById('diagBle').innerHTML = [
@@ -1497,6 +1502,11 @@
       const wIp = document.getElementById('wifiCurrentIp');
       if (wSsid) wSsid.textContent = wifiSsidDisplay(j) || (j.wifi_connected ? '(συνδεδεμένο)' : '—');
       if (wIp) wIp.textContent = j.ip || '—';
+      const localLink = document.getElementById('localOtaLink');
+      if (localLink && j.ip) {
+        localLink.href = 'http://' + j.ip + '/';
+        localLink.textContent = 'http://' + j.ip;
+      }
       const bleName = document.getElementById('bleCurrentName');
       const bleMac = document.getElementById('bleCurrentMac');
       const bleState = document.getElementById('bleCurrentState');
@@ -1879,6 +1889,37 @@
       }
       toast('ESP pull timeout', 6000);
       return false;
+    }
+
+    function openLocalOta() {
+      const ip = lastStatus && lastStatus.ip;
+      if (!ip) {
+        toast('Δεν υπάρχει IP — περίμενε status από ESP32', 5000);
+        return;
+      }
+      const steps = [
+        'Τοπικό OTA (5 λεπτά, πιο αξιόπιστο από MQTT):',
+        '',
+        '1) Κατέβασε: firmware-s3.bin',
+        '2) Άνοιξε: http://' + ip + '/',
+        '3) Επίλεξε το .bin → Ανέβασμα',
+        '4) Περίμενε reboot (~1 λεπτό)',
+        '',
+        'Χρειάζεσαι ίδιο WiFi ή VPN στο σπίτι.',
+        '',
+        'Άνοιγμα σελίδας ESP32 τώρα;'
+      ].join('\n');
+      if (!confirm(steps)) return;
+      window.open('http://' + ip + '/', '_blank', 'noopener');
+      const a = document.createElement('a');
+      a.href = FIRMWARE_BIN_URL;
+      a.download = 'firmware-s3.bin';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast('Κατέβασε firmware-s3.bin και ανέβασέ το στο ESP32', 8000);
+      closeDrawer();
     }
 
     async function remoteOta() {

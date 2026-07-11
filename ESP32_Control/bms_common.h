@@ -78,13 +78,33 @@ inline BmsType bmsTypeFromString(const String& s) {
   return BmsType::None;
 }
 
-inline bool bmsNameLooksLikeJkSerial(const String& name) {
-  // JK-PB / Jikong often advertise as a hex serial only (e.g. 50514652C101132).
-  if (name.length() < 12 || name.length() > 24) return false;
+inline bool bmsNameLooksLikeHexSerial(const String& name) {
+  // Tianpower / Basen often advertise as hex serial only (e.g. 50514652C101132).
+  if (name.length() < 10 || name.length() > 24) return false;
   for (unsigned i = 0; i < name.length(); i++) {
     if (!isxdigit((unsigned char)name.charAt(i))) return false;
   }
   return true;
+}
+
+inline bool bmsMacLooksEspressif(const String& mac) {
+  String m = mac;
+  m.toUpperCase();
+  return m.startsWith("C8:47:8") || m.startsWith("24:0A:C4") || m.startsWith("30:AE:A4")
+      || m.startsWith("A4:CF:12") || m.startsWith("84:CC:A8") || m.startsWith("3C:61:05");
+}
+
+inline bool bmsHasServiceUuid(BLEAdvertisedDevice& d, uint16_t uuid16) {
+  if (!d.haveServiceUUID()) return false;
+  BLEUUID want16(uuid16);
+  char buf[40];
+  snprintf(buf, sizeof(buf), "0000%04x-0000-1000-8000-00805f9b34fb", uuid16);
+  BLEUUID want128(buf);
+  for (int i = 0; i < d.getServiceUUIDCount(); i++) {
+    BLEUUID u = d.getServiceUUID(i);
+    if (u.equals(want16) || u.equals(want128)) return true;
+  }
+  return d.isAdvertisingService(want16) || d.isAdvertisingService(want128);
 }
 
 inline BmsType bmsDetectFromName(const String& name) {
@@ -95,10 +115,11 @@ inline BmsType bmsDetectFromName(const String& name) {
   if (n.indexOf("-B2A") >= 0 || n.indexOf("_B2A") >= 0) return BmsType::Jk;
   if (n.indexOf("_BD") >= 0 || n.indexOf("-BD") >= 0) return BmsType::Jk;
   if (n.indexOf("PB2A") >= 0 || n.indexOf("PB1A") >= 0) return BmsType::Jk;
-  if (bmsNameLooksLikeJkSerial(n)) return BmsType::Jk;
   if (n.startsWith("TP_") || n.startsWith("TP-")) return BmsType::Basen;
-  if (n.indexOf("BSTBD") >= 0 || n.indexOf("LT55") >= 0 || n.indexOf("TIANPOWER") >= 0) return BmsType::Basen;
+  if (n.indexOf("BSTBD") >= 0 || n.indexOf("LT55") >= 0 || n.indexOf("LT52") >= 0) return BmsType::Basen;
+  if (n.indexOf("TIANPOWER") >= 0 || n.indexOf("TIAN") >= 0) return BmsType::Basen;
   if (n.indexOf("BASEN") >= 0) return BmsType::Basen;
+  if (bmsNameLooksLikeHexSerial(n)) return BmsType::Basen;
   return BmsType::None;
 }
 
@@ -116,16 +137,11 @@ inline bool bmsHasService(BLEAdvertisedDevice& d, const char* uuid16) {
 }
 
 inline BmsType bmsDetectType(const String& name, BLEAdvertisedDevice& d) {
-  // Service UUID is more reliable than BLE name (Basen/JK often use hex serials).
-  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) {
-    return BmsType::Basen;
-  }
-  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) {
-    return BmsType::Jk;
-  }
-  if (bmsMfgMatch(d, 0x4B4A) || bmsMfgMatch(d, 0x0B65)) {
-    return BmsType::Jk;
-  }
+  if (bmsHasServiceUuid(d, 0xff00)) return BmsType::Basen;
+  if (bmsHasServiceUuid(d, 0xffe0)) return BmsType::Jk;
+  if (bmsHasService(d, "0000ff00-0000-1000-8000-00805f9b34fb")) return BmsType::Basen;
+  if (bmsHasService(d, "0000ffe0-0000-1000-8000-00805f9b34fb")) return BmsType::Jk;
+  if (bmsMfgMatch(d, 0x4B4A) || bmsMfgMatch(d, 0x0B65)) return BmsType::Jk;
 
   BmsType byName = bmsDetectFromName(name);
   if (byName != BmsType::None) return byName;

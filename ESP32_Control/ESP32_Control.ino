@@ -21,6 +21,7 @@
 #include <WiFiManager.h>
 
 #include <esp_mac.h>
+#include <esp_coexist.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
 
@@ -37,6 +38,7 @@
 #include <ArduinoJson.h>
 
 #include "config.h"
+#include "ble_radio.h"
 
 #include "webui.h"
 #include "bms_manager.h"
@@ -267,6 +269,7 @@ String buildStatusJson() {
   ble["info_frames"] = bmsMgr.proto.infoFrames;
   ble["crc_errors"] = bmsMgr.proto.crcErrors;
   if (bmsMgr.connected && bmsMgr.bleRssi > -200) ble["rssi"] = bmsMgr.bleRssi;
+  ble["tx_power_dbm"] = bleTxPowerDbm(BLE_TX_POWER_LEVEL);
   ble["data_age_ms"] = bmsMgr.bms.valid
     ? (long)(millis() - bmsMgr.bms.lastUpdate) : -1;
   if (bmsMgr.lastNotifyMs)
@@ -753,6 +756,20 @@ void loadSettings() {
       prefs.putString("bms_type", bmsTypeId(detected));
     }
   }
+  if (bmsMgr.type == BmsType::Jk && bmsNameLooksLikeHexSerial(bmsMgr.name)) {
+    Serial.printf("BMS hex serial %s -> basen (was jk)\n", bmsMgr.name.c_str());
+    bmsMgr.type = BmsType::Basen;
+    prefs.putString("bms_type", "basen");
+  }
+  if (bmsMgr.mac.length() && bmsMacLooksEspressif(bmsMgr.mac) && bmsNameLooksLikeHexSerial(bmsMgr.name)) {
+    Serial.println("BMS saved MAC looks like ESP32 module — clearing stale BLE prefs");
+    bmsMgr.mac = "";
+    bmsMgr.name = "";
+    bmsMgr.type = BmsType::None;
+    prefs.remove("ble_mac");
+    prefs.remove("ble_name");
+    prefs.remove("bms_type");
+  }
   if (bmsMgr.type == BmsType::None && bmsMgr.name.length())
     bmsMgr.type = bmsDetectFromName(bmsMgr.name);
 #if defined(ESP32_SLIM_BUILD)
@@ -826,16 +843,13 @@ void setupWiFi() {
 
 
 
-void configureBleRadio() {
-  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
-  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_SCAN);
-  BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
-  Serial.println("BLE TX power: +9 dBm (default/scan/adv)");
-}
-
 void startBleScan() {
   pumpNetwork();
-
+  configureBleRadio();
+  WiFi.setSleep(false);
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+  esp_coex_preference_set(ESP_COEX_PREFER_BT);
+#endif
   if (bmsMgr.client && bmsMgr.client->isConnected()) {
     Serial.println("BLE scan: disconnecting BMS link so it can advertise");
     bmsMgr.client->disconnect();
@@ -896,6 +910,9 @@ void startBleScan() {
 
   scan->clearResults();
   pumpNetwork();
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+  esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+#endif
   Serial.printf("BLE scan done: %d devices, %d BMS\n", count, bmsCount);
 }
 

@@ -498,20 +498,11 @@ struct GenManager {
   }
 
   bool cmdSetOpMode(uint8_t mode) {
-    if (mode > 2) {
-      data.lastError = "invalid op mode";
-      return false;
-    }
-    if (!writeHoldRetry(CUMMINS_REG_OP_MODE, (uint16_t)mode)) return false;
-    modbusBusGap(300);
-    if (!refreshStatusBlock()) return false;
-    if (data.opMode != mode) {
-      data.lastError = "mode readback=" + String(data.opMode) + " expected " + String(mode) +
-                       " — το 40010 είναι κατάσταση διακόπτη panel (read-only)";
-      return false;
-    }
-    data.lastError = String("mode OK • ") + cumminsOpModeLabelEl(mode);
-    return true;
+    (void)mode;
+    refreshStatusBlock();
+    // PS0600 register 40010 mirrors the physical panel switch — writes return exc 4.
+    data.lastError = "Το 40010 είναι read-only — άλλαξε Off/Auto/Manual μόνο από τον διακόπτη στο panel";
+    return false;
   }
 
   bool runGensetCmd(const char* action) {
@@ -532,12 +523,12 @@ struct GenManager {
     bool ok = false;
     if (strcmp(action, "start") == 0) {
       ok = cmdStart();
-      if (ok && data.opMode != 2)
-        data.lastError = "40300=1 OK — βάλε MANUAL στο panel για εκκίνηση";
-      else if (ok && data.gensetState == 1)
-        data.lastError = "40300=1 OK — κατάσταση Stop (περίμενε Precrank/Crank)";
-      else if (ok)
-        data.lastError = "start OK • reg40300=1 • " + String(cumminsStateLabelEl(data.gensetState));
+      if (ok) {
+        if (data.gensetState >= 4)
+          data.lastError = "start OK • reg40300=1 • " + String(cumminsStateLabelEl(data.gensetState));
+        else
+          data.lastError = "40300=1 OK — περίμενε 10–30s (Precrank → Running)";
+      }
     } else if (strcmp(action, "stop") == 0) {
       ok = cmdStop();
       if (ok) data.lastError = "stop OK • reg40300=0";

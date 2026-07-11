@@ -218,8 +218,8 @@
     .btn.stop{border-color:var(--bad);color:var(--bad)}
     .btn.stop:hover{box-shadow:0 0 20px var(--glow-bad)}
     .mode-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-    .btn.mode{font-size:.65rem;padding:10px 4px}
-    .btn.mode.active{background:var(--l1);color:#000;border-color:var(--l1)}
+    .mode-row .mode{display:block;font-size:.65rem;padding:10px 4px;text-align:center;opacity:.55;border-style:dashed}
+    .mode-row .mode.active{opacity:1;border-style:solid;background:var(--l1);color:#000;border-color:var(--l1)}
 
     /* BOTTOM */
     .bottom{
@@ -381,10 +381,10 @@
             <button type="button" class="btn start" id="btnStart">▶ START</button>
             <button type="button" class="btn stop" id="btnStop">■ STOP</button>
           </div>
-          <div class="mode-row">
-            <button type="button" class="btn mode" data-mode="0">OFF</button>
-            <button type="button" class="btn mode" data-mode="1">AUTO</button>
-            <button type="button" class="btn mode" data-mode="2">MAN</button>
+          <div class="mode-row" title="Αλλαγή μόνο από φυσικό διακόπτη στο panel">
+            <span class="btn mode" data-mode="0">OFF</span>
+            <span class="btn mode" data-mode="1">AUTO</span>
+            <span class="btn mode" data-mode="2">MAN</span>
           </div>
         </div>
       </aside>
@@ -630,7 +630,7 @@
 
       // Mode buttons
       const mode = Number(d.op_mode);
-      document.querySelectorAll('.btn.mode[data-mode]').forEach(btn => {
+      document.querySelectorAll('.mode[data-mode]').forEach(btn => {
         btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
       });
 
@@ -735,7 +735,7 @@
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Εκκίνηση γεννήτριας;')) return;
       pubCmd({ genset: 'start' });
-      toast('START στάλθηκε');
+      toast('START στάλθηκε — περίμενε 10–30s', 6000);
     };
     document.getElementById('btnStop').onclick = () => {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
@@ -743,17 +743,6 @@
       pubCmd({ genset: 'stop' });
       toast('STOP στάλθηκε');
     };
-    document.querySelectorAll('.btn.mode[data-mode]').forEach(btn => {
-      btn.onclick = () => {
-        const mode = +btn.dataset.mode;
-        const actions = ['mode_off', 'mode_auto', 'mode_manual'];
-        const labels = ['Off', 'Auto', 'Manual'];
-        if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-        if (!confirm('Mode → ' + labels[mode] + ';')) return;
-        pubCmd({ genset: actions[mode] });
-        toast('Mode: ' + labels[mode]);
-      };
-    });
 
     window.addEventListener('resize', drawSparkline);
 

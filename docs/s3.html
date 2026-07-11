@@ -370,7 +370,9 @@
       text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;
     }
     .gen-mode-btns{display:flex;gap:6px;margin-bottom:10px}
-    .gen-mode-btns button{flex:1;padding:10px 6px;font-size:.78rem}
+    .gen-mode-btns button,.gen-mode-btns .mode-btn{flex:1;padding:10px 6px;font-size:.78rem;text-align:center}
+    .gen-mode-readonly .mode-btn{cursor:default;opacity:.55;border-style:dashed}
+    .gen-mode-readonly .mode-btn.active{opacity:1;border-style:solid;box-shadow:0 0 0 1px var(--ok)}
     .gen-cmd-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .gen-cmd-btns .full{grid-column:1/-1}
 
@@ -889,12 +891,12 @@
         <div class="gen-cmd-grid">
           <div class="gen-cmd-panel">
             <h4>Λειτουργία &amp; εντολές</h4>
-            <div class="gen-mode-btns">
-              <button class="sec mode-btn" id="modeOff" onclick="genSetMode(0)">Off</button>
-              <button class="sec mode-btn" id="modeAuto" onclick="genSetMode(1)">Auto</button>
-              <button class="sec mode-btn" id="modeManual" onclick="genSetMode(2)">Manual</button>
+            <div class="gen-mode-btns gen-mode-readonly" title="Αλλαγή μόνο από φυσικό διακόπτη στο panel PS0600">
+              <span class="sec mode-btn" id="modeOff">Off</span>
+              <span class="sec mode-btn" id="modeAuto">Auto</span>
+              <span class="sec mode-btn" id="modeManual">Manual</span>
             </div>
-            <p class="small muted" id="genModeHint" style="margin-bottom:10px">Το register 40010 δείχνει τη θέση του φυσικού διακόπτη — συνήθως <b>δεν αλλάζει</b> απομακρυσμένα. Για εκκίνηση: <b>Manual</b> στο panel + Εκκίνηση.</p>
+            <p class="small muted" id="genModeHint" style="margin-bottom:10px">Ο διακόπτης <b>Off/Auto/Manual</b> αλλάζει μόνο στο <b>panel</b> της γεννήτριας (το 40010 είναι ένδειξη, όχι εντολή). Για εκκίνηση πάτα <b>▶ Εκκίνηση</b> και περίμενε 10–30s. Το #141 λάδι χαμηλό είναι φυσιολογικό όταν ο κινητήρας είναι σταματημένος.</p>
             <div class="gen-cmd-btns">
               <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
               <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
@@ -1124,7 +1126,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.20';
-    const DASHBOARD_BUILD = '2026-07-11-meter2';
+    const DASHBOARD_BUILD = '2026-07-11-toastfix';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
@@ -1928,24 +1930,14 @@
 
     let pendingGenCmd = '';
     let pendingBaud = 0;
+    let lastScanResultToast = '';
 
     function genCmd(action) {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
       if (!confirm('Εντολή γεννήτριας: ' + action + ';')) return;
       pendingGenCmd = action;
       pubCmd({ genset: action });
-      toast('Εντολή στάλθηκε: ' + action);
-    }
-
-    function genSetMode(mode) {
-      const actions = ['mode_off', 'mode_auto', 'mode_manual'];
-      const labels = ['Off', 'Auto', 'Manual'];
-      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      if (mode < 0 || mode > 2) return;
-      if (!confirm('Αλλαγή λειτουργίας γεννήτριας σε ' + labels[mode] + ';')) return;
-      pendingGenCmd = actions[mode];
-      pubCmd({ genset: actions[mode] });
-      toast('Mode εντολή: ' + labels[mode]);
+      toast(action === 'start' ? 'Εκκίνηση στάλθηκε — περίμενε 10–30s' : 'Εντολή στάλθηκε: ' + action, 5000);
     }
 
     function syncGenModeButtons(opMode) {
@@ -2626,6 +2618,7 @@
         msgStats.status = 0; msgStats.bms = 0; msgStats.genset = 0; msgStats.meter = 0;
         msgStats.connectedAt = Date.now();
         lastUpdate = 0;
+        lastScanResultToast = '';
         client.subscribe(`home/${id}/status`);
         client.subscribe(`home/${id}/bms`);
         client.subscribe(`home/${id}/genset`);
@@ -2674,12 +2667,9 @@
             lastGensetTopicAt = Date.now();
             if (pendingGenCmd && j.last_cmd === pendingGenCmd) {
               const msg = j.last_cmd_detail || j.error || (j.last_cmd_ok ? ('OK: ' + pendingGenCmd) : ('Αποτυχία ' + pendingGenCmd));
-              toast(msg, j.last_cmd_ok && !j.error ? 4000 : 10000);
+              toast(msg, j.last_cmd_ok ? 6000 : 10000);
               pendingGenCmd = '';
             }
-            const hint = document.getElementById('genModeHint');
-            if (hint && j.last_cmd && j.last_cmd.startsWith('mode_') && j.last_cmd_detail)
-              hint.textContent = j.last_cmd_detail;
             renderGenset(j);
             renderOverview(lastStatus.bms, j);
             if (lastStatus.meter) renderMeter(lastStatus.meter);
@@ -2687,7 +2677,8 @@
               toast('Baud εφαρμόστηκε: ' + j.baud, 5000);
               pendingBaud = 0;
             }
-            if (j.scan_result && j.scan_result.startsWith('CFG')) {
+            if (j.scan_result && j.scan_result.startsWith('CFG') && j.scan_result !== lastScanResultToast) {
+              lastScanResultToast = j.scan_result;
               toast(j.scan_result, j.scan_result.startsWith('CFG OK') ? 5000 : 8000);
             }
           }

@@ -317,6 +317,10 @@
     .gen-load-phase.l3{border-top:3px solid #3b82f6}
     .gen-load-phase .ph{font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
     .gen-load-phase .pct{font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums}
+    .gen-load-phase .extra{
+      font-size:.82rem;color:var(--muted);margin:2px 0 8px;
+      font-variant-numeric:tabular-nums;font-weight:600;
+    }
     .gen-load-phase .bar{
       height:7px;border-radius:999px;background:var(--border);
       overflow:hidden;margin-top:12px;
@@ -641,6 +645,7 @@
           <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα γεννήτριας" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Γεννήτρια Hz</div><div class="v"><span id="ovHz">—</span><span class="u">Hz</span></div></div>
           <div class="kpi chartable" data-chart-key="gen.kw_total" data-chart-label="kW γεννήτριας" data-chart-unit="kW" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Γεννήτρια kW</div><div class="v" id="ovKw">—</div></div>
           <div class="kpi chartable" data-chart-key="gen.engine_rpm" data-chart-label="RPM κινητήρα" data-chart-unit="rpm" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">RPM</div><div class="v" id="ovRpm">—</div></div>
+          <div class="kpi chartable" data-chart-key="gen.battery_v" data-chart-label="Μπαταρία γεννήτριας" data-chart-unit="V" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Μπαταρία γεννήτριας</div><div class="v"><span id="ovGenBatt">—</span><span class="u">V</span></div></div>
           <div class="kpi chartable" data-chart-key="bms.remaining_ah" data-chart-label="Διαθέσιμα Ah" data-chart-unit="Ah" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Ah διαθέσιμα</div><div class="v"><span id="ovAh">—</span><span class="u">Ah</span></div></div>
           <div class="kpi chartable" data-chart-key="bms.avg_temp" data-chart-label="Θερμοκρασία πακέτου" data-chart-unit="°C" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Θερμοκρασία</div><div class="v"><span id="ovTemp">—</span><span class="u">°C</span></div></div>
         </div>
@@ -747,6 +752,14 @@
             </svg>
             <div class="val"><div class="num" id="genGaugeKw">—</div><div class="lbl">kW</div></div>
           </div>
+          <div class="gen-gauge chartable" data-chart-key="gen.battery_v" data-chart-label="Μπαταρία γεννήτριας" data-chart-unit="V" data-chart-dec="1" title="Κλικ για διάγραμμα">
+            <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#243044" stroke-width="8"/>
+              <circle id="genBattArc" cx="50" cy="50" r="42" fill="none" stroke="#a855f7" stroke-width="8"
+                stroke-dasharray="264" stroke-dashoffset="264" stroke-linecap="round"/>
+            </svg>
+            <div class="val"><div class="num" id="genGaugeBatt">—</div><div class="lbl">Batt V</div></div>
+          </div>
         </div>
       </div>
 
@@ -756,16 +769,19 @@
           <div class="gen-load-phase l1">
             <div class="ph">Φάση L1</div>
             <div class="pct" id="loadL1t">—</div>
+            <div class="extra" id="loadL1extra">— A · — kW</div>
             <div class="bar"><div id="loadL1"></div></div>
           </div>
           <div class="gen-load-phase l2">
             <div class="ph">Φάση L2</div>
             <div class="pct" id="loadL2t">—</div>
+            <div class="extra" id="loadL2extra">— A · — kW</div>
             <div class="bar"><div id="loadL2"></div></div>
           </div>
           <div class="gen-load-phase l3">
             <div class="ph">Φάση L3</div>
             <div class="pct" id="loadL3t">—</div>
+            <div class="extra" id="loadL3extra">— A · — kW</div>
             <div class="bar"><div id="loadL3"></div></div>
           </div>
         </div>
@@ -775,6 +791,7 @@
         <div class="card">
           <div class="card-title">Ηλεκτρικά <span class="chart-hint">κλικ → γράφημα</span></div>
           <div class="stats">
+            <div class="kpi chartable" data-chart-key="gen.battery_v" data-chart-label="Μπαταρία γεννήτριας" data-chart-unit="V" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">🔋 Μπαταρία γενν.</div><div class="v"><span id="gBattEle">—</span><span class="u">V</span></div></div>
             <div class="kpi chartable" data-chart-key="gen.volt_avg_ll" data-chart-label="Τάση L-L" data-chart-unit="V" data-chart-dec="0" title="Κλικ για διάγραμμα"><div class="l">Τάση L-L</div><div class="v"><span id="gVll">—</span><span class="u">V</span></div></div>
             <div class="kpi chartable" data-chart-key="gen.frequency" data-chart-label="Συχνότητα" data-chart-unit="Hz" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">Συχνότητα</div><div class="v"><span id="gHz">—</span><span class="u">Hz</span></div></div>
             <div class="kpi chartable" data-chart-key="gen.kva_total" data-chart-label="kVA" data-chart-unit="kVA" data-chart-dec="1" title="Κλικ για διάγραμμα"><div class="l">kW / kVA</div><div class="v" id="gKva">—</div></div>
@@ -786,7 +803,7 @@
           <div class="gen-engine-row">
             <div class="gen-engine-item">
               <div class="ico" id="gBattIco">🔋</div>
-              <div class="txt"><div class="l">Μπαταρία</div><div class="v"><span id="gBatt">—</span> V</div></div>
+              <div class="txt"><div class="l">Μπαταρία γεννήτριας</div><div class="v"><span id="gBatt">—</span> V</div></div>
             </div>
             <div class="gen-engine-item">
               <div class="ico" id="gOilIco">🛢</div>
@@ -1045,7 +1062,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.18';
-    const DASHBOARD_BUILD = '2026-07-11-baud1';
+    const DASHBOARD_BUILD = '2026-07-11-phase1';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
@@ -1426,7 +1443,7 @@
       document.getElementById('heroGenState').textContent = gState;
       const genFaultHint = gValid && window.GensetDecode ? GensetDecode.overviewFaultHint(g) : null;
       document.getElementById('heroGenDetail').textContent = gValid
-        ? (genFaultHint || `${g.op_mode_label_el || g.op_mode_label || '—'} • ${f2(g.frequency, 1)} Hz • ${f0(g.kw_total)} kW`)
+        ? (genFaultHint || `${g.op_mode_label_el || g.op_mode_label || '—'} • ${f2(g.frequency, 1)} Hz • ${f0(g.kw_total)} kW • 🔋 ${f2(g.battery_v, 1)} V`)
         : (g && g.error ? g.error : 'Αναμονή Modbus...');
       const running = gValid && (g.running === true || Number(g.genset_state) === 8);
       const gChip = document.getElementById('heroGenChip');
@@ -1444,6 +1461,7 @@
       document.getElementById('ovHz').textContent = gValid ? f2(g.frequency, 1) : '—';
       document.getElementById('ovKw').textContent = gValid ? f0(g.kw_total) : '—';
       document.getElementById('ovRpm').textContent = gValid ? f0(g.engine_rpm) : '—';
+      document.getElementById('ovGenBatt').textContent = gValid ? f2(g.battery_v, 1) : '—';
     }
 
     function assessHealth(b) {
@@ -1563,6 +1581,23 @@
       if (txt) txt.textContent = Number.isFinite(+pct) ? f2(p, 1) + '%' : '—';
     }
 
+    function setLoadPhase(barId, pctId, extraId, pct, amps, kw) {
+      setLoadBar(barId, pctId, pct);
+      const el = document.getElementById(extraId);
+      if (!el) return;
+      const aStr = Number.isFinite(+amps) ? f2(amps, 1) + ' A' : '— A';
+      const kStr = Number.isFinite(+kw) ? f0(kw) + ' kW' : '— kW';
+      el.textContent = aStr + ' · ' + kStr;
+    }
+
+    function setGenBattery(v) {
+      const s = Number.isFinite(+v) ? f2(v, 1) : '—';
+      ['gBatt', 'gBattEle', 'ovGenBatt', 'genGaugeBatt'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = s;
+      });
+    }
+
     const GEN_ARC_LEN = 264;
     function setGenArc(arcId, value, max, color) {
       const arc = document.getElementById(arcId);
@@ -1594,9 +1629,14 @@
       document.getElementById('genGaugeRpm').textContent = Number.isFinite(+rpm) ? f0(rpm) : '—';
       document.getElementById('genGaugeHz').textContent = Number.isFinite(+hz) ? f2(hz, 1) : '—';
       document.getElementById('genGaugeKw').textContent = Number.isFinite(+kw) ? f0(kw) : '—';
+      const batt = d.battery_v;
+      document.getElementById('genGaugeBatt').textContent = Number.isFinite(+batt) ? f2(batt, 1) : '—';
       setGenArc('genRpmArc', rpm, rpmMax, running ? '#22c55e' : '#f59e0b');
       setGenArc('genHzArc', hz, hzMax, Number(hz) >= 49 && Number(hz) <= 51 ? '#22c55e' : '#3b82f6');
       setGenArc('genKwArc', kw, kwMax, '#22c55e');
+      const battOk = Number(batt) >= 24 && Number(batt) <= 28;
+      const battLow = Number(batt) > 0 && Number(batt) < 22;
+      setGenArc('genBattArc', batt, 30, battOk ? '#22c55e' : battLow ? '#ef4444' : '#a855f7');
     }
 
     function renderGenset(g) {
@@ -1627,15 +1667,15 @@
         document.getElementById('genMode').textContent = 'Ένδειξη δικτύου';
         box.className = 'gen-hero run';
         document.getElementById('genChips').innerHTML = `<span class="chip ok">ΔΙΚΤΥΟ</span><span class="chip">${f2(d.frequency, 1)} Hz</span>`;
-        setLoadBar('loadL1', 'loadL1t', null);
-        setLoadBar('loadL2', 'loadL2t', null);
-        setLoadBar('loadL3', 'loadL3t', null);
+        setLoadPhase('loadL1', 'loadL1t', 'loadL1extra', null, null, null);
+        setLoadPhase('loadL2', 'loadL2t', 'loadL2extra', null, null, null);
+        setLoadPhase('loadL3', 'loadL3t', 'loadL3extra', null, null, null);
         document.getElementById('gVll').textContent = f0(d.volt_avg_ll);
         document.getElementById('gHz').textContent = f2(d.frequency, 1);
         document.getElementById('gKva').textContent = f2(d.kva_total, 2) + ' kVA';
         document.getElementById('gRpm').textContent = '—';
         document.getElementById('gCurr').textContent = f2(d.curr_avg, 1);
-        document.getElementById('gBatt').textContent = '—';
+        setGenBattery(null);
         document.getElementById('gOil').textContent = '—';
         document.getElementById('gCool').textContent = '—';
         updateGenGauges(d, true);
@@ -1671,16 +1711,16 @@
       document.getElementById('genChips').innerHTML = chips.map(c =>
         `<span class="chip ${c.cls}">${c.t}</span>`).join('');
 
-      setLoadBar('loadL1', 'loadL1t', d.load_l1_pct);
-      setLoadBar('loadL2', 'loadL2t', d.load_l2_pct);
-      setLoadBar('loadL3', 'loadL3t', d.load_l3_pct);
+      setLoadPhase('loadL1', 'loadL1t', 'loadL1extra', d.load_l1_pct, d.curr_l1, d.kw_l1);
+      setLoadPhase('loadL2', 'loadL2t', 'loadL2extra', d.load_l2_pct, d.curr_l2, d.kw_l2);
+      setLoadPhase('loadL3', 'loadL3t', 'loadL3extra', d.load_l3_pct, d.curr_l3, d.kw_l3);
 
       document.getElementById('gVll').textContent = f0(d.volt_avg_ll);
       document.getElementById('gHz').textContent = f2(d.frequency, 1);
       document.getElementById('gKva').textContent = f0(d.kw_total) + ' / ' + f0(d.kva_total);
       document.getElementById('gRpm').textContent = f0(d.engine_rpm);
       document.getElementById('gCurr').textContent = f2(d.curr_avg, 1);
-      document.getElementById('gBatt').textContent = f2(d.battery_v, 1);
+      setGenBattery(d.battery_v);
       document.getElementById('gOil').textContent = f0(d.oil_kpa);
       document.getElementById('gCool').textContent = f2(d.coolant_c, 1);
       setEngineIco('gBattIco', d.battery_v, 24, 28, 22, 30);

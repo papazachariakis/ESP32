@@ -840,7 +840,7 @@
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
     const EXPECTED_FIRMWARE = '3.0.14';
-    const DASHBOARD_BUILD = '2026-07-11-ota5';
+    const DASHBOARD_BUILD = '2026-07-11-ota6';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -1636,19 +1636,57 @@
       return s.ota_phase === 'mqtt' && !!s.ota_error;
     }
 
-    async function otaRebootAndWait(pw) {
-      client.publish(cmdTopic, JSON.stringify({ reboot: pw }), { qos: 1 });
-      lastOtaErrorToast = '';
-      lastOtaPhaseToast = '';
-      toast('Reboot ESP32… περίμενε ~45s', 7000);
-      await sleepMs(18000);
-      for (let i = 0; i < 35; i++) {
-        await sleepMs(2000);
-        const s = lastStatus || {};
-        if (s.wifi_connected && s.firmware && !s.ota_error && !s.ota_phase) return true;
-        if (s.wifi_connected && s.firmware && !isStaleOtaFailure(s)) return true;
+    function sendMqttReboot(pw) {
+      const payload = JSON.stringify({ password: pw, reboot: pw });
+      for (let i = 0; i < 5; i++) {
+        client.publish(cmdTopic, payload, { qos: 1 });
       }
-      return !!(lastStatus && lastStatus.wifi_connected && lastStatus.firmware);
+    }
+
+    async function mqttRebootAndWait(pw) {
+      if (!client || !connected) {
+        toast('MQTT offline — σύνδεση πρώτα', 5000);
+        return false;
+      }
+      const count0 = msgStats.status;
+      sendMqttReboot(pw);
+      toast('Reboot στάλθηκε ×5 → ' + cmdTopic, 6000);
+
+      for (let i = 0; i < 20; i++) {
+        await sleepMs(1000);
+        if (msgStats.status > count0) break;
+      }
+
+      let stagnant = 0;
+      let lastCount = msgStats.status;
+      let sawOffline = false;
+      for (let i = 0; i < 45; i++) {
+        await sleepMs(1000);
+        if (msgStats.status === lastCount) stagnant++;
+        else { stagnant = 0; lastCount = msgStats.status; }
+        if (stagnant >= 12) { sawOffline = true; break; }
+      }
+      if (!sawOffline) {
+        toast('⚠️ ESP32 δεν έγινε offline — το reboot δεν επιβεβαιώθηκε', 8000);
+        return false;
+      }
+
+      toast('ESP32 offline — αναμονή επανεκκίνησης…', 5000);
+      for (let i = 0; i < 50; i++) {
+        await sleepMs(2000);
+        const fresh = lastUpdate && (Date.now() - lastUpdate) < 8000;
+        const s = lastStatus || {};
+        if (fresh && s.wifi_connected && msgStats.status > lastCount) {
+          toast('ESP32 online ✓', 4000);
+          return !isStaleOtaFailure(s);
+        }
+      }
+      toast('ESP32 δεν επανήλθε στο MQTT', 7000);
+      return false;
+    }
+
+    async function otaRebootAndWait(pw) {
+      return mqttRebootAndWait(pw);
     }
 
     async function waitForOtaSessionBegin(totalBytes, maxWaitMs) {
@@ -1854,14 +1892,18 @@
       if (!pw) return;
       const legacy = isLegacyOtaFirmware(s.firmware);
       const msg = legacy
-        ? `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\n• Αυτόματο reboot ESP32 πρώτα (καθαρισμός παλιού σφάλματος)\n• ESP pull (HTTPS) ~5 λεπτά\n• Browser push ~3–4 ώρες αν αποτύχει\n\n⚠ ΜΗΝ κλείσεις το tab\n\nΣυνέχεια;`
-        : `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n1) Reboot + ESP pull\n2) Browser push\n\nΣυνέχεια;`;
+        ? `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\n1) ESP pull (HTTPS) ~5 λεπτά\n2) Browser push ~3–4 ώρες\n\n⚠ ΜΗΝ κλείσεις το tab\n\nΣυνέχεια;`
+        : `Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\n1) ESP pull\n2) Browser push\n\nΣυνέχεια;`;
       if (!confirm(msg)) return;
       closeDrawer();
-      if (legacy || isStaleOtaFailure(s) || s.ota_error) {
-        if (!await otaRebootAndWait(pw)) {
-          toast('ESP32 δεν επανήλθε μετά reboot — έλεγξε MQTT', 8000);
-          return;
+      if (isStaleOtaFailure(s) || s.ota_error) {
+        if (confirm('Υπάρχει παλιό OTA σφάλμα.\n\nΔοκιμή reboot ESP32 πρώτα; (συνιστάται)')) {
+          if (!await mqttRebootAndWait(pw)) {
+            toast('Reboot απέτυχε — συνεχίζω OTA χωρίς reboot', 6000);
+          } else {
+            lastOtaErrorToast = '';
+            lastOtaPhaseToast = '';
+          }
         }
       }
       await otaPrepareDeviceQuiet();
@@ -1871,12 +1913,13 @@
       toast('OTA απέτυχε και τα δύο. Reboot ESP32 και ξαναδοκίμασε.', 8000);
     }
 
-    function remoteReboot() {
+    async function remoteReboot() {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      if (!confirm('Επανεκκίνηση ESP32;')) return;
-      client.publish(cmdTopic, JSON.stringify({ reboot: 'esp32ota' }));
-      toast('Reboot εντολή στάλθηκε');
+      const pw = prompt('Κωδικός reboot:', 'esp32ota');
+      if (!pw) return;
+      if (!confirm('Επανεκκίνηση ESP32;\n\nΘα δεις OFFLINE ~15s αν έφτασε η εντολή.')) return;
       closeDrawer();
+      await mqttRebootAndWait(pw);
     }
 
     function remoteFactoryReset() {

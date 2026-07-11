@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#040a08" />
+  <title>🔋 BMS EXTREME — JK / Basen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --bg:#040a08;--panel:#0a1510;--panel2:#0f1f17;--line:#1a3328;
+      --text:#e8fff4;--muted:#6b9e88;--dim:#3d6a55;
+      --ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--accent:#a855f7;--charge:#38bdf8;--discharge:#fb923c;
+      --glow-ok:rgba(34,197,94,.45);--glow-warn:rgba(245,158,11,.5);--glow-bad:rgba(239,68,68,.55);
+      --mono:'JetBrains Mono',ui-monospace,monospace;
+      --display:'Orbitron',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-text-size-adjust:100%}
+    html,body{height:100%;overflow:hidden}
+    body{
+      font-family:var(--mono);background:var(--bg);color:var(--text);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 50% -30%,rgba(34,197,94,.1),transparent 55%),
+        radial-gradient(ellipse 60% 40% at 100% 100%,rgba(168,85,247,.07),transparent),
+        linear-gradient(180deg,#040a08 0%,#061210 100%);
+    }
+    .scanlines{
+      pointer-events:none;position:fixed;inset:0;z-index:9999;opacity:.035;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.4) 2px,rgba(0,0,0,.4) 4px);
+    }
+    .grid-bg{
+      pointer-events:none;position:fixed;inset:0;opacity:.1;
+      background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+      background-size:48px 48px;
+    }
+    .cockpit{display:grid;grid-template-rows:auto 1fr auto;height:100vh;height:100dvh;position:relative;z-index:1}
+    .top{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      padding:10px 16px;border-bottom:1px solid var(--line);
+      background:rgba(6,14,10,.92);backdrop-filter:blur(8px);
+    }
+    .brand{font-family:var(--display);font-weight:900;font-size:.95rem;letter-spacing:.12em;color:var(--ok)}
+    .brand span{color:var(--muted);font-weight:500;font-size:.72rem;letter-spacing:.06em}
+    .top-spacer{flex:1}
+    .pill{
+      padding:4px 10px;border-radius:4px;font-size:.68rem;font-weight:700;letter-spacing:.08em;
+      border:1px solid var(--line);text-transform:uppercase;
+    }
+    .pill.ok{border-color:rgba(34,197,94,.5);color:var(--ok);box-shadow:0 0 12px var(--glow-ok)}
+    .pill.warn{border-color:rgba(245,158,11,.5);color:var(--warn)}
+    .pill.bad{border-color:rgba(239,68,68,.6);color:var(--bad);animation:blink .7s ease infinite}
+    .pill.charge{border-color:rgba(56,189,248,.5);color:var(--charge)}
+    .pill.discharge{border-color:rgba(251,146,60,.5);color:var(--discharge)}
+    .pill.off{color:var(--muted)}
+    @keyframes blink{50%{opacity:.55}}
+    .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px}
+    .conn-dot.on{background:var(--ok);box-shadow:0 0 8px var(--glow-ok)}
+    .top a,.top .btn-link{
+      color:var(--muted);text-decoration:none;font-size:.72rem;padding:6px 10px;
+      border:1px solid var(--line);border-radius:6px;background:transparent;cursor:pointer;font-family:inherit;
+    }
+    .top a:hover,.top .btn-link:hover{color:var(--text);border-color:var(--ok)}
+
+    .main{
+      display:grid;gap:10px;padding:10px;min-height:0;overflow:hidden;
+      grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.85fr) minmax(200px,.7fr);
+      grid-template-areas:"cells center power side" "strip strip strip strip";
+    }
+    .area-cells{grid-area:cells}
+    .area-center{grid-area:center}
+    .area-power{grid-area:power}
+    .area-side{grid-area:side}
+    .area-strip{grid-area:strip}
+
+    @media(max-width:1100px){
+      html,body{overflow:auto;overflow-x:hidden;height:auto;min-height:100dvh}
+      .cockpit{height:auto;min-height:100dvh}
+      .main{
+        grid-template-columns:1fr 1fr;
+        grid-template-areas:"center center" "cells power" "side side" "strip strip";
+        overflow:visible;
+      }
+    }
+    @media(max-width:640px){
+      .top{padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));gap:6px}
+      .brand{font-size:.82rem}
+      .brand span{display:block;font-size:.62rem;margin-top:2px}
+      .top-spacer{display:none}
+      #deviceLabel{flex:1 1 100%;order:10;font-size:.62rem;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .main{
+        grid-template-columns:1fr;
+        grid-template-areas:"center" "power" "cells" "side" "strip";
+        padding:8px;padding-bottom:max(8px,env(safe-area-inset-bottom));gap:8px;
+      }
+      .cells-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+      .cell{padding:5px 3px}
+      .cell .cv{font-size:.72rem}
+      .soc-wrap{width:min(220px,82vw)}
+      .soc-num{font-size:clamp(2rem,14vw,2.8rem)}
+      .strip-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .bottom{padding-bottom:max(8px,env(safe-area-inset-bottom))}
+      .toast-wrap{left:10px;right:10px;bottom:max(56px,calc(48px + env(safe-area-inset-bottom)))}
+    }
+
+    .panel{
+      background:linear-gradient(145deg,var(--panel2),var(--panel));
+      border:1px solid var(--line);border-radius:10px;position:relative;overflow:hidden;
+    }
+    .panel::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,transparent,var(--ok),transparent);opacity:.45;
+    }
+    .panel-title{
+      font-size:.62rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--muted);padding:10px 12px 0;
+    }
+
+    /* CELLS */
+    .cells-wrap{padding:8px 10px 12px;min-height:0}
+    .cell-stats{font-size:.68rem;color:var(--muted);padding:0 12px 6px}
+    .cells-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+    .cell{
+      background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:6px;
+      padding:6px 4px;text-align:center;transition:border-color .2s,box-shadow .2s;
+    }
+    .cell.bal{border-color:var(--accent);box-shadow:0 0 10px rgba(168,85,247,.25)}
+    .cell.min{border-color:var(--bad)}
+    .cell.max{border-color:var(--ok)}
+    .cell .n{font-size:.58rem;color:var(--muted);letter-spacing:.04em}
+    .cell .bar{
+      height:36px;margin:4px 0;background:rgba(0,0,0,.5);border-radius:4px;
+      display:flex;align-items:flex-end;overflow:hidden;
+    }
+    .cell .bar i{display:block;width:100%;border-radius:3px 3px 0 0;transition:height .4s}
+    .cell .cv{font-family:var(--display);font-size:.78rem;font-weight:700}
+
+    /* SOC CENTER */
+    .center-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 8px 14px}
+    .state-banner{
+      font-family:var(--display);font-size:clamp(.95rem,2.5vw,1.35rem);font-weight:900;
+      letter-spacing:.08em;text-align:center;margin-bottom:4px;
+    }
+    .state-banner.charge{color:var(--charge)}
+    .state-banner.discharge{color:var(--discharge)}
+    .state-banner.idle{color:var(--muted)}
+    .state-banner.bal{color:var(--accent)}
+    .meta-line{font-size:.68rem;color:var(--muted);margin-bottom:10px;text-align:center;max-width:320px;line-height:1.4}
+    .soc-wrap{position:relative;width:min(260px,88vw);aspect-ratio:1}
+    .soc-wrap svg{width:100%;height:100%;transform:rotate(-135deg)}
+    .soc-val{
+      position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;pointer-events:none;
+    }
+    .soc-num{font-family:var(--display);font-size:clamp(2.4rem,8vw,3.4rem);font-weight:900;line-height:1}
+    .soc-lbl{font-size:.72rem;color:var(--muted);letter-spacing:.12em;margin-top:4px}
+    .soc-sub{font-size:.78rem;color:var(--ok);margin-top:6px;font-weight:700}
+    .led-row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+    .led{
+      background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:8px;
+      padding:8px 14px;text-align:center;min-width:88px;
+    }
+    .led .v{font-family:var(--display);font-size:1.25rem;font-weight:700;line-height:1}
+    .led .l{font-size:.58rem;color:var(--muted);letter-spacing:.08em;margin-top:3px}
+    .led.v .v{color:var(--ok)}
+    .led.a .v{color:var(--charge)}
+    .led.w .v{color:var(--accent)}
+
+    /* POWER PANEL */
+    .power-body{padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px}
+    .big-ah{
+      text-align:center;padding:14px 8px;
+      background:rgba(0,0,0,.35);border-radius:8px;border:1px solid var(--line);
+    }
+    .big-ah .num{font-family:var(--display);font-size:clamp(2rem,5vw,2.8rem);font-weight:900;color:var(--ok);line-height:1}
+    .big-ah .unit{font-size:.72rem;color:var(--muted);margin-top:4px}
+    .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .metric{background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:6px;padding:8px}
+    .metric .l{font-size:.56rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+    .metric .v{font-size:1rem;font-weight:700;margin-top:2px}
+    .metric .v.ok{color:var(--ok)}.metric .v.warn{color:var(--warn)}.metric .v.bad{color:var(--bad)}
+    canvas.spark{width:100%;height:52px;border-radius:6px;background:rgba(0,0,0,.35);border:1px solid var(--line)}
+
+    /* SIDE */
+    .side{display:flex;flex-direction:column;min-height:0}
+    .side-scroll{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:8px;min-height:0}
+    .health{
+      border-left:3px solid var(--ok);padding:8px 10px;background:rgba(0,0,0,.3);
+      border-radius:0 6px 6px 0;font-size:.72rem;line-height:1.45;
+    }
+    .health.warn{border-color:var(--warn)}
+    .health.bad{border-color:var(--bad)}
+    .health h4{font-size:.75rem;margin-bottom:4px}
+    .health ul{margin:0;padding-left:14px;color:var(--muted)}
+    .alarms{font-size:.72rem;line-height:1.45}
+    .alarm-block{border-left:3px solid var(--warn);padding:8px 10px;background:rgba(0,0,0,.3);border-radius:0 6px 6px 0;margin-bottom:6px}
+    .alarm-block.bad{border-color:var(--bad)}
+    .alarm-block .t{font-weight:700;margin-bottom:4px;font-size:.74rem}
+    .alarm-block ul{margin:0;padding-left:14px;color:var(--muted)}
+    .alarm-ok{color:var(--ok);font-size:.74rem;padding:6px 0}
+    .ble-box{
+      font-size:.68rem;color:var(--muted);padding:8px;background:rgba(0,0,0,.25);
+      border-radius:6px;border:1px solid var(--line);line-height:1.5;
+    }
+    .ble-box strong{color:var(--text)}
+
+    /* STRIP */
+    .strip-grid{
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;padding:0 10px 10px;
+    }
+    .strip-item{
+      display:flex;align-items:center;gap:8px;padding:10px 12px;
+      background:linear-gradient(135deg,var(--panel2),rgba(0,0,0,.3));
+      border:1px solid var(--line);border-radius:8px;
+    }
+    .strip-item .ico{font-size:1.2rem}
+    .strip-item .l{font-size:.56rem;color:var(--muted);letter-spacing:.05em}
+    .strip-item .v{font-family:var(--display);font-size:1rem;font-weight:700}
+
+    .bottom{
+      display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:center;
+      padding:6px 16px;border-top:1px solid var(--line);
+      font-size:.68rem;color:var(--muted);background:rgba(6,14,10,.95);
+    }
+    .bottom strong{color:var(--text)}
+
+    .overlay{
+      position:fixed;inset:0;z-index:100;background:rgba(4,10,8,.94);
+      display:flex;align-items:center;justify-content:center;padding:20px;
+    }
+    .overlay.hide{display:none}
+    .connect-box{
+      width:min(400px,100%);background:var(--panel);border:1px solid var(--line);
+      border-radius:12px;padding:24px;
+    }
+    .connect-box h2{font-family:var(--display);font-size:1rem;margin-bottom:16px;color:var(--ok)}
+    .connect-box label{display:block;font-size:.72rem;color:var(--muted);margin:10px 0 4px}
+    .connect-box input{
+      width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);
+      background:#000;color:var(--text);font-family:var(--mono);font-size:.85rem;
+    }
+    .connect-box .go{
+      width:100%;margin-top:16px;padding:14px;border:none;border-radius:8px;
+      background:linear-gradient(90deg,var(--ok),#16a34a);color:#000;
+      font-family:var(--display);font-weight:900;letter-spacing:.1em;cursor:pointer;
+    }
+    .toast-wrap{position:fixed;bottom:48px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px}
+    .toast{padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:.75rem}
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="grid-bg"></div>
+
+  <div class="cockpit" id="cockpit">
+    <header class="top">
+      <div class="brand">BMS <span>EXTREME</span></div>
+      <span class="pill off" id="connPill"><span class="conn-dot" id="connDot"></span><span id="connText">OFFLINE</span></span>
+      <span class="pill off" id="bmsPill">—</span>
+      <span class="pill off" id="flowPill" style="display:none">—</span>
+      <div class="top-spacer"></div>
+      <span style="font-size:.68rem;color:var(--muted)" id="deviceLabel">—</span>
+      <a href="s3.html" id="backLink">← Dashboard</a>
+      <a href="genset-extreme.html" id="genLink">Genset</a>
+      <button type="button" class="btn-link" id="btnReconnect">⚙</button>
+    </header>
+
+    <div class="main">
+      <section class="panel area-cells">
+        <div class="panel-title">Κελιά λιθίου</div>
+        <div class="cell-stats" id="cellStats">—</div>
+        <div class="cells-wrap">
+          <div class="cells-grid" id="cellsGrid"></div>
+        </div>
+      </section>
+
+      <section class="panel area-center">
+        <div class="center-body">
+          <div class="state-banner idle" id="stateBanner">ΑΝΑΜΟΝΗ</div>
+          <div class="meta-line" id="metaLine">—</div>
+          <div class="soc-wrap">
+            <svg viewBox="0 0 200 200" aria-hidden="true">
+              <circle cx="100" cy="100" r="88" fill="none" stroke="#1a3328" stroke-width="10"/>
+              <circle cx="100" cy="100" r="88" fill="none" stroke="#2a4a38" stroke-width="10"
+                stroke-dasharray="414" stroke-dashoffset="103" stroke-linecap="round"/>
+              <circle id="socArc" cx="100" cy="100" r="88" fill="none" stroke="#22c55e" stroke-width="10"
+                stroke-dasharray="414" stroke-dashoffset="414" stroke-linecap="round"
+                style="filter:drop-shadow(0 0 6px rgba(34,197,94,.55))"/>
+            </svg>
+            <div class="soc-val">
+              <div class="soc-num" id="socNum">—</div>
+              <div class="soc-lbl">SOC %</div>
+              <div class="soc-sub" id="socSub">—</div>
+            </div>
+          </div>
+          <div class="led-row">
+            <div class="led v"><div class="v" id="vLed">—</div><div class="l">V</div></div>
+            <div class="led a"><div class="v" id="aLed">—</div><div class="l">A</div></div>
+            <div class="led w"><div class="v" id="wLed">—</div><div class="l">W</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel area-power">
+        <div class="panel-title">Ενέργεια &amp; υγεία</div>
+        <div class="power-body">
+          <div class="big-ah">
+            <div class="num" id="bigAh">—</div>
+            <div class="unit">Ah ΔΙΑΘΕΣΙΜΑ / ΣΥΝΟΛΟ</div>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric"><div class="l">SOH</div><div class="v ok" id="mSoh">—</div></div>
+            <div class="metric"><div class="l">Διαφορά κελιών</div><div class="v" id="mDv">—</div></div>
+            <div class="metric"><div class="l">Μέση κελί</div><div class="v" id="mAvgCell">—</div></div>
+            <div class="metric"><div class="l">Κύκλοι</div><div class="v" id="mCycles">—</div></div>
+          </div>
+          <div class="panel-title" style="padding:4px 0 2px">Ιστορικό SOC (session)</div>
+          <canvas class="spark" id="socSpark" height="52"></canvas>
+          <div class="panel-title" style="padding:4px 0 2px">Ιστορικό ισχύος W</div>
+          <canvas class="spark" id="pwrSpark" height="52"></canvas>
+        </div>
+      </section>
+
+      <aside class="panel side area-side">
+        <div class="panel-title">Υγεία &amp; συναγερμοί</div>
+        <div class="side-scroll">
+          <div class="health warn" id="healthBox">
+            <h4 id="healthTitle">Αναμονή...</h4>
+            <ul id="healthList"></ul>
+          </div>
+          <div class="ble-box" id="bleBox">BLE: —</div>
+          <div class="alarms" id="alarms"><div class="alarm-ok">—</div></div>
+        </div>
+      </aside>
+
+      <div class="area-strip">
+        <div class="strip-grid">
+          <div class="strip-item"><div class="ico">🌡</div><div><div class="l">Πακέτο</div><div class="v" id="sPack">—</div></div></div>
+          <div class="strip-item"><div class="ico">🏠</div><div><div class="l">Περιβάλλον</div><div class="v" id="sAmb">—</div></div></div>
+          <div class="strip-item"><div class="ico">⚡</div><div><div class="l">MOSFET</div><div class="v" id="sMos">—</div></div></div>
+          <div class="strip-item"><div class="ico">📡</div><div><div class="l">BLE RSSI</div><div class="v" id="sRssi">—</div></div></div>
+          <div class="strip-item"><div class="ico">🔢</div><div><div class="l">Κελιά</div><div class="v" id="sCells">—</div></div></div>
+          <div class="strip-item"><div class="ico">🔄</div><div><div class="l">Balancing</div><div class="v" id="sBal">—</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="bottom">
+      <span>FW <strong id="fwVer">—</strong></span>
+      <span>BMS <strong id="bmsAge">—</strong></span>
+      <span>Τελευταίο <strong id="lastRx">—</strong></span>
+      <span id="bmsName" style="color:var(--muted)">—</span>
+    </footer>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="connect-box">
+      <h2>🔋 BMS EXTREME COCKPIT</h2>
+      <label>Device ID (MAC)</label>
+      <input id="deviceId" placeholder="π.χ. 1CDBD47A3C50" autocomplete="off" />
+      <label>MQTT Broker (WebSocket)</label>
+      <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
+      <button type="button" class="go" id="btnConnect">ΣΥΝΔΕΣΗ</button>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="bms-decode.js"></script>
+  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const board = params.get('board') || 's3';
+    const LS = board === 'classic'
+      ? { id: 'esp32_classic_device_id', broker: 'esp32_classic_broker' }
+      : { id: 'esp32_s3_device_id', broker: 'esp32_s3_broker' };
+    const BACK_PAGE = board === 'classic' ? 'esp32.html' : 's3.html';
+    const SOC_ARC = 414;
+
+    document.getElementById('backLink').href = BACK_PAGE;
+    document.getElementById('genLink').href = 'genset-extreme.html' + (board === 'classic' ? '?board=classic' : '');
+
+    const savedId = localStorage.getItem(LS.id);
+    const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');
+    if (savedId) document.getElementById('deviceId').value = savedId;
+    if (savedBroker) document.getElementById('broker').value = savedBroker;
+
+    let client = null, connected = false, lastBms = null, lastStatus = {}, lastRxAt = 0;
+    let socHistory = [], pwrHistory = [];
+
+    function toast(msg, ms = 3000) {
+      const w = document.getElementById('toasts');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      w.appendChild(t);
+      setTimeout(() => t.remove(), ms);
+    }
+
+    function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+    function f0(x) { return Number.isFinite(+x) ? Number(x).toFixed(0) : '—'; }
+    function f1(x) { return Number.isFinite(+x) ? Number(x).toFixed(1) : '—'; }
+    function f2(x) { return Number.isFinite(+x) ? Number(x).toFixed(2) : '—'; }
+    function f3(x) { return Number.isFinite(+x) ? Number(x).toFixed(3) : '—'; }
+
+    function cellColor(v, minV, maxV) {
+      if (!Number.isFinite(v) || v < 0.5 || !Number.isFinite(minV) || maxV <= minV) return '#334155';
+      const t = clamp((v - minV) / (maxV - minV), 0, 1);
+      const lerp = (a, b, x) => a + (b - a) * x;
+      const mix = (c1, c2, x) => `rgb(${lerp(c1[0], c2[0], x) | 0},${lerp(c1[1], c2[1], x) | 0},${lerp(c1[2], c2[2], x) | 0})`;
+      if (t < 0.5) return mix([239, 68, 68], [245, 158, 11], t / 0.5);
+      return mix([245, 158, 11], [34, 197, 94], (t - 0.5) / 0.5);
+    }
+
+    function setArc(el, pct, color) {
+      if (!el) return;
+      const p = clamp(Number(pct) || 0, 0, 100);
+      el.setAttribute('stroke-dashoffset', String(SOC_ARC * (1 - p / 100)));
+      if (color) el.setAttribute('stroke', color);
+    }
+
+    function assessHealth(b) {
+      if (!b || !b.valid) return { level: 'warn', title: 'Αναμονή δεδομένων...', items: ['Σύνδεση BLE ή αναμονή cell frames.'] };
+      const items = [];
+      let level = 'good';
+      const dv = Number(b.delta_cell_v), soh = Number(b.soh), temp = Number(b.avg_temp);
+      const soc = Number(b.soc), cap = Number(b.capacity_ah);
+      const rem = cap > 0 && soc > 0 ? cap * soc / 100 : Number(b.remaining_ah);
+      if (dv > 0 && dv <= 0.03) items.push('Εξαιρετική ισορροπία κελιών (ΔV ≤ 0.03V)');
+      else if (dv <= 0.05) items.push('Καλή ισορροπία κελιών');
+      else { items.push('Αυξημένη διαφορά κελιών'); level = 'warn'; }
+      if (soh >= 90) items.push(`SOH ${f0(soh)}%`);
+      else if (soh >= 80) items.push(`SOH μέτριο ${f0(soh)}%`);
+      else if (soh > 0) { items.push(`Χαμηλό SOH ${f0(soh)}%`); level = 'warn'; }
+      if (temp > 0 && temp < 40) items.push(`Θερμοκρασία OK ${f1(temp)}°C`);
+      else if (temp >= 40) { items.push(`Ζεστή μπαταρία ${f1(temp)}°C`); level = 'warn'; }
+      if (b.charging) items.push(`Φόρτιση ${f1(b.current)}A`);
+      if (b.discharging) items.push(`Εκφόρτιση ${f1(Math.abs(b.current))}A`);
+      if (b.limiting_current) { items.push('Περιορισμός ρεύματος'); level = 'warn'; }
+      if (b.balancing) items.push('Balancing ενεργό');
+      if (cap > 0) items.push(`${f1(rem)} / ${f1(cap)} Ah (${f0(soc)}%)`);
+      if (b.error_mask && window.BmsDecode) {
+        const errs = BmsDecode.buildBmsAlarmSections(b).find(s => s.title === 'Σφάλματα BMS');
+        if (errs && errs.items.length) { items.push(...errs.items.slice(0, 3)); level = 'bad'; }
+      }
+      return { level, title: level === 'good' ? 'Η μπαταρία φαίνεται υγιής' : 'Υπάρχουν σημεία προσοχής', items };
+    }
+
+    function drawSpark(canvasId, history, color, maxHint) {
+      const c = document.getElementById(canvasId);
+      if (!c) return;
+      const ctx = c.getContext('2d');
+      const w = c.clientWidth || 280;
+      c.width = w * devicePixelRatio;
+      c.height = 52 * devicePixelRatio;
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, w, 52);
+      if (history.length < 2) return;
+      const vals = history.map(p => p.v);
+      const max = Math.max(maxHint || 0, ...vals) * 1.08 || 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 5;
+      ctx.beginPath();
+      history.forEach((p, i) => {
+        const x = (i / (history.length - 1)) * (w - 4) + 2;
+        const y = 50 - (p.v / max) * 46;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    function renderBle(ble) {
+      const box = document.getElementById('bleBox');
+      if (!ble) { box.textContent = 'BLE: —'; return; }
+      const parts = [];
+      parts.push(ble.connected ? '<strong>BLE συνδεδεμένο</strong>' : '<strong>BLE αποσυνδεδεμένο</strong>');
+      if (ble.name) parts.push(ble.name);
+      if (ble.mac) parts.push(ble.mac);
+      if (ble.bms_type) parts.push(ble.bms_type.toUpperCase());
+      if (ble.rssi != null) parts.push(ble.rssi + ' dBm');
+      if (ble.cell_frames != null) parts.push('cells ' + ble.cell_frames);
+      if (ble.crc_errors > 0) parts.push('<span style="color:var(--bad)">CRC ' + ble.crc_errors + '</span>');
+      if (ble.data_age_ms != null && ble.data_age_ms > 15000) parts.push('<span style="color:var(--warn)">stale ' + Math.round(ble.data_age_ms / 1000) + 's</span>');
+      box.innerHTML = parts.join(' · ');
+      document.getElementById('sRssi').textContent = ble.rssi != null ? ble.rssi + ' dBm' : '—';
+    }
+
+    function render(b, ble) {
+      const valid = b && b.valid;
+      const soc = valid ? Number(b.soc) : NaN;
+      const cap = valid ? Number(b.capacity_ah) : NaN;
+      const rem = valid && cap > 0 && soc > 0 ? cap * soc / 100 : (valid ? Number(b.remaining_ah) : NaN);
+
+      const connPill = document.getElementById('connPill');
+      connPill.className = 'pill ' + (connected ? 'ok' : 'off');
+      document.getElementById('connText').textContent = connected ? 'MQTT OK' : 'OFFLINE';
+
+      const bmsPill = document.getElementById('bmsPill');
+      bmsPill.textContent = valid ? 'BMS OK' : (ble && ble.connected ? 'BLE' : 'NO DATA');
+      bmsPill.className = 'pill ' + (valid ? 'ok' : ble && ble.connected ? 'warn' : 'off');
+
+      const flowPill = document.getElementById('flowPill');
+      if (valid && (b.charging || b.discharging || b.balancing)) {
+        flowPill.style.display = '';
+        if (b.charging) { flowPill.textContent = 'CHARGE'; flowPill.className = 'pill charge'; }
+        else if (b.discharging) { flowPill.textContent = 'DISCHARGE'; flowPill.className = 'pill discharge'; }
+        else { flowPill.textContent = 'BALANCE'; flowPill.className = 'pill warn'; }
+      } else {
+        flowPill.style.display = 'none';
+      }
+
+      const banner = document.getElementById('stateBanner');
+      if (!valid) {
+        banner.textContent = ble && ble.connected ? 'BLE — ΑΝΑΜΟΝΗ' : 'OFFLINE';
+        banner.className = 'state-banner idle';
+      } else if (b.charging) {
+        banner.textContent = 'ΦΟΡΤΙΣΗ';
+        banner.className = 'state-banner charge';
+      } else if (b.discharging) {
+        banner.textContent = 'ΕΚΦΟΡΙΣΗ';
+        banner.className = 'state-banner discharge';
+      } else if (b.balancing) {
+        banner.textContent = 'BALANCING';
+        banner.className = 'state-banner bal';
+      } else {
+        banner.textContent = 'ΑΝΕΝΕΡΓΗ';
+        banner.className = 'state-banner idle';
+      }
+
+      const meta = [];
+      if (valid && b.type_label) meta.push(b.type_label);
+      if (valid && b.device_model) meta.push(b.device_model);
+      if (valid && b.sw_version) meta.push('FW ' + b.sw_version);
+      document.getElementById('metaLine').textContent = meta.join(' · ') || '—';
+
+      document.getElementById('socNum').textContent = valid ? f0(soc) : '—';
+      document.getElementById('socSub').textContent = valid && cap > 0 ? f1(rem) + ' / ' + f1(cap) + ' Ah' : '—';
+      const socColor = soc > 60 ? '#22c55e' : soc > 20 ? '#f59e0b' : '#ef4444';
+      setArc(document.getElementById('socArc'), valid ? soc : 0, socColor);
+
+      document.getElementById('vLed').textContent = valid ? f2(b.voltage) : '—';
+      document.getElementById('aLed').textContent = valid ? f2(b.current) : '—';
+      document.getElementById('wLed').textContent = valid ? f0(b.power) : '—';
+
+      document.getElementById('bigAh').textContent = valid && cap > 0
+        ? f1(rem) + ' / ' + f1(cap) : (valid ? f1(rem) : '—');
+      document.getElementById('mSoh').textContent = valid ? f0(b.soh) + '%' : '—';
+      const dv = valid ? Number(b.delta_cell_v) : NaN;
+      const dvEl = document.getElementById('mDv');
+      dvEl.textContent = valid ? f3(dv) + ' V' : '—';
+      dvEl.className = 'v ' + (dv > 0.05 ? 'warn' : 'ok');
+      document.getElementById('mAvgCell').textContent = valid ? f3(b.avg_cell_v) + ' V' : '—';
+      document.getElementById('mCycles').textContent = valid ? (b.cycles ?? '—') : '—';
+
+      const minV = valid ? Number(b.min_cell_v) : NaN;
+      const maxV = valid ? Number(b.max_cell_v) : NaN;
+      const minN = valid ? Number(b.min_cell_num) : 0;
+      const maxN = valid ? Number(b.max_cell_num) : 0;
+      document.getElementById('cellStats').textContent = valid && minV > 0
+        ? `Min ${f3(minV)}V (#${minN}) · Max ${f3(maxV)}V (#${maxN}) · Δ ${f3(dv)}V`
+        : 'Αναμονή κελιών...';
+
+      const cellCount = valid ? (Number(b.cell_count) > 0 ? Math.min(16, Number(b.cell_count)) : 16) : 16;
+      const cells = valid && Array.isArray(b.cells) ? b.cells.slice(0, cellCount) : [];
+      const grid = document.getElementById('cellsGrid');
+      if (!cells.length) {
+        grid.innerHTML = Array.from({ length: cellCount }, (_, i) =>
+          `<div class="cell"><div class="n">C${i + 1}</div><div class="bar"><i style="height:0;background:#334155"></i></div><div class="cv">—</div></div>`
+        ).join('');
+      } else {
+        grid.innerHTML = cells.map((v, i) => {
+          const vv = Number(v);
+          const bal = Array.isArray(b.cell_balancing) && b.cell_balancing[i];
+          const col = cellColor(vv, minV, maxV);
+          const pct = Number.isFinite(vv) && maxV > minV ? clamp((vv - minV) / (maxV - minV), 0, 1) * 100 : 0;
+          const cls = ['cell', bal ? 'bal' : '', i + 1 === minN ? 'min' : '', i + 1 === maxN ? 'max' : ''].filter(Boolean).join(' ');
+          return `<div class="${cls}"><div class="n">C${i + 1}${bal ? ' ⚖' : ''}</div><div class="bar"><i style="height:${pct}%;background:${col}"></i></div><div class="cv">${vv > 0.5 ? f3(vv) : '—'}</div></div>`;
+        }).join('');
+      }
+
+      const h = assessHealth(b);
+      const hbox = document.getElementById('healthBox');
+      hbox.className = 'health ' + h.level;
+      document.getElementById('healthTitle').textContent = h.title;
+      document.getElementById('healthList').innerHTML = h.items.map(i => `<li>${i}</li>`).join('');
+
+      const alEl = document.getElementById('alarms');
+      if (valid && window.BmsDecode) {
+        const sections = BmsDecode.buildBmsAlarmSections(b);
+        if (!sections.length) alEl.innerHTML = '<div class="alarm-ok">✓ Χωρίς ενεργό συναγερμό</div>';
+        else {
+          alEl.innerHTML = sections.map(s =>
+            `<div class="alarm-block ${s.level === 'bad' ? 'bad' : ''}"><div class="t">${s.title}</div><ul>${s.items.map(i => `<li>${i}</li>`).join('')}</ul></div>`
+          ).join('');
+        }
+      } else {
+        alEl.innerHTML = '<div class="alarm-ok">—</div>';
+      }
+
+      document.getElementById('sPack').textContent = valid && b.avg_temp > -50 ? f1(b.avg_temp) + '°C' : '—';
+      document.getElementById('sAmb').textContent = valid && b.ambient_temp > -50 ? f1(b.ambient_temp) + '°C' : '—';
+      document.getElementById('sMos').textContent = valid && b.mosfet_temp > -50 ? f1(b.mosfet_temp) + '°C' : '—';
+      document.getElementById('sCells').textContent = valid ? String(cellCount) : '—';
+      document.getElementById('sBal').textContent = valid ? (b.balancing ? 'ON' : 'OFF') : '—';
+      document.getElementById('bmsName').textContent = valid && b.name ? b.name : (b && b.mac ? b.mac : '—');
+
+      if (valid) {
+        socHistory.push({ t: Date.now(), v: soc });
+        if (socHistory.length > 120) socHistory.shift();
+        pwrHistory.push({ t: Date.now(), v: Number(b.power) || 0 });
+        if (pwrHistory.length > 120) pwrHistory.shift();
+        drawSpark('socSpark', socHistory, '#22c55e', 100);
+        drawSpark('pwrSpark', pwrHistory, '#a855f7', 0);
+      }
+    }
+
+    function setConn(ok, text) {
+      document.getElementById('connDot').classList.toggle('on', ok);
+      const pill = document.getElementById('connPill');
+      pill.className = 'pill ' + (ok ? 'ok' : 'off');
+      document.getElementById('connText').textContent = text || (ok ? 'MQTT OK' : 'OFFLINE');
+    }
+
+    function onBms(j) {
+      lastBms = j;
+      lastRxAt = Date.now();
+      render(j, lastStatus.ble);
+    }
+
+    function onStatus(j) {
+      lastStatus = j;
+      if (j.firmware) document.getElementById('fwVer').textContent = 'v' + j.firmware;
+      if (j.ble) renderBle(j.ble);
+      if (j.bms && (!lastBms || !lastBms.valid)) onBms(j.bms);
+      else if (lastBms) render(lastBms, j.ble);
+    }
+
+    function updateClock() {
+      if (!lastRxAt) {
+        document.getElementById('lastRx').textContent = '—';
+        document.getElementById('bmsAge').textContent = '—';
+        return;
+      }
+      const sec = Math.round((Date.now() - lastRxAt) / 1000);
+      document.getElementById('lastRx').textContent = sec < 2 ? 'τώρα' : sec + 's πριν';
+      document.getElementById('bmsAge').textContent = sec + 's';
+    }
+    setInterval(updateClock, 1000);
+
+    function connect() {
+      const id = document.getElementById('deviceId').value.trim().toUpperCase();
+      const url = document.getElementById('broker').value.trim();
+      if (!id) { toast('Βάλε Device ID'); return; }
+      localStorage.setItem(LS.id, id);
+      localStorage.setItem(LS.broker, url);
+      document.getElementById('deviceLabel').textContent = id;
+      if (client) { client.removeAllListeners(); client.end(true); }
+
+      setConn(false, 'Σύνδεση...');
+      document.getElementById('overlay').classList.add('hide');
+
+      client = mqtt.connect(url, {
+        clientId: 'bms-extreme-' + Math.random().toString(16).slice(2),
+        reconnectPeriod: 5000,
+        connectTimeout: 15000,
+        protocolVersion: 4
+      });
+
+      client.on('connect', () => {
+        connected = true;
+        setConn(true, 'MQTT OK');
+        client.subscribe(`home/${id}/status`);
+        client.subscribe(`home/${id}/bms`);
+        toast('Συνδέθηκε — αναμονή BMS...');
+      });
+      client.on('offline', () => { connected = false; setConn(false, 'OFFLINE'); });
+      client.on('error', () => setConn(false, 'ΣΦΑΛΜΑ'));
+      client.on('message', (t, msg) => {
+        try {
+          const j = JSON.parse(msg.toString());
+          if (t.endsWith('/bms')) onBms(j);
+          else if (t.endsWith('/status')) onStatus(j);
+        } catch (e) {}
+      });
+    }
+
+    document.getElementById('btnConnect').onclick = connect;
+    document.getElementById('btnReconnect').onclick = () => {
+      document.getElementById('overlay').classList.remove('hide');
+    };
+    window.addEventListener('resize', () => {
+      drawSpark('socSpark', socHistory, '#22c55e', 100);
+      drawSpark('pwrSpark', pwrHistory, '#a855f7', 0);
+    });
+
+    if (savedId) {
+      document.getElementById('overlay').classList.add('hide');
+      connect();
+    }
+  </script>
+</body>
+</html>

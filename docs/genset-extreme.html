@@ -307,7 +307,10 @@
     .btn.stop{border-color:var(--bad);color:var(--bad)}
     .btn.stop:hover{box-shadow:0 0 20px var(--glow-bad)}
     .mode-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-    .mode-row .mode{display:block;font-size:.65rem;padding:10px 4px;text-align:center;opacity:.55;border-style:dashed}
+    .mode-row .mode{
+      display:block;font-size:.65rem;padding:10px 4px;text-align:center;opacity:.55;
+      border:2px solid var(--line);border-radius:8px;background:rgba(0,0,0,.4);
+    }
     .mode-row .mode.active{opacity:1;border-style:solid;background:var(--l1);color:#000;border-color:var(--l1)}
 
     /* BOTTOM */
@@ -360,6 +363,7 @@
       <span class="pill off" id="faultPill" style="display:none">FAULT</span>
       <div class="top-spacer"></div>
       <span style="font-size:.68rem;color:var(--muted)" id="deviceLabel">—</span>
+      <a href="bms-extreme.html" id="bmsLink">BMS</a>
       <a href="s3.html" id="backLink">← Dashboard</a>
       <a href="meter.html">Μετρητής</a>
       <button type="button" class="btn mode" id="btnReconnect" style="padding:6px 10px">⚙</button>
@@ -524,6 +528,7 @@
     const STATE_LABELS = ['Off','Stop','Preheat','Precrank','Crank','Starter','PreRamp','Ramp','RUN','Fault','Prerun','Runtime','Factory','Powerdown'];
 
     document.getElementById('backLink').href = BACK_PAGE;
+    document.getElementById('bmsLink').href = 'bms-extreme.html' + (board === 'classic' ? '?board=classic' : '');
 
     const savedId = localStorage.getItem(LS.id);
     const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');

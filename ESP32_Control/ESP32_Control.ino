@@ -230,7 +230,7 @@ String buildStatusJson() {
   wifiStoreAddToJson(prefs, savedWifi);
 
   if (otaStatusField()) doc["ota_phase"] = otaStatusField();
-  if (lastOtaError().length()) doc["ota_error"] = lastOtaError();
+  if (otaErrorVisible()) doc["ota_error"] = lastOtaError();
   if (mqttOtaActive()) {
     char buf[48];
     snprintf(buf, sizeof(buf), "%d/%d", mqttOtaReceived(), mqttOtaExpected());

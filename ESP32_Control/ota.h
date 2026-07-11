@@ -63,9 +63,15 @@ inline String& otaPhase() {
   return phase;
 }
 
+inline unsigned long& otaErrorAt() {
+  static unsigned long ms = 0;
+  return ms;
+}
+
 inline void otaSetError(const char* phase, const char* msg) {
   otaPhase() = phase;
   lastOtaError() = msg;
+  otaErrorAt() = millis();
   Serial.printf("OTA %s: %s\n", phase, msg);
   otaNotifyStatus();
 }
@@ -103,6 +109,12 @@ inline int& mqttOtaExpected() {
 inline int& mqttOtaReceived() {
   static int received = 0;
   return received;
+}
+
+inline bool otaErrorVisible() {
+  if (!lastOtaError().length()) return false;
+  if (mqttOtaActive() || otaInProgress()) return true;
+  return millis() - otaErrorAt() < 120000;
 }
 
 inline void requestRemoteOta() {
@@ -534,6 +546,11 @@ inline bool mqttOtaFeedChunk(const uint8_t* data, size_t len) {
     return false;
   }
   mqttOtaReceived() += (int)len;
+  static int lastPubRx = 0;
+  if (mqttOtaReceived() - lastPubRx >= 2048) {
+    lastPubRx = mqttOtaReceived();
+    otaNotifyStatus();
+  }
   return true;
 }
 

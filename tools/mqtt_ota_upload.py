@@ -67,45 +67,57 @@ def main():
 
     print(f"Uploading {size} bytes via MQTT chunks to {cmd}")
     client.publish(cmd, json.dumps({"ota_mqtt": PASSWORD, "size": size}), qos=1)
-    time.sleep(2)
+    print("Waiting for device OTA session...")
+    for _ in range(40):
+        time.sleep(0.5)
+        phase = last_status.get("ota_phase")
+        rx_s = last_status.get("ota_mqtt_rx", "")
+        if phase == "mqtt_rx" and rx_s.endswith(f"/{size}"):
+            try:
+                if int(rx_s.split("/", 1)[0]) <= 512:
+                    break
+            except ValueError:
+                pass
+    else:
+        print("ERROR: device did not start MQTT OTA session", last_status)
+        client.loop_stop()
+        return 1
 
     sent = 0
     seq = 0
     t0 = time.time()
-    CHUNK = 384
-    BATCH = 4
+    CHUNK = 256
     while sent < size:
-        batch_end = min(sent + CHUNK * BATCH, size)
-        off = sent
-        while off < batch_end:
-            piece = data[off : off + CHUNK]
-            b64 = base64.b64encode(piece).decode("ascii")
-            payload = json.dumps({"ota_chunk": b64})
-            client.publish(cmd, payload, qos=1)
-            off += len(piece)
-            seq += 1
-        sent = batch_end
-        pct = sent * 100 // size
-        deadline = time.time() + 25
-        want_rx = max(0, sent - CHUNK)
-        while time.time() < deadline:
-            time.sleep(0.3)
-            err = last_status.get("ota_error")
-            if err:
-                print("ERROR during upload:", err)
-                client.loop_stop()
-                return 1
-            rx_s = last_status.get("ota_mqtt_rx", "")
-            rx = 0
-            if "/" in rx_s:
-                try:
-                    rx = int(rx_s.split("/", 1)[0])
-                except ValueError:
-                    pass
-            if rx >= want_rx:
-                break
-        rx_s = last_status.get("ota_mqtt_rx", "?")
-        print(f"  {pct}% ({sent}/{size}) device_rx={rx_s}")
+        piece = data[sent : sent + CHUNK]
+        b64 = base64.b64encode(piece).decode("ascii")
+        payload = json.dumps({"ota_chunk": b64})
+        client.publish(cmd, payload, qos=1)
+        sent += len(piece)
+        seq += 1
+        if seq % 20 == 0 or sent >= size:
+            pct = sent * 100 // size
+            deadline = time.time() + 20
+            while time.time() < deadline:
+                time.sleep(0.35)
+                err = last_status.get("ota_error")
+                phase = last_status.get("ota_phase")
+                rx_s = last_status.get("ota_mqtt_rx", "")
+                exp = 0
+                rx = 0
+                if "/" in rx_s:
+                    try:
+                        parts = rx_s.split("/", 1)
+                        rx = int(parts[0])
+                        exp = int(parts[1])
+                    except ValueError:
+                        pass
+                if err and phase == "mqtt_rx" and exp == size:
+                    print("ERROR during upload:", err)
+                    client.loop_stop()
+                    return 1
+                if phase == "mqtt_rx" and exp == size and rx >= sent:
+                    break
+            print(f"  {pct}% ({sent}/{size}) device_rx={last_status.get('ota_mqtt_rx', '?')}")
 
     print("Waiting for device to receive all bytes...")
     deadline = time.time() + 60

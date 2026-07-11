@@ -813,7 +813,7 @@
     <button class="btn sec" onclick="remoteOta()">⬆ Ενημέρωση firmware (remote)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.13</span></b> · esp32ota · browser push ~2 λεπτά</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.14</span></b> · esp32ota · browser push ~3–5 λεπτά · build <span id="dashBuild">—</span></p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -839,7 +839,8 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.13';
+    const EXPECTED_FIRMWARE = '3.0.14';
+    const DASHBOARD_BUILD = '2026-07-11-ota2';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
 
@@ -855,6 +856,8 @@
     let wifiPick = '';
     let blePick = null;
     let lastSeenFirmware = '';
+    let lastOtaErrorToast = '';
+    let otaExpectedTotal = 0;
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -1501,8 +1504,15 @@
         bleMac.textContent = j.ble.mac || '—';
         bleState.textContent = j.ble.connected ? 'συνδεδεμένο' : (j.ble.mac ? 'αποσυνδεδεμένο' : '—');
       }
-      if (j.ota_phase) toast('OTA: ' + j.ota_phase, 2000);
-      if (j.ota_error) toast('OTA σφάλμα: ' + j.ota_error, 5000);
+      if (j.ota_phase && j.ota_phase !== 'mqtt_rx') toast('OTA: ' + j.ota_phase, 2000);
+      if (j.ota_error) {
+        if (j.ota_error !== lastOtaErrorToast) {
+          lastOtaErrorToast = j.ota_error;
+          toast('OTA σφάλμα: ' + j.ota_error, 5000);
+        }
+      } else {
+        lastOtaErrorToast = '';
+      }
     }
 
     let pendingGenCmd = '';
@@ -1601,16 +1611,46 @@
       return m ? parseInt(m[1], 10) : 0;
     }
 
-    async function waitDeviceOtaRx(minBytes, maxWaitMs) {
+    function parseOtaExpectedTotal(s) {
+      if (!s) return 0;
+      const m = String(s).match(/^(\d+)\/(\d+)$/);
+      return m ? parseInt(m[2], 10) : 0;
+    }
+
+    function otaSessionMatches(totalBytes) {
+      const s = lastStatus || {};
+      if (s.ota_phase !== 'mqtt_rx') return false;
+      const exp = parseOtaExpectedTotal(s.ota_mqtt_rx);
+      return exp === totalBytes;
+    }
+
+    async function waitForOtaSessionBegin(totalBytes, maxWaitMs) {
       const deadline = Date.now() + maxWaitMs;
       while (Date.now() < deadline) {
         await sleepMs(300);
-        if (lastStatus && lastStatus.ota_error) return -1;
-        if (lastStatus && lastStatus.ota_phase === 'rebooting') return minBytes;
-        const rx = parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx);
-        if (rx >= minBytes) return rx;
+        const s = lastStatus || {};
+        if (s.ota_error && !otaSessionMatches(totalBytes)) return false;
+        if (!otaSessionMatches(totalBytes)) continue;
+        const rx = parseOtaRx(s.ota_mqtt_rx);
+        if (rx <= 512) return true;
       }
-      return parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx);
+      return otaSessionMatches(totalBytes) && parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx) <= 512;
+    }
+
+    async function waitDeviceOtaRx(targetAbs, totalBytes, maxWaitMs) {
+      const deadline = Date.now() + maxWaitMs;
+      while (Date.now() < deadline) {
+        await sleepMs(350);
+        const s = lastStatus || {};
+        if (s.ota_error && otaSessionMatches(totalBytes)) return -1;
+        if (s.ota_phase === 'rebooting') return targetAbs;
+        if (!otaSessionMatches(totalBytes)) continue;
+        const rx = parseOtaRx(s.ota_mqtt_rx);
+        if (rx >= targetAbs) return rx;
+      }
+      return otaSessionMatches(totalBytes)
+        ? parseOtaRx(lastStatus && lastStatus.ota_mqtt_rx)
+        : 0;
     }
 
     async function remoteOtaBrowserPush(pw) {
@@ -1619,36 +1659,32 @@
         toast('Αποτυχία λήψης firmware — έλεγξε internet / GitHub', 7000);
         return false;
       }
-      toast(`Firmware ${(buf.length / 1024 / 1024).toFixed(2)} MB — αποστολή στο ESP32…`, 4000);
+      otaExpectedTotal = buf.length;
+      lastOtaErrorToast = '';
+      toast(`Firmware ${(buf.length / 1024 / 1024).toFixed(2)} MB (${buf.length} bytes) — αποστολή…`, 5000);
       client.publish(cmdTopic, JSON.stringify({ ota_mqtt: pw, size: buf.length }), { qos: 1 });
-      await sleepMs(2000);
-      if (lastStatus && lastStatus.ota_error) {
-        toast('OTA σφάλμα: ' + lastStatus.ota_error, 7000);
+      if (!await waitForOtaSessionBegin(buf.length, 20000)) {
+        toast('ESP32 δεν ξεκίνησε OTA — δοκίμασε USB flash ή reboot ESP32', 8000);
         return false;
       }
-      const CHUNK = 384;
-      const BATCH = 4;
+      const CHUNK = 256;
       let sent = 0;
       while (sent < buf.length) {
-        const batchEnd = Math.min(sent + CHUNK * BATCH, buf.length);
-        for (let off = sent; off < batchEnd; off += CHUNK) {
-          const slice = buf.subarray(off, Math.min(off + CHUNK, buf.length));
-          client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }), { qos: 1 });
+        const slice = buf.subarray(sent, Math.min(sent + CHUNK, buf.length));
+        client.publish(cmdTopic, JSON.stringify({ ota_chunk: uint8ToBase64(slice) }), { qos: 1 });
+        sent += slice.length;
+        if (sent % (CHUNK * 20) === 0 || sent === buf.length) {
+          toast('OTA ' + Math.round(sent / buf.length * 100) + '%', 1500);
         }
-        sent = batchEnd;
-        toast('OTA ' + Math.round(sent / buf.length * 100) + '%', 1500);
-        const wantRx = Math.max(0, sent - CHUNK);
-        const rx = await waitDeviceOtaRx(wantRx, 25000);
+        const rx = await waitDeviceOtaRx(sent, buf.length, 20000);
         if (rx < 0) {
-          toast('OTA σφάλμα: ' + (lastStatus.ota_error || '?'), 7000);
+          toast('OTA σφάλμα: ' + ((lastStatus && lastStatus.ota_error) || '?'), 7000);
           return false;
         }
-        if (rx < wantRx && sent < buf.length) {
-          await sleepMs(1500);
-        }
+        if (rx < sent - CHUNK * 2) await sleepMs(800);
       }
       toast('OTA finalize — αναμονή ESP32…', 3000);
-      const finalRx = await waitDeviceOtaRx(buf.length, 60000);
+      const finalRx = await waitDeviceOtaRx(buf.length, buf.length, 90000);
       if (finalRx < buf.length) {
         toast(`OTA timeout: ESP32 ${finalRx}/${buf.length} bytes`, 8000);
         return false;
@@ -1656,7 +1692,7 @@
       client.publish(cmdTopic, JSON.stringify({ ota_end: pw }), { qos: 1 });
       for (let i = 0; i < 45; i++) {
         await sleepMs(2000);
-        if (lastStatus && lastStatus.ota_error) {
+        if (lastStatus && lastStatus.ota_error && lastStatus.ota_phase !== 'rebooting') {
           toast('OTA σφάλμα: ' + lastStatus.ota_error, 7000);
           return false;
         }
@@ -2013,6 +2049,9 @@
       updateFreshness();
       if (lastStatus.device_id) renderDiagnostics(lastStatus);
     }, 2000);
+
+    const db = document.getElementById('dashBuild');
+    if (db) db.textContent = DASHBOARD_BUILD;
 
     if (savedId) connect();
     if (window.ChartHub) ChartHub.init();

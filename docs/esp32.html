@@ -935,6 +935,8 @@
     let wifiPick = '';
     let blePick = null;
     let lastSeenFirmware = '';
+    let gensetStable = null;
+    let lastGensetTopicAt = 0;
 
     const savedId = localStorage.getItem(LS.id);
     if (savedId) document.getElementById('deviceId').value = savedId;
@@ -1425,16 +1427,17 @@
 
     function renderGenset(g) {
       if (!g) return;
-      const valid = g.valid;
-      const hasData = valid || g.genset_state != null || g.controller_type != null;
-      const partial = hasData && !g.poll_complete;
+      if (g.poll_complete) gensetStable = Object.assign({}, g);
+      const d = (g.poll_complete || !gensetStable) ? g : gensetStable;
+      const valid = d.valid;
+      const hasData = valid || d.genset_state != null || d.controller_type != null;
       const box = document.getElementById('genStatusBox');
-      const isEntes = String(g.profile || '').includes('ENTES');
+      const isEntes = String(d.profile || '').includes('ENTES');
 
-      syncModbusCfg(g);
+      syncModbusCfg(d);
 
       if (!hasData) {
-        document.getElementById('genState').textContent = g.error ? 'Modbus: ' + g.error : 'Αναμονή δεδομένων...';
+        document.getElementById('genState').textContent = d.error ? 'Modbus: ' + d.error : 'Αναμονή δεδομένων...';
         document.getElementById('genMode').textContent = '—';
         box.className = 'gen-hero off';
         document.getElementById('genChips').innerHTML = '';
@@ -1442,98 +1445,97 @@
         return;
       }
 
-      syncGenModeButtons(g.op_mode);
+      syncGenModeButtons(g.op_mode != null ? g.op_mode : d.op_mode);
 
       if (isEntes) {
         document.getElementById('genState').textContent = 'ENTES MPR-46S';
         document.getElementById('genMode').textContent = 'Ένδειξη δικτύου';
         box.className = 'gen-hero run';
-        document.getElementById('genChips').innerHTML = `<span class="chip ok">ΔΙΚΤΥΟ</span><span class="chip">${f2(g.frequency, 1)} Hz</span>`;
+        document.getElementById('genChips').innerHTML = `<span class="chip ok">ΔΙΚΤΥΟ</span><span class="chip">${f2(d.frequency, 1)} Hz</span>`;
         setLoadBar('loadL1', 'loadL1t', null);
         setLoadBar('loadL2', 'loadL2t', null);
         setLoadBar('loadL3', 'loadL3t', null);
-        document.getElementById('gVll').textContent = f0(g.volt_avg_ll);
-        document.getElementById('gHz').textContent = f2(g.frequency, 1);
-        document.getElementById('gKva').textContent = f2(g.kva_total, 2) + ' kVA';
+        document.getElementById('gVll').textContent = f0(d.volt_avg_ll);
+        document.getElementById('gHz').textContent = f2(d.frequency, 1);
+        document.getElementById('gKva').textContent = f2(d.kva_total, 2) + ' kVA';
         document.getElementById('gRpm').textContent = '—';
-        document.getElementById('gCurr').textContent = f2(g.curr_avg, 1);
+        document.getElementById('gCurr').textContent = f2(d.curr_avg, 1);
         document.getElementById('gBatt').textContent = '—';
         document.getElementById('gOil').textContent = '—';
         document.getElementById('gCool').textContent = '—';
         const phases = [
-          { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kva: g.kva_l1 },
-          { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kva: g.kva_l2 },
-          { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kva: g.kva_l3 }
+          { n: 'L1', vn: d.volt_l1n, vll: d.volt_l1l2, i: d.curr_l1, kva: d.kva_l1 },
+          { n: 'L2', vn: d.volt_l2n, vll: d.volt_l2l3, i: d.curr_l2, kva: d.kva_l2 },
+          { n: 'L3', vn: d.volt_l3n, vll: d.volt_l3l1, i: d.curr_l3, kva: d.kva_l3 }
         ];
         document.getElementById('genPhases').innerHTML = phases.map(p => phaseHtml(p, false)).join('');
         document.getElementById('genAlarms').textContent = 'Μετρητής δικτύου (δοκιμή)';
-        if (window.ChartHub) ChartHub.recordGenset(g);
+        if (window.ChartHub) ChartHub.recordGenset(d);
         return;
       }
 
-      const state = g.genset_state_label_el || g.genset_state_label || '—';
-      const mode = g.op_mode_label_el || g.op_mode_label || '—';
+      const state = d.genset_state_label_el || d.genset_state_label || '—';
+      const mode = d.op_mode_label_el || d.op_mode_label || '—';
       document.getElementById('genState').textContent = state;
-      document.getElementById('genMode').textContent = `${mode} • Controller ${g.controller_type ?? '—'} • PS0600`;
+      document.getElementById('genMode').textContent = `${mode} • Controller ${d.controller_type ?? '—'} • PS0600`;
 
-      const running = g.running === true || Number(g.genset_state) === 8;
-      const crank = Number(g.genset_state) === 4;
-      const warn = Number(g.active_fault) > 0 || Number(g.fault_type) === 2;
+      const running = d.running === true || Number(d.genset_state) === 8;
+      const crank = Number(d.genset_state) === 4;
+      const warn = Number(d.active_fault) > 0 || Number(d.fault_type) === 2;
       box.className = 'gen-hero ' + (running ? 'run' : warn ? 'warn' : 'off');
 
       const chips = [];
-      if (partial) chips.push({ t: 'ΜΕΡΙΚΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
-      else if (!valid) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
+      if (!valid && hasData) chips.push({ t: 'ΠΑΛΙΑ ΔΕΔΟΜΕΝΑ', cls: 'warn' });
       if (running) chips.push({ t: 'ΛΕΙΤΟΥΡΓΕΙ', cls: 'ok' });
       else if (crank) chips.push({ t: 'CRANK', cls: 'warn' });
       else chips.push({ t: state.toUpperCase(), cls: '' });
       chips.push({ t: mode.toUpperCase(), cls: 'ok' });
-      if (Number(g.fault_type) === 1) chips.push({ t: 'WARNING', cls: 'warn' });
-      if (Number(g.fault_type) === 2) chips.push({ t: 'SHUTDOWN', cls: 'bad' });
+      if (Number(d.fault_type) === 1) chips.push({ t: 'WARNING', cls: 'warn' });
+      if (Number(d.fault_type) === 2) chips.push({ t: 'SHUTDOWN', cls: 'bad' });
       document.getElementById('genChips').innerHTML = chips.map(c =>
         `<span class="chip ${c.cls}">${c.t}</span>`).join('');
 
-      setLoadBar('loadL1', 'loadL1t', g.load_l1_pct);
-      setLoadBar('loadL2', 'loadL2t', g.load_l2_pct);
-      setLoadBar('loadL3', 'loadL3t', g.load_l3_pct);
+      setLoadBar('loadL1', 'loadL1t', d.load_l1_pct);
+      setLoadBar('loadL2', 'loadL2t', d.load_l2_pct);
+      setLoadBar('loadL3', 'loadL3t', d.load_l3_pct);
 
-      document.getElementById('gVll').textContent = f0(g.volt_avg_ll);
-      document.getElementById('gHz').textContent = f2(g.frequency, 1);
-      document.getElementById('gKva').textContent = f0(g.kw_total) + ' / ' + f0(g.kva_total);
-      document.getElementById('gRpm').textContent = f0(g.engine_rpm);
-      document.getElementById('gCurr').textContent = f2(g.curr_avg, 1);
-      document.getElementById('gBatt').textContent = f2(g.battery_v, 1);
-      document.getElementById('gOil').textContent = f0(g.oil_kpa);
-      document.getElementById('gCool').textContent = f2(g.coolant_c, 1);
-      document.getElementById('gCtrl').textContent = g.controller_type ?? '—';
-      document.getElementById('gRuns').textContent = g.total_runs ?? '—';
-      document.getElementById('gHours').textContent = (g.runtime_hours != null ? f2(g.runtime_hours, 1) : '—') + ' h';
+      document.getElementById('gVll').textContent = f0(d.volt_avg_ll);
+      document.getElementById('gHz').textContent = f2(d.frequency, 1);
+      document.getElementById('gKva').textContent = f0(d.kw_total) + ' / ' + f0(d.kva_total);
+      document.getElementById('gRpm').textContent = f0(d.engine_rpm);
+      document.getElementById('gCurr').textContent = f2(d.curr_avg, 1);
+      document.getElementById('gBatt').textContent = f2(d.battery_v, 1);
+      document.getElementById('gOil').textContent = f0(d.oil_kpa);
+      document.getElementById('gCool').textContent = f2(d.coolant_c, 1);
+      document.getElementById('gCtrl').textContent = d.controller_type ?? '—';
+      document.getElementById('gRuns').textContent = d.total_runs ?? '—';
+      document.getElementById('gHours').textContent = (d.runtime_hours != null ? f2(d.runtime_hours, 1) : '—') + ' h';
       document.getElementById('gFault').textContent = window.GensetDecode
-        ? GensetDecode.formatActiveFaultShort(g)
-        : (Number(g.active_fault) ? '#' + g.active_fault + ' (' + (g.fault_type_label || '') + ')' : 'Κανένα');
+        ? GensetDecode.formatActiveFaultShort(d)
+        : (Number(d.active_fault) ? '#' + d.active_fault + ' (' + (d.fault_type_label || '') + ')' : 'Κανένα');
 
       const phases = [
-        { n: 'L1', vn: g.volt_l1n, vll: g.volt_l1l2, i: g.curr_l1, kw: g.kw_l1, kva: g.kva_l1, load: g.load_l1_pct },
-        { n: 'L2', vn: g.volt_l2n, vll: g.volt_l2l3, i: g.curr_l2, kw: g.kw_l2, kva: g.kva_l2, load: g.load_l2_pct },
-        { n: 'L3', vn: g.volt_l3n, vll: g.volt_l3l1, i: g.curr_l3, kw: g.kw_l3, kva: g.kva_l3, load: g.load_l3_pct }
+        { n: 'L1', vn: d.volt_l1n, vll: d.volt_l1l2, i: d.curr_l1, kw: d.kw_l1, kva: d.kva_l1, load: d.load_l1_pct },
+        { n: 'L2', vn: d.volt_l2n, vll: d.volt_l2l3, i: d.curr_l2, kw: d.kw_l2, kva: d.kva_l2, load: d.load_l2_pct },
+        { n: 'L3', vn: d.volt_l3n, vll: d.volt_l3l1, i: d.curr_l3, kw: d.kw_l3, kva: d.kva_l3, load: d.load_l3_pct }
       ];
       document.getElementById('genPhases').innerHTML = phases.map(p => phaseHtml(p, true)).join('');
 
       if (window.GensetDecode) {
         document.getElementById('genAlarms').innerHTML =
-          GensetDecode.renderAlarmHtml(GensetDecode.buildGensetAlarmSections(g));
-        const nfItems = GensetDecode.nfpaListItems(g);
+          GensetDecode.renderAlarmHtml(GensetDecode.buildGensetAlarmSections(d));
+        const nfItems = GensetDecode.nfpaListItems(d);
         document.getElementById('genNfpaList').innerHTML = nfItems.length
           ? nfItems.map(x => `<li>${x}</li>`).join('')
           : '<li class="muted">Κανένα ενεργό NFPA/Extended bit</li>';
       } else {
         const al = [];
-        if (g.nfpa_fault) al.push('NFPA 110: ' + hex(g.nfpa_fault));
-        if (g.active_fault) al.push('Σφάλμα #' + g.active_fault);
+        if (d.nfpa_fault) al.push('NFPA 110: ' + hex(d.nfpa_fault));
+        if (d.active_fault) al.push('Σφάλμα #' + d.active_fault);
         document.getElementById('genAlarms').textContent = al.length ? al.join('\n') : 'Κανένας ενεργός συναγερμός.';
         document.getElementById('genNfpaList').innerHTML = '<li class="muted">—</li>';
       }
-      if (window.ChartHub) ChartHub.recordGenset(g);
+      if (window.ChartHub) ChartHub.recordGenset(d);
     }
 
     function phaseHtml(p, showKw) {
@@ -1565,7 +1567,7 @@
       updateFreshness();
       if (j.outputs) { outputs = j.outputs; renderRelays(); }
       if (j.bms) renderBms(j.bms);
-      if (j.genset) renderGenset(j.genset);
+      if (j.genset && Date.now() - lastGensetTopicAt > 4000) renderGenset(j.genset);
       renderOverview(j.bms, j.genset);
       renderDiagnostics(j);
       const wSsid = document.getElementById('wifiCurrentSsid');
@@ -1954,6 +1956,7 @@
           }
           if (t.endsWith('/genset')) {
             msgStats.genset++;
+            lastGensetTopicAt = Date.now();
             if (pendingGenCmd && j.last_cmd === pendingGenCmd) {
               const msg = j.error || (j.last_cmd_ok ? ('OK: ' + pendingGenCmd) : ('Αποτυχία ' + pendingGenCmd));
               toast(msg, j.last_cmd_ok && !j.error ? 4000 : 8000);

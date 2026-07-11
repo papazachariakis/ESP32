@@ -745,7 +745,11 @@ void loadSettings() {
   }
   if (bmsMgr.type == BmsType::None && bmsMgr.name.length())
     bmsMgr.type = bmsDetectFromName(bmsMgr.name);
+#if defined(ESP32_SLIM_BUILD)
+  if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Basen;
+#else
   if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
+#endif
 
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
@@ -832,7 +836,6 @@ void startBleScan() {
   scan->setActiveScan(true);
   scan->setInterval(BLE_SCAN_INTERVAL_MS);
   scan->setWindow(BLE_SCAN_WINDOW_MS);
-  scan->setDuplicateFilter(false);
 
   scan->clearResults();
 
@@ -1480,7 +1483,7 @@ void loop() {
   static unsigned long lastGenMqtt = 0;
 
   if (genMgr.enabled && (genMgr.takePublishPending()
-      || millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS)) {
+      || (genMgr.data.pollComplete && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS))) {
     lastGenMqtt = millis();
     publishGensetMqtt();
   }

@@ -255,10 +255,10 @@ struct GenManager {
   bool publishPending = false;
   static const uint8_t kPollBudgetMs = 35;
 
-  void markUpdated() {
+  void markUpdated(bool publish = false) {
     data.lastUpdate = millis();
     data.valid = true;
-    publishPending = true;
+    if (publish) publishPending = true;
   }
 
   bool takePublishPending() {
@@ -568,6 +568,7 @@ struct GenManager {
   }
 
   bool pollEntesOnce() {
+#ifndef ESP32_SLIM_BUILD
     uint16_t r[ENTES_REG_MEAS_COUNT];
     if (!readDirect(ENTES_REG_MEAS_START, ENTES_REG_MEAS_COUNT, r)) {
       data.lastError = "modbus 0 - ENTES/RS485 RX2 TX2";
@@ -598,6 +599,10 @@ struct GenManager {
     data.lastError = "";
     publishPending = true;
     return true;
+#else
+    data.lastError = "ENTES profile disabled on this build";
+    return false;
+#endif
   }
 
   void pollReset() { pollStep = 0; data.pollComplete = false; }
@@ -621,7 +626,6 @@ struct GenManager {
         data.gensetState = (uint8_t)a[2];
         data.activeFault = a[3];
         data.faultType = (uint8_t)a[4];
-        data.pollComplete = false;
         markUpdated();
         pollStep = 1;
         modbusBusGap();
@@ -765,7 +769,7 @@ struct GenManager {
         data.runTimeSec = (uint32_t)(data.runtimeHours * 3600.0f);
         data.pollComplete = true;
         data.lastError = "";
-        markUpdated();
+        markUpdated(true);
         pollStep = 0;
         return true;
       }

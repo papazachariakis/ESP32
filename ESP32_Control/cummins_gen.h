@@ -279,7 +279,7 @@ struct GenManager {
     if (bus) while (bus->available()) bus->read();
   }
 
-  bool readBlockGap(uint16_t reg40001, uint16_t count, uint16_t* out) {
+  bool readBlockGap(uint32_t reg40001, uint16_t count, uint16_t* out) {
     if (!readBlock(reg40001, count, out)) return false;
     modbusBusGap();
     return true;
@@ -475,7 +475,7 @@ struct GenManager {
     return false;
   }
 
-  bool readBlock(uint16_t reg40001, uint16_t count, uint16_t* out) {
+  bool readBlock(uint32_t reg40001, uint16_t count, uint16_t* out) {
     return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, modbusHoldAddr(reg40001), count, out,
                              MODBUS_READ_TIMEOUT_MS);
   }
@@ -484,7 +484,7 @@ struct GenManager {
     return modbusReadHolding(*bus, MODBUS_DE_PIN, slaveId, startReg, count, out, 2000);
   }
 
-  bool readHoldOne(uint16_t reg40001, uint16_t* out) {
+  bool readHoldOne(uint32_t reg40001, uint16_t* out) {
     return readBlock(reg40001, 1, out);
   }
 

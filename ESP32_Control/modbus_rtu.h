@@ -195,9 +195,9 @@ inline bool modbusWriteSingle(
   return wReg == reg && wVal == value;
 }
 
-// Cummins docs use 4xxxx holding register numbers.
-inline uint16_t modbusHoldAddr(uint16_t reg40001) {
-  return (uint16_t)(reg40001 - 40001);
+// Cummins docs use 4xxxx holding register numbers (may exceed 65535, e.g. 402355).
+inline uint16_t modbusHoldAddr(uint32_t reg40001) {
+  return (uint16_t)(reg40001 - 40001u);
 }
 
 inline void modbusBusGap(uint16_t ms = 10) {

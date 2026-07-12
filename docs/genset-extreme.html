@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#05080f" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <title>⚡ Genset EXTREME — Cummins C22D5</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -18,7 +18,7 @@
       --display:'Orbitron',system-ui,sans-serif;
     }
     *{box-sizing:border-box;margin:0;padding:0;-webkit-text-size-adjust:100%}
-    html,body{height:100%;overflow:hidden}
+    html,body{min-height:100%;overflow-x:hidden;overflow-y:auto}
     body{
       font-family:var(--mono);background:var(--bg);color:var(--text);
       background-image:
@@ -39,7 +39,7 @@
       background-size:48px 48px;
     }
 
-    .cockpit{display:grid;grid-template-rows:auto 1fr auto;height:100vh;height:100dvh;position:relative;z-index:1}
+    .cockpit{display:grid;grid-template-rows:auto 1fr auto;min-height:100vh;min-height:100dvh;position:relative;z-index:1}
 
     /* TOP BAR */
     .top{
@@ -69,11 +69,12 @@
 
     /* MAIN GRID */
     .main{
-      display:grid;gap:10px;padding:10px;min-height:0;overflow:hidden;
+      display:grid;gap:10px;padding:10px;min-height:0;overflow-y:auto;overflow-x:hidden;
       grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,.9fr) minmax(220px,.75fr);
-      grid-template-rows:1fr auto;
+      grid-template-rows:minmax(0,1fr) auto auto;
       grid-template-areas:
         "phases center power side"
+        "schedule schedule schedule schedule"
         "engine engine engine engine";
     }
     .area-phases{grid-area:phases}
@@ -81,6 +82,7 @@
     .area-power{grid-area:power}
     .area-side{grid-area:side}
     .area-engine{grid-area:engine}
+    .area-schedule{grid-area:schedule}
 
     @media(max-width:1100px){
       html,body{overflow:auto;overflow-x:hidden;height:auto;min-height:100dvh}
@@ -91,6 +93,7 @@
           "center center"
           "phases power"
           "side side"
+          "schedule schedule"
           "engine engine";
         overflow:visible;min-height:0;
       }
@@ -116,6 +119,7 @@
           "side"
           "phases"
           "power"
+          "schedule"
           "engine";
         padding:8px;padding-bottom:max(8px, env(safe-area-inset-bottom));
         gap:8px;
@@ -349,6 +353,129 @@
     .toast-wrap{position:fixed;bottom:48px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px}
     .toast{padding:10px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:.75rem;animation:fadein .2s}
     @keyframes fadein{from{opacity:0;transform:translateY(8px)}}
+
+    /* SCHEDULE PANEL (inline, always visible) */
+    .sched-panel{padding:0 12px 12px}
+    .sched-inline-head{
+      display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      padding:10px 0 8px;border-bottom:1px solid var(--line);margin-bottom:10px;
+    }
+    .sched-inline-head .title{
+      font-family:var(--display);font-size:.78rem;font-weight:900;letter-spacing:.1em;color:var(--l1);
+    }
+    .sched-inline-head .title span{font-size:.62rem;color:var(--muted);font-weight:500;letter-spacing:.04em;margin-left:8px}
+    .sched-inline-head .spacer{flex:1}
+    .sched-slots-inline{
+      display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+    }
+    @media(max-width:900px){.sched-slots-inline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:480px){.sched-slots-inline{grid-template-columns:1fr}}
+    .sched-clock-inline{
+      text-align:center;padding:6px 12px;background:rgba(0,0,0,.35);border:1px solid var(--line);border-radius:8px;
+    }
+    .sched-clock-inline .time{font-family:var(--display);font-size:1rem;font-weight:900;letter-spacing:.06em;line-height:1.2}
+    .sched-clock-inline .meta{font-size:.58rem;color:var(--muted);margin-top:2px}
+    .sched-clock-inline.synced .time{color:var(--ok);text-shadow:0 0 10px var(--glow-ok)}
+    .sched-save-inline{
+      padding:8px 14px;border:none;border-radius:8px;cursor:pointer;
+      background:linear-gradient(90deg,var(--l1),#ea580c);color:#000;
+      font-family:var(--display);font-weight:900;font-size:.68rem;letter-spacing:.08em;white-space:nowrap;
+    }
+    .sched-save-inline:hover{filter:brightness(1.1);box-shadow:0 0 16px rgba(245,158,11,.35)}
+    .sched-master{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:10px 12px;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:10px;
+    }
+    .sched-master .lbl{font-size:.72rem;font-weight:700;letter-spacing:.08em}
+    .sched-master .lbl small{display:block;font-size:.62rem;color:var(--muted);font-weight:400;margin-top:2px}
+    .sw{
+      position:relative;width:52px;height:28px;flex-shrink:0;cursor:pointer;
+    }
+    .sw input{opacity:0;width:0;height:0;position:absolute}
+    .sw .track{
+      position:absolute;inset:0;border-radius:14px;background:var(--dim);border:1px solid var(--line);
+      transition:background .2s,box-shadow .2s;
+    }
+    .sw input:checked + .track{background:var(--ok);box-shadow:0 0 14px var(--glow-ok);border-color:var(--ok)}
+    .sw .knob{
+      position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+      background:var(--text);transition:transform .2s;box-shadow:0 2px 6px rgba(0,0,0,.4);
+    }
+    .sw input:checked ~ .knob{transform:translateX(24px);background:#fff}
+    .sched-active-bar{
+      display:none;padding:10px 12px;border-radius:10px;border:1px solid rgba(34,197,94,.5);
+      background:rgba(34,197,94,.08);animation:glow-run 2s ease infinite;
+    }
+    .sched-active-bar.show{display:block}
+    .sched-active-bar .t{font-size:.72rem;font-weight:700;color:var(--ok);margin-bottom:6px}
+    .sched-active-bar .prog{height:4px;border-radius:2px;background:rgba(0,0,0,.4);overflow:hidden}
+    .sched-active-bar .prog .fill{height:100%;background:var(--ok);box-shadow:0 0 8px var(--glow-ok);transition:width 1s linear}
+    .sched-timeline{
+      height:32px;border-radius:6px;background:rgba(0,0,0,.4);border:1px solid var(--line);
+      position:relative;overflow:hidden;
+    }
+    .sched-timeline .tick{
+      position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.08);
+    }
+    .sched-timeline .slot-mark{
+      position:absolute;top:4px;bottom:4px;border-radius:3px;opacity:.85;
+      border:1px solid rgba(255,255,255,.15);
+    }
+    .sched-timeline .slot-mark.c1{background:rgba(245,158,11,.45)}
+    .sched-timeline .slot-mark.c2{background:rgba(34,197,94,.4)}
+    .sched-timeline .slot-mark.c3{background:rgba(59,130,246,.4)}
+    .sched-timeline .slot-mark.c4{background:rgba(168,85,247,.4)}
+    .sched-slot{
+      border:1px solid var(--line);border-radius:10px;padding:10px;
+      background:rgba(0,0,0,.25);transition:border-color .25s,box-shadow .25s,opacity .25s;
+    }
+    .sched-slot.off{opacity:.45}
+    .sched-slot.on{border-color:rgba(245,158,11,.45);box-shadow:0 0 16px rgba(245,158,11,.12)}
+    .sched-slot.running{border-color:var(--ok);box-shadow:0 0 20px var(--glow-ok);animation:glow-run 2s ease infinite}
+    .sched-slot-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .sched-num{
+      font-family:var(--display);font-size:.75rem;font-weight:900;width:28px;height:28px;
+      display:flex;align-items:center;justify-content:center;border-radius:6px;
+      background:rgba(245,158,11,.15);color:var(--l1);border:1px solid rgba(245,158,11,.3);flex-shrink:0;
+    }
+    .sched-time-wrap{flex:1}
+    .sched-time-wrap input[type=time]{
+      width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);
+      background:#000;color:var(--text);font-family:var(--display);font-size:1.25rem;font-weight:700;
+      letter-spacing:.08em;text-align:center;
+    }
+    .sched-time-wrap input[type=time]:focus{outline:none;border-color:var(--l1);box-shadow:0 0 12px rgba(245,158,11,.25)}
+    .sched-dur-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .sched-dur-row .lbl{font-size:.62rem;color:var(--muted);letter-spacing:.06em;min-width:52px}
+    .sched-dur-ctrl{display:flex;align-items:center;gap:6px;flex:1}
+    .sched-dur-ctrl button{
+      width:32px;height:32px;border:1px solid var(--line);border-radius:6px;
+      background:rgba(0,0,0,.4);color:var(--text);cursor:pointer;font-size:1rem;font-weight:700;
+    }
+    .sched-dur-ctrl button:hover{border-color:var(--l1);color:var(--l1)}
+    .sched-dur-ctrl input[type=range]{flex:1;accent-color:var(--l1);height:6px}
+    .sched-dur-ctrl .val{
+      font-family:var(--display);font-size:.95rem;font-weight:700;min-width:48px;text-align:center;color:var(--l1);
+    }
+    .sched-days{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+    .sched-day{
+      padding:6px 8px;border-radius:6px;font-size:.62rem;font-weight:700;letter-spacing:.04em;
+      border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--muted);cursor:pointer;
+      transition:all .15s;user-select:none;
+    }
+    .sched-day.on{border-color:var(--l1);background:rgba(245,158,11,.2);color:var(--l1)}
+    .sched-presets{display:flex;gap:4px;flex-wrap:wrap}
+    .sched-presets button{
+      padding:4px 8px;border-radius:4px;font-size:.58rem;border:1px solid var(--line);
+      background:rgba(0,0,0,.3);color:var(--muted);cursor:pointer;letter-spacing:.04em;
+    }
+    .sched-presets button:hover{border-color:var(--accent);color:var(--accent)}
+    #schedFoot{cursor:pointer;transition:color .2s}
+    #schedFoot:hover{color:var(--l1)!important}
+    @media(max-width:640px){
+      .sched-inline-head{gap:8px}
+      .sched-time-wrap input[type=time]{font-size:1rem}
+    }
   </style>
 </head>
 <body>
@@ -482,6 +609,30 @@
         </div>
       </aside>
 
+      <!-- SCHEDULE (always visible) -->
+      <section class="panel area-schedule" id="schedPanel">
+        <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
+        <div class="sched-panel">
+          <div class="sched-inline-head">
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-12</span></div>
+            <div class="sched-clock-inline" id="schedClock">
+              <div class="time" id="schedClockTime">—:—:—</div>
+              <div class="meta" id="schedClockMeta">NTP...</div>
+            </div>
+            <label class="sw" title="Ενεργό πρόγραμμα"><input type="checkbox" id="schedMaster" checked /><span class="track"></span><span class="knob"></span></label>
+            <div class="spacer"></div>
+            <button type="button" class="sched-save-inline" id="schedSave">💾 ΑΠΟΘΗΚΕΥΣΗ</button>
+          </div>
+          <div class="sched-active-bar" id="schedActiveBar">
+            <div class="t" id="schedActiveText">—</div>
+            <div class="prog"><div class="fill" id="schedActiveProg" style="width:0%"></div></div>
+          </div>
+          <div class="panel-title" style="padding:8px 0 4px">24ωρο χρονοδιάγραμμα</div>
+          <div class="sched-timeline" id="schedTimeline"></div>
+          <div class="sched-slots-inline" id="schedSlots"></div>
+        </div>
+      </section>
+
       <!-- ENGINE STRIP -->
       <div class="engine-strip area-engine">
         <div class="eng"><div class="ico">🔋</div><div><div class="l">Μπαταρία γενν.</div><div class="v" id="eBatt">—</div></div></div>
@@ -497,7 +648,7 @@
       <span>FW <strong id="fwVer">—</strong></span>
       <span>Modbus <strong id="modbusAge">—</strong></span>
       <span>Τελευταίο <strong id="lastRx">—</strong></span>
-      <span id="schedFoot" style="color:var(--muted)">Πρόγραμμα: —</span>
+      <span id="schedFoot" style="color:var(--muted)">⏰ —</span>
       <span id="cmdFeedback" style="color:var(--muted)"></span>
     </footer>
   </div>
@@ -539,6 +690,271 @@
     let client = null, cmdTopic = '', connected = false;
     let gensetStable = null, lastGenset = null, lastStatus = {};
     let lastRxAt = 0, kwHistory = [];
+    let lastSchedule = null;
+
+    const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
+    const SCHED_PRESETS = [
+      { label: 'Δε-Πα', mask: 0x3E },
+      { label: 'Κάθε μέρα', mask: 0x7F },
+      { label: 'Σα-Κυ', mask: 0x41 },
+      { label: 'Καθαρό', mask: 0 }
+    ];
+    let schedEditing = false;
+    let schedDirty = false;
+
+    function buildSchedSlots() {
+      const box = document.getElementById('schedSlots');
+      if (!box) return;
+      box.innerHTML = [0, 1, 2, 3].map(i => `
+        <div class="sched-slot off" id="schedSlot${i}" data-idx="${i}">
+          <div class="sched-slot-top">
+            <div class="sched-num">${i + 1}</div>
+            <div class="sched-time-wrap">
+              <input type="time" id="schedTime${i}" />
+            </div>
+            <label class="sw" title="Ενεργό slot"><input type="checkbox" id="schedEn${i}" /><span class="track"></span><span class="knob"></span></label>
+          </div>
+          <div class="sched-dur-row">
+            <span class="lbl">Διάρκεια</span>
+            <div class="sched-dur-ctrl">
+              <button type="button" data-act="dur-" data-i="${i}">−</button>
+              <input type="range" id="schedDurRange${i}" min="5" max="600" step="5" value="30" />
+              <span class="val" id="schedDurVal${i}">30′</span>
+              <button type="button" data-act="dur+" data-i="${i}">+</button>
+            </div>
+          </div>
+          <div class="sched-days" id="schedDays${i}">${SCHED_DAY_BITS.map((d, b) =>
+            `<span class="sched-day${(0x3E & (1 << b)) ? ' on' : ''}" data-i="${i}" data-b="${b}">${d}</span>`
+          ).join('')}</div>
+          <div class="sched-presets">${SCHED_PRESETS.map(p =>
+            `<button type="button" data-act="preset" data-i="${i}" data-mask="${p.mask}">${p.label}</button>`
+          ).join('')}</div>
+        </div>`).join('');
+      [0, 1, 2, 3].forEach(i => {
+        const tm = document.getElementById('schedTime' + i);
+        if (tm) tm.value = i === 0 ? '07:00' : i === 1 ? '12:00' : i === 2 ? '18:00' : '00:00';
+      });
+      box.addEventListener('change', e => {
+        const t = e.target;
+        if (t.id && t.id.startsWith('sched')) {
+          schedDirty = true;
+          const idx = t.closest('[data-idx]')?.dataset.idx;
+          if (idx != null) updateSlotVisual(+idx);
+          drawSchedTimeline();
+        }
+      });
+      box.addEventListener('focusin', e => { if (e.target.closest('.sched-slot')) schedEditing = true; });
+      box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) schedEditing = false; });
+      box.addEventListener('click', e => {
+        const btn = e.target.closest('[data-act]');
+        if (!btn) {
+          const day = e.target.closest('.sched-day');
+          if (day) {
+            day.classList.toggle('on');
+            schedDirty = true;
+            updateSlotVisual(+day.dataset.i);
+            drawSchedTimeline();
+          }
+          return;
+        }
+        const i = +btn.dataset.i;
+        const act = btn.dataset.act;
+        if (act === 'dur-' || act === 'dur+') {
+          const r = document.getElementById('schedDurRange' + i);
+          const step = act === 'dur+' ? 5 : -5;
+          r.value = clamp(+r.value + step, +r.min, +r.max);
+          syncDurDisplay(i);
+          schedDirty = true;
+          drawSchedTimeline();
+        } else if (act === 'preset') {
+          setSchedDays(i, +btn.dataset.mask);
+          schedDirty = true;
+          updateSlotVisual(i);
+          drawSchedTimeline();
+        }
+      });
+      box.querySelectorAll('[id^=schedDurRange]').forEach(r => {
+        r.addEventListener('input', () => {
+          syncDurDisplay(+r.id.replace('schedDurRange', ''));
+          schedDirty = true;
+          drawSchedTimeline();
+        });
+      });
+      document.getElementById('schedMaster').addEventListener('change', () => { schedDirty = true; drawSchedTimeline(); });
+      drawSchedTimeline();
+    }
+
+    function syncDurDisplay(i) {
+      const r = document.getElementById('schedDurRange' + i);
+      const v = document.getElementById('schedDurVal' + i);
+      if (r && v) v.textContent = r.value + '′';
+    }
+
+    function readSchedDays(i) {
+      let mask = 0;
+      document.querySelectorAll('#schedDays' + i + ' .sched-day.on').forEach(el => {
+        mask |= (1 << +el.dataset.b);
+      });
+      return mask;
+    }
+
+    function setSchedDays(i, mask) {
+      document.querySelectorAll('#schedDays' + i + ' .sched-day').forEach(el => {
+        el.classList.toggle('on', !!(mask & (1 << +el.dataset.b)));
+      });
+    }
+
+    function updateSlotVisual(i) {
+      const slot = document.getElementById('schedSlot' + i);
+      const en = document.getElementById('schedEn' + i);
+      if (slot && en) {
+        slot.classList.toggle('off', !en.checked);
+        slot.classList.toggle('on', en.checked);
+      }
+    }
+
+    function drawSchedTimeline() {
+      const tl = document.getElementById('schedTimeline');
+      if (!tl) return;
+      const master = document.getElementById('schedMaster')?.checked;
+      let html = '';
+      for (let h = 1; h < 24; h++) html += `<div class="tick" style="left:${(h / 24) * 100}%"></div>`;
+      if (master) {
+        [0, 1, 2, 3].forEach(i => {
+          const en = document.getElementById('schedEn' + i);
+          if (!en?.checked) return;
+          const tm = (document.getElementById('schedTime' + i)?.value || '00:00').split(':');
+          const startMin = (+tm[0] || 0) * 60 + (+tm[1] || 0);
+          const dur = +(document.getElementById('schedDurRange' + i)?.value || 30);
+          const left = (startMin / 1440) * 100;
+          const width = Math.min((dur / 1440) * 100, 100 - left);
+          html += `<div class="slot-mark c${i + 1}" style="left:${left}%;width:${width}%" title="#${i + 1}"></div>`;
+        });
+      }
+      tl.innerHTML = html;
+    }
+
+    function formatRemaining(sec) {
+      if (!Number.isFinite(sec)) return '?';
+      sec = Math.max(0, Math.round(sec));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return m > 0 ? m + 'λ ' + s + 'δ' : s + 'δ';
+    }
+
+    function renderGensetSchedule(s) {
+      if (!s) return;
+      lastSchedule = s;
+      if (schedEditing || schedDirty) {
+        updateSchedFooter(s);
+        updateSchedActive(s);
+        return;
+      }
+      const master = document.getElementById('schedMaster');
+      if (master && s.master_enabled != null) master.checked = !!s.master_enabled;
+      const clock = document.getElementById('schedClock');
+      const clockTime = document.getElementById('schedClockTime');
+      const clockMeta = document.getElementById('schedClockMeta');
+      if (clock && clockTime) {
+        if (s.time_synced && s.local_time) {
+          const parts = s.local_time.split(' ');
+          clockTime.textContent = parts[1] || parts[0] || '—';
+          clockMeta.textContent = parts[0] ? 'ESP32 · ' + parts[0] + ' · NTP OK' : 'NTP συγχρονισμένο';
+          clock.classList.add('synced');
+        } else {
+          clockTime.textContent = '—:—:—';
+          clockMeta.textContent = 'Αναμονή συγχρονισμού NTP (WiFi)...';
+          clock.classList.remove('synced');
+        }
+      }
+      (s.slots || []).forEach((slot, i) => {
+        if (i > 3) return;
+        const en = document.getElementById('schedEn' + i);
+        const tm = document.getElementById('schedTime' + i);
+        const durR = document.getElementById('schedDurRange' + i);
+        const slotEl = document.getElementById('schedSlot' + i);
+        if (en) en.checked = !!slot.enabled;
+        if (tm) tm.value = String(slot.hour || 0).padStart(2, '0') + ':' + String(slot.minute || 0).padStart(2, '0');
+        if (durR) durR.value = clamp(slot.duration_min || 30, 5, 600);
+        syncDurDisplay(i);
+        setSchedDays(i, slot.days != null ? slot.days : 0x3E);
+        if (slotEl) {
+          slotEl.classList.toggle('running', s.active_slot === i);
+          updateSlotVisual(i);
+        }
+      });
+      drawSchedTimeline();
+      updateSchedActive(s);
+      updateSchedFooter(s);
+    }
+
+    function updateSchedActive(s) {
+      const bar = document.getElementById('schedActiveBar');
+      const txt = document.getElementById('schedActiveText');
+      const prog = document.getElementById('schedActiveProg');
+      const panel = document.getElementById('schedPanel');
+      if (!bar) return;
+      if (s.active_slot >= 0 && s.master_enabled) {
+        const rem = s.remaining_sec != null ? Math.max(0, s.remaining_sec) : null;
+        const slot = (s.slots || [])[s.active_slot];
+        const durSec = slot ? (slot.duration_min || 30) * 60 : null;
+        bar.classList.add('show');
+        txt.textContent = '▶ Πρόγραμμα #' + (s.active_slot + 1) + ' ενεργό — STOP σε ' + formatRemaining(rem);
+        if (prog && rem != null && durSec) {
+          prog.style.width = clamp((1 - rem / durSec) * 100, 0, 100) + '%';
+        }
+        if (panel) panel.style.borderColor = 'rgba(34,197,94,.5)';
+      } else {
+        bar.classList.remove('show');
+        if (panel) panel.style.borderColor = '';
+        [0, 1, 2, 3].forEach(i => {
+          const el = document.getElementById('schedSlot' + i);
+          if (el) el.classList.remove('running');
+        });
+      }
+    }
+
+    function updateSchedFooter(s) {
+      const sf = document.getElementById('schedFoot');
+      if (!sf || !s) return;
+      if (s.active_slot >= 0 && s.master_enabled) {
+        sf.textContent = '⏰ #' + (s.active_slot + 1) + ' ενεργό · ' + formatRemaining(s.remaining_sec);
+        sf.style.color = 'var(--ok)';
+      } else if (s.time_synced && s.slots) {
+        const on = s.slots.filter(sl => sl.enabled);
+        sf.textContent = on.length
+          ? ('⏰ ' + on.length + ' πρόγραμμα' + (on.length > 1 ? 'τα' : '') + ' · ' + (s.local_time ? s.local_time.split(' ')[1] || '' : ''))
+          : '⏰ Πρόγραμμα: απενεργοποιημένο';
+        sf.style.color = s.master_enabled ? 'var(--l1)' : 'var(--muted)';
+      } else {
+        sf.textContent = '⏰ NTP...';
+        sf.style.color = 'var(--muted)';
+      }
+    }
+
+    function saveGensetSchedule() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const slots = [0, 1, 2, 3].map(i => {
+        const tm = (document.getElementById('schedTime' + i).value || '07:00').split(':');
+        return {
+          enabled: document.getElementById('schedEn' + i).checked,
+          hour: +tm[0] || 0,
+          minute: +tm[1] || 0,
+          duration_min: +(document.getElementById('schedDurRange' + i).value || 30),
+          days: readSchedDays(i)
+        };
+      });
+      pubCmd({
+        genset_schedule: {
+          master_enabled: document.getElementById('schedMaster').checked,
+          slots
+        }
+      });
+      schedDirty = false;
+      toast('Πρόγραμμα αποθηκεύτηκε στο ESP32', 4000);
+    }
+
+    buildSchedSlots();
 
     const stepperEl = document.getElementById('stepper');
     STATE_LABELS.forEach((_, i) => {
@@ -761,20 +1177,7 @@
         renderMeter(j.meter);
       }
       if (j.genset && Date.now() - lastRxAt > 5000) onGenset(j.genset);
-      const sf = document.getElementById('schedFoot');
-      const sch = j.genset_schedule;
-      if (sf && sch) {
-        if (sch.active_slot >= 0) {
-          sf.textContent = 'Πρόγραμμα #' + (sch.active_slot + 1) + ' ενεργό · ~' + (sch.remaining_sec || '?') + 's';
-          sf.style.color = 'var(--ok)';
-        } else if (sch.time_synced && sch.slots) {
-          const on = sch.slots.filter(s => s.enabled);
-          sf.textContent = on.length ? ('Πρόγραμμα: ' + on.length + ' slot(s) · ' + (sch.local_time || '')) : 'Πρόγραμμα: off';
-          sf.style.color = 'var(--muted)';
-        } else {
-          sf.textContent = 'Πρόγραμμα: NTP...';
-        }
-      }
+      if (j.genset_schedule) renderGensetSchedule(j.genset_schedule);
     }
 
     function updateClock() {
@@ -838,6 +1241,10 @@
     document.getElementById('btnConnect').onclick = connect;
     document.getElementById('btnReconnect').onclick = () => {
       document.getElementById('overlay').classList.remove('hide');
+    };
+    document.getElementById('schedSave').onclick = saveGensetSchedule;
+    document.getElementById('schedFoot').onclick = () => {
+      document.getElementById('schedPanel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     document.getElementById('btnStart').onclick = () => {

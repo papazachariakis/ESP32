@@ -153,7 +153,7 @@ def main():
 
         piece = data[sent : sent + CHUNK]
         b64 = base64.b64encode(piece).decode("ascii")
-        client.publish(cmd, json.dumps({"ota_chunk": b64}), qos=1)
+        client.publish(cmd, json.dumps({"ota_chunk": b64}, separators=(",", ":")), qos=1)
         sent += len(piece)
         seq += 1
 

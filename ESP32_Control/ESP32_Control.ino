@@ -571,6 +571,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     JsonObject gd = doc["genset_delay"];
     float startSec = gd.containsKey("start_sec") ? gd["start_sec"].as<float>() : -1;
     float stopSec = gd.containsKey("stop_sec") ? gd["stop_sec"].as<float>() : -1;
+    if (startSec < 0 && gd.containsKey("start_pre_sec"))
+      startSec = gd["start_pre_sec"].as<float>();
+    if (stopSec < 0 && gd.containsKey("stop_pre_sec"))
+      stopSec = gd["stop_pre_sec"].as<float>();
     bool ok = genMgr.setDelaySeconds(startSec, stopSec);
     if (!ok) {
       Serial.printf("MQTT: genset_delay failed: %s\n", genMgr.data.lastError.c_str());

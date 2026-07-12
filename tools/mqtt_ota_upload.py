@@ -90,7 +90,7 @@ def main():
     while sent < size:
         piece = data[sent : sent + CHUNK]
         b64 = base64.b64encode(piece).decode("ascii")
-        payload = json.dumps({"ota_chunk": b64})
+        payload = json.dumps({"ota_chunk": b64}, separators=(",", ":"))
         client.publish(cmd, payload, qos=1)
         sent += len(piece)
         seq += 1

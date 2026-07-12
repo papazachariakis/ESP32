@@ -44,6 +44,8 @@
 #define CUMMINS_REG_RUNTIME_LO    40071
 #define CUMMINS_REG_DELAY_START   402355  // TDES, x0.1 sec
 #define CUMMINS_REG_DELAY_STOP    402356  // TDEC (cooldown), x0.1 sec
+#define CUMMINS_REG_TIME_DELAY_START 403006  // pre-crank delay, x1 sec
+#define CUMMINS_REG_TIME_DELAY_STOP  403007  // pre-cooldown delay, x1 sec
 #define CUMMINS_CMD_START         40300  // Modbus Remote Start 0/1
 #define CUMMINS_CMD_RESET         40301  // Modbus Fault Reset 0/1
 #define CUMMINS_CMD_ESTOP         40302  // Network Shutdown 0/1
@@ -96,6 +98,8 @@ struct GenData {
   float runtimeHours = 0;
   float delayStartSec = 0;
   float delayStopSec = 0;
+  float delayStartPreSec = 0;
+  float delayStopPreSec = 0;
   float delayStartRemainSec = 0;
   float delayStopRemainSec = 0;
   bool delayStartActive = false;
@@ -234,8 +238,12 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
   o["runtime_hours"] = g.runtimeHours;
-  o["delay_start_sec"] = g.delayStartSec;
-  o["delay_stop_sec"] = g.delayStopSec;
+  o["delay_start_sec"] = g.delayStartSec > 0.05f ? g.delayStartSec : g.delayStartPreSec;
+  o["delay_stop_sec"] = g.delayStopSec > 0.05f ? g.delayStopSec : g.delayStopPreSec;
+  o["delay_start_pre_sec"] = g.delayStartPreSec;
+  o["delay_stop_pre_sec"] = g.delayStopPreSec;
+  o["tdes_sec"] = g.delayStartSec;
+  o["tdec_sec"] = g.delayStopSec;
   o["delay_start_remain_sec"] = g.delayStartRemainSec;
   o["delay_stop_remain_sec"] = g.delayStopRemainSec;
   o["delay_start_active"] = g.delayStartActive;
@@ -383,9 +391,12 @@ struct GenManager {
       return false;
     }
 
-    if (running && data.delayStopSec > 0.05f)
-      data.lastError = "stop OK • TDEC " + String(data.delayStopSec, 1)
-        + "s (ο κινητήρας ακόμα τρέχει)";
+    if (running) {
+      const float total = delayStopTotalSec();
+      data.lastError = total > 0
+        ? "stop OK • απομένουν ~" + String(total, 0) + "s"
+        : "stop OK • " + String(cumminsStateLabelEl(data.gensetState));
+    }
     else
       data.lastError = "stop OK • " + String(cumminsStateLabelEl(data.gensetState));
     return true;
@@ -569,48 +580,84 @@ struct GenManager {
     return false;
   }
 
+  float delayStartTotalSec() const {
+    if (data.delayStartSec > 0.05f) return data.delayStartSec;
+    return data.delayStartPreSec;
+  }
+
+  float delayStopTotalSec() const {
+    if (data.delayStopSec > 0.05f) return data.delayStopSec;
+    return data.delayStopPreSec;
+  }
+
+  bool gensetRunning() const {
+    return data.gensetState == 8 || data.engineRpm > 100;
+  }
+
+  bool gensetStopped() const {
+    return data.gensetState <= 1 && data.engineRpm < 50;
+  }
+
   void armStartDelayCountdown() {
-    if (data.delayStartSec <= 0) return;
+    const float total = delayStartTotalSec();
+    if (total <= 0) return;
     startDelayArmed = true;
     startDelayT0 = millis();
     data.delayStartActive = true;
-    data.delayStartRemainSec = data.delayStartSec;
+    data.delayStartRemainSec = total;
   }
 
   void armStopDelayCountdown() {
-    if (data.delayStopSec <= 0) return;
+    const float total = delayStopTotalSec();
+    if (total <= 0) return;
     stopDelayArmed = true;
     stopDelayT0 = millis();
     data.delayStopActive = true;
-    data.delayStopRemainSec = data.delayStopSec;
+    data.delayStopRemainSec = total;
   }
 
   void updateDelayCountdown() {
     const uint16_t rs = data.remoteStartReg;
     const uint8_t st = data.gensetState;
+    const bool running = gensetRunning();
+    const bool stopped = gensetStopped();
 
-    if (rs == 1 && lastRemoteStart != 1 && data.delayStartSec > 0)
-      armStartDelayCountdown();
-    if (startDelayArmed && rs == 1 && st < 4) {
-      float elapsed = (millis() - startDelayT0) / 1000.0f;
-      data.delayStartRemainSec = elapsed < data.delayStartSec ? data.delayStartSec - elapsed : 0;
-      data.delayStartActive = data.delayStartRemainSec > 0.05f;
-      if (st >= 4 || !data.delayStartActive) startDelayArmed = false;
-    } else if (!startDelayArmed) {
+    if (rs == 1 && !running) {
+      const float total = delayStartTotalSec();
+      if (total > 0) {
+        if (!startDelayArmed) armStartDelayCountdown();
+        else {
+          float elapsed = (millis() - startDelayT0) / 1000.0f;
+          data.delayStartRemainSec = elapsed < total ? total - elapsed : 0;
+          data.delayStartActive = true;
+        }
+      }
+    } else {
+      startDelayArmed = false;
       data.delayStartActive = false;
       data.delayStartRemainSec = 0;
     }
-    if (rs == 0) startDelayArmed = false;
 
-    if (rs == 0 && lastRemoteStart == 1 && (st == 8 || st == 13 || data.engineRpm > 80))
-      armStopDelayCountdown();
-    if (stopDelayArmed) {
-      float elapsed = (millis() - stopDelayT0) / 1000.0f;
-      data.delayStopRemainSec = elapsed < data.delayStopSec ? data.delayStopSec - elapsed : 0;
-      data.delayStopActive = data.delayStopRemainSec > 0.05f
-        && (st == 8 || st == 13 || data.engineRpm > 50);
-      if ((st <= 1 && data.engineRpm < 50) || !data.delayStopActive) stopDelayArmed = false;
-    } else {
+    if ((rs == 0 && running) || st == 13) {
+      const float total = delayStopTotalSec();
+      if (total > 0) {
+        if (!stopDelayArmed) armStopDelayCountdown();
+        else {
+          float elapsed = (millis() - stopDelayT0) / 1000.0f;
+          data.delayStopRemainSec = elapsed < total ? total - elapsed : 0;
+          data.delayStopActive = true;
+        }
+      } else {
+        data.delayStopActive = false;
+        data.delayStopRemainSec = 0;
+      }
+      if (stopped) {
+        stopDelayArmed = false;
+        data.delayStopActive = false;
+        data.delayStopRemainSec = 0;
+      }
+    } else if (stopped || (rs == 1 && running)) {
+      stopDelayArmed = false;
       data.delayStopActive = false;
       data.delayStopRemainSec = 0;
     }
@@ -618,7 +665,7 @@ struct GenManager {
     lastRemoteStart = rs;
   }
 
-  bool setDelaySeconds(float startSec, float stopSec) {
+  bool setDelaySeconds(float start403006, float stop403007) {
     data.lastCmd = "set_delay";
     data.lastCmdOk = false;
     data.lastCmdDetail = "";
@@ -626,45 +673,89 @@ struct GenManager {
       data.lastError = "delay write unavailable (enable PS0600 profile)";
       return false;
     }
+    if (start403006 < 0 && stop403007 < 0) {
+      data.lastError = "no delay values";
+      return false;
+    }
 
     pollPaused = true;
     flushBus();
     modbusBusGap(50);
     bool ok = true;
+    bool usedTdes = false;
+    bool usedTdec = false;
+    String note;
 
-    if (startSec >= 0) {
-      if (startSec > 3600) startSec = 3600;
-      uint16_t raw = (uint16_t)(startSec * 10.0f + 0.5f);
-      if (!writeHoldRetry(CUMMINS_REG_DELAY_START, raw)) ok = false;
+    if (start403006 >= 0) {
+      if (start403006 > 300) start403006 = 300;
+      uint16_t raw = (uint16_t)(start403006 + 0.5f);
+      uint8_t exc = 0;
+      if (writeHold(CUMMINS_REG_TIME_DELAY_START, raw, &exc)) {
+        if (!writeHoldRetry(CUMMINS_REG_DELAY_START, 0)) ok = false;
+      } else if (exc == 4) {
+        uint16_t tdes = (uint16_t)(start403006 * 10.0f + 0.5f);
+        if (!writeHoldRetry(CUMMINS_REG_DELAY_START, tdes)) ok = false;
+        else { usedTdes = true; note += " start→TDES"; }
+      } else {
+        ok = false;
+      }
       modbusBusGap(80);
     }
-    if (stopSec >= 0) {
-      if (stopSec > 3600) stopSec = 3600;
-      uint16_t raw = (uint16_t)(stopSec * 10.0f + 0.5f);
-      if (!writeHoldRetry(CUMMINS_REG_DELAY_STOP, raw)) ok = false;
+
+    if (stop403007 >= 0) {
+      if (stop403007 > 600) stop403007 = 600;
+      uint16_t raw = (uint16_t)(stop403007 + 0.5f);
+      uint8_t exc = 0;
+      if (writeHold(CUMMINS_REG_TIME_DELAY_STOP, raw, &exc)) {
+        if (!writeHoldRetry(CUMMINS_REG_DELAY_STOP, 0)) ok = false;
+      } else if (exc == 4) {
+        uint16_t tdec = (uint16_t)(stop403007 * 10.0f + 0.5f);
+        if (!writeHoldRetry(CUMMINS_REG_DELAY_STOP, tdec)) ok = false;
+        else { usedTdec = true; note += " stop→TDEC"; }
+      } else {
+        ok = false;
+      }
       modbusBusGap(80);
     }
 
     uint16_t d[2];
     if (!readBlock(CUMMINS_REG_DELAY_START, 2, d)) {
       ok = false;
-      if (!data.lastError.length()) data.lastError = "delay readback failed";
+      if (!data.lastError.length()) data.lastError = "TDES/TDEC readback failed";
     } else {
       data.delayStartSec = cumminsNaU(d[0]) ? 0 : d[0] * 0.1f;
       data.delayStopSec = cumminsNaU(d[1]) ? 0 : d[1] * 0.1f;
-      if (startSec >= 0 && fabsf(data.delayStartSec - startSec) > 0.2f) {
+    }
+
+    uint16_t td[2];
+    if (!readBlock(CUMMINS_REG_TIME_DELAY_START, 2, td)) {
+      ok = false;
+      if (!data.lastError.length()) data.lastError = "403006/403007 readback failed";
+    } else {
+      data.delayStartPreSec = cumminsNaU(td[0]) ? 0 : (float)td[0];
+      data.delayStopPreSec = cumminsNaU(td[1]) ? 0 : (float)td[1];
+    }
+
+    if (start403006 >= 0 && ok) {
+      float got = usedTdes ? data.delayStartSec : data.delayStartPreSec;
+      if (fabsf(got - start403006) > 0.5f) {
         ok = false;
-        data.lastError = "TDES readback " + String(data.delayStartSec, 1) + "s != " + String(startSec, 1) + "s";
+        data.lastError = (usedTdes ? "TDES" : "403006") + String(" readback ")
+          + String(got, 0) + "s != " + String(start403006, 0) + "s";
       }
-      if (stopSec >= 0 && ok && fabsf(data.delayStopSec - stopSec) > 0.2f) {
+    }
+    if (stop403007 >= 0 && ok) {
+      float got = usedTdec ? data.delayStopSec : data.delayStopPreSec;
+      if (fabsf(got - stop403007) > 0.5f) {
         ok = false;
-        data.lastError = "TDEC readback " + String(data.delayStopSec, 1) + "s != " + String(stopSec, 1) + "s";
+        data.lastError = (usedTdec ? "TDEC" : "403007") + String(" readback ")
+          + String(got, 0) + "s != " + String(stop403007, 0) + "s";
       }
     }
 
     data.lastCmdOk = ok;
     data.lastCmdDetail = ok
-      ? "TDES=" + String(data.delayStartSec, 1) + "s TDEC=" + String(data.delayStopSec, 1) + "s"
+      ? "start=" + String(delayStartTotalSec(), 0) + "s stop=" + String(delayStopTotalSec(), 0) + "s" + note
       : data.lastError;
     publishPending = true;
     pollPaused = false;
@@ -948,6 +1039,12 @@ struct GenManager {
         if (readBlock(CUMMINS_REG_DELAY_START, 2, d)) {
           data.delayStartSec = cumminsNaU(d[0]) ? 0 : d[0] * 0.1f;
           data.delayStopSec = cumminsNaU(d[1]) ? 0 : d[1] * 0.1f;
+          markUpdated();
+        }
+        uint16_t td[2];
+        if (readBlock(CUMMINS_REG_TIME_DELAY_START, 2, td)) {
+          data.delayStartPreSec = cumminsNaU(td[0]) ? 0 : (float)td[0];
+          data.delayStopPreSec = cumminsNaU(td[1]) ? 0 : (float)td[1];
           markUpdated();
         }
         updateDelayCountdown();

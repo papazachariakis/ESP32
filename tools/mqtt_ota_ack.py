@@ -20,7 +20,7 @@ BROKER = "broker.hivemq.com"
 PORT = 1883
 PASSWORD = "esp32ota"
 CHUNK = 512
-GAP_SEC = 6.0
+GAP_SEC = 2.0
 
 
 def parse_rx(rx_s):
@@ -151,7 +151,7 @@ def main():
     while sent < size:
         piece = data[sent : sent + CHUNK]
         b64 = base64.b64encode(piece).decode("ascii")
-        client.publish(cmd, json.dumps({"ota_chunk": b64}), qos=1)
+        client.publish(cmd, json.dumps({"ota_chunk": b64}, separators=(",", ":")), qos=1)
         sent += len(piece)
         seq += 1
 
@@ -193,7 +193,7 @@ def main():
     for _ in range(90):
         time.sleep(2)
         fw = last.get("firmware")
-        if last.get("wifi_connected") and fw and fw != "3.0.12":
+        if last.get("wifi_connected") and fw and fw not in ("3.0.12", "3.0.22"):
             print("SUCCESS: firmware", fw, "ip", last.get("ip"))
             client.loop_stop()
             return 0

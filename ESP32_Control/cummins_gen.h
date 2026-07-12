@@ -359,12 +359,57 @@ struct GenManager {
   }
 
   bool cmdStop() {
+    refreshStatusBlock();
+    readCmdRegs();
+    uint8_t exc = 0;
+
     if (!writeHoldRetry(CUMMINS_CMD_START, 0)) return false;
-    modbusBusGap(200);
-    if (readCmdRegs() && data.remoteStartReg != 0) {
-      data.lastError = "40300 stop readback=" + String(data.remoteStartReg);
+
+    for (uint8_t i = 0; i < 8; i++) {
+      modbusBusGap(250);
+      readCmdRegs();
+      refreshStatusBlock();
+      if (data.remoteStartReg == 0) break;
+      if (data.gensetState == 13 || data.gensetState <= 1) break;
+      if (i == 3 || i == 6) writeHold(CUMMINS_CMD_START, 0, &exc);
+    }
+
+    const bool running = data.gensetState == 8 || data.engineRpm > 100;
+    const bool latched = data.remoteStartReg == 0 || data.gensetState == 13 || data.gensetState <= 1;
+
+    if (!latched && running) {
+      data.lastError = "stop απορρίφθηκε: 40300=" + String(data.remoteStartReg)
+        + " state=" + String(data.gensetState) + " rpm=" + String(data.engineRpm);
       return false;
     }
+
+    if (running && data.delayStopSec > 0.05f)
+      data.lastError = "stop OK • TDEC " + String(data.delayStopSec, 1)
+        + "s (ο κινητήρας ακόμα τρέχει)";
+    else
+      data.lastError = "stop OK • " + String(cumminsStateLabelEl(data.gensetState));
+    return true;
+  }
+
+  bool cmdStopHard() {
+    refreshStatusBlock();
+    readCmdRegs();
+    uint8_t exc = 0;
+
+    writeHoldRetry(CUMMINS_CMD_START, 0);
+    modbusBusGap(80);
+    if (!writeHold(CUMMINS_CMD_ESTOP, 1, &exc)) {
+      data.lastError = writeError(CUMMINS_CMD_ESTOP, exc);
+      return false;
+    }
+    modbusBusGap(200);
+    writeHold(CUMMINS_CMD_ESTOP, 0, &exc);
+    modbusBusGap(100);
+    writeHoldRetry(CUMMINS_CMD_START, 0);
+    modbusBusGap(400);
+    refreshStatusBlock();
+    readCmdRegs();
+    data.lastError = "stop_hard OK • Network Shutdown";
     return true;
   }
 
@@ -653,10 +698,13 @@ struct GenManager {
       }
     } else if (strcmp(action, "stop") == 0) {
       ok = cmdStop();
-      if (ok) {
+      if (ok && (data.gensetState == 8 || data.engineRpm > 100 || data.gensetState == 13))
         armStopDelayCountdown();
-        data.lastError = "stop OK • reg40300=0";
-      }
+    } else if (strcmp(action, "stop_hard") == 0) {
+      ok = cmdStopHard();
+      stopDelayArmed = false;
+      data.delayStopActive = false;
+      data.delayStopRemainSec = 0;
     } else if (strcmp(action, "reset") == 0) {
       ok = cmdFaultReset();
       if (!ok && data.lastError.length() == 0) data.lastError = "fault reset write 40301 failed";

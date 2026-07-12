@@ -299,7 +299,7 @@
     .alarm-ok{color:var(--ok);font-size:.75rem;padding:8px}
 
     .ctrl{padding:8px 10px 12px;border-top:1px solid var(--line)}
-    .ctrl-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .ctrl-btns{display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px}
     .btn{
       font-family:var(--display);font-weight:700;font-size:.78rem;letter-spacing:.06em;
       padding:14px 8px;border-radius:8px;border:2px solid var(--line);
@@ -632,6 +632,7 @@
           <div class="ctrl-btns">
             <button type="button" class="btn start" id="btnStart">▶ START</button>
             <button type="button" class="btn stop" id="btnStop">■ STOP</button>
+            <button type="button" class="btn stop" id="btnStopNow" style="font-size:.62rem;padding:10px 6px" title="Άμεση διακοπή (Network Shutdown)">⚡ ΤΩΡΑ</button>
           </div>
           <div class="mode-row" title="Αλλαγή μόνο από φυσικό διακόπτη στο panel">
             <span class="btn mode" data-mode="0">OFF</span>
@@ -644,7 +645,7 @@
               <strong class="cd-val" id="delayCdStart">—</strong>
             </div>
             <div class="delay-cd idle" id="delayCdStopBox">
-              <span class="cd-label">STOP COUNTDOWN</span>
+              <span class="cd-label" id="delayCdStopLabel">STOP COUNTDOWN</span>
               <strong class="cd-val" id="delayCdStop">—</strong>
             </div>
           </div>
@@ -1100,7 +1101,9 @@
         delayTick.t0 = Date.now();
         stopBox.classList.add('active');
         stopBox.classList.remove('idle');
-        stopEl.textContent = fmtCountdown(delayTick.stop);
+        const running = d.running === true || Number(d.genset_state) === 8 || Number(d.engine_rpm) > 100;
+        document.getElementById('delayCdStopLabel').textContent = running ? 'COOLDOWN TDEC' : 'STOP COUNTDOWN';
+        stopEl.textContent = fmtCountdown(delayTick.stop) + (running ? ' · RUN' : '');
       } else {
         delayTick.stop = null;
         stopBox.classList.remove('active');
@@ -1122,11 +1125,14 @@
       }
       if (delayTick.stop != null) {
         const rem = Math.max(0, delayTick.stop - elapsed);
-        document.getElementById('delayCdStop').textContent = fmtCountdown(rem);
+        const running = lastGenset && (lastGenset.running === true || Number(lastGenset.genset_state) === 8 || Number(lastGenset.engine_rpm) > 100);
+        document.getElementById('delayCdStop').textContent = fmtCountdown(rem) + (running ? ' · RUN' : '');
         if (rem <= 0) {
           delayTick.stop = null;
           document.getElementById('delayCdStopBox').classList.remove('active');
           document.getElementById('delayCdStopBox').classList.add('idle');
+          document.getElementById('delayCdStopLabel').textContent = 'STOP COUNTDOWN';
+          if (running) toast('⚠ TDEC έληξε αλλά η γεννήτρια ακόμα τρέχει — δοκίμασε ⚡ ΤΩΡΑ', 8000);
         }
       }
     }
@@ -1442,9 +1448,20 @@
     };
     document.getElementById('btnStop').onclick = () => {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
-      if (!confirm('Διακοπή γεννήτριας;')) return;
+      const tdec = lastGenset && Number.isFinite(+lastGenset.delay_stop_sec) ? lastGenset.delay_stop_sec : '?';
+      const msg = 'Διακοπή γεννήτριας;\n\n'
+        + 'Με STOP η γεννήτρια συνεχίζει να τρέχει κατά το cooldown TDEC (~' + tdec + ' s)\n'
+        + 'και μετά σταματά.\n\n'
+        + 'Για άμεση διακοπή πάτα ⚡ ΤΩΡΑ.';
+      if (!confirm(msg)) return;
       pubCmd({ genset: 'stop' });
-      toast('STOP στάλθηκε');
+      toast('STOP — cooldown TDEC…', 5000);
+    };
+    document.getElementById('btnStopNow').onclick = () => {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Άμεση διακοπή (Network Shutdown);\n\nΧωρίς cooldown TDEC. Συνέχεια;')) return;
+      pubCmd({ genset: 'stop_hard' });
+      toast('⚡ STOP NOW στάλθηκε', 5000);
     };
 
     window.addEventListener('resize', drawSparkline);

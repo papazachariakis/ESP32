@@ -2301,6 +2301,10 @@
       return firmwareNum(fw) < firmwareNum('3.0.13');
     }
 
+    function supportsEspHttpsPull(fw) {
+      return firmwareNum(fw) >= firmwareNum('3.0.23');
+    }
+
     async function otaPrepareDeviceQuiet() {
       toast('Προετοιμασία ESP32 (αποσύνδεση BLE / παύση Modbus)...', 4000);
       pubCmd({ ble_disconnect: true });
@@ -2526,8 +2530,12 @@
         }
       }
       await otaPrepareDeviceQuiet();
-      if (await remoteOtaEspPull(pw)) return;
-      toast('ESP pull απέτυχε — browser push…', 6000);
+      if (supportsEspHttpsPull(s.firmware)) {
+        if (await remoteOtaEspPull(pw)) return;
+        toast('ESP pull απέτυχε — browser push…', 6000);
+      } else {
+        toast(`v${s.firmware || '?'} — MQTT browser push (HTTPS pull από v3.0.23+)`, 7000);
+      }
       if (await remoteOtaBrowserPush(pw)) return;
       toast('OTA απέτυχε και τα δύο. Reboot ESP32 και ξαναδοκίμασε.', 8000);
     }

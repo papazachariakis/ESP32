@@ -128,6 +128,26 @@ inline void otaResetDownloadProgress() {
   otaDownloadReceived() = 0;
 }
 
+inline void otaForceReset() {
+  if (mqttOtaActive()) Update.abort();
+  mqttOtaActive() = false;
+  mqttOtaExpected() = 0;
+  mqttOtaReceived() = 0;
+  otaInProgress() = false;
+  remoteOtaPending() = false;
+  httpOtaPending() = false;
+  httpOtaUrl() = "";
+  otaResetDownloadProgress();
+  lastOtaError() = "";
+  otaErrorAt() = 0;
+  otaPhase() = "";
+}
+
+inline void otaAbortRemote() {
+  otaForceReset();
+  otaNotifyStatus();
+}
+
 inline bool otaErrorVisible() {
   if (!lastOtaError().length()) return false;
   if (mqttOtaActive() || otaInProgress()) return true;
@@ -135,9 +155,8 @@ inline bool otaErrorVisible() {
 }
 
 inline void requestRemoteOta() {
+  otaForceReset();
   otaPhase() = "queued";
-  lastOtaError() = "";
-  otaResetDownloadProgress();
   remoteOtaPending() = true;
   otaNotifyStatus();
 }
@@ -548,7 +567,13 @@ inline bool performPendingHttpOta() {
 }
 
 inline bool mqttOtaBegin(int size) {
-  if (mqttOtaActive()) return false;
+  if (mqttOtaActive()) {
+    Update.abort();
+    mqttOtaActive() = false;
+    mqttOtaExpected() = 0;
+    mqttOtaReceived() = 0;
+    otaInProgress() = false;
+  }
   if (size < 500000 || size > 1966080) {
     otaSetError("mqtt", "bad size");
     return false;

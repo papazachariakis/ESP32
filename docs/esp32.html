@@ -1184,7 +1184,7 @@
     const BOARD_LABEL = 'ESP32 Classic';
     const OTA_FIRMWARE_FILE = 'firmware.bin';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware.bin';
-    const EXPECTED_FIRMWARE = '3.0.36';
+    const EXPECTED_FIRMWARE = '3.0.37';
     const MQTT_CMD_PW = 'esp32ota';
 
     function pubCmd(obj) {
@@ -1297,14 +1297,21 @@
 
     function refreshOtaProgressFromStatus(j) {
       if (!otaUiActive || !j) return;
-      const total = parseOtaExpectedTotal(j.ota_mqtt_rx) || otaExpectedTotal || 0;
-      if (total > 0) otaExpectedTotal = total;
-      updateOtaProgressUi({
-        phase: j.ota_phase || 'starting',
-        rx: parseOtaRx(j.ota_mqtt_rx),
-        total,
-        sent: otaBrowserSent
-      });
+      const phase = j.ota_phase || 'starting';
+      let total = otaExpectedTotal || 0;
+      let rx = 0;
+      const pullPhase = phase.indexOf('download') >= 0 || phase.indexOf('connect') >= 0;
+      const mqttPhase = phase === 'mqtt_rx';
+      if (pullPhase || mqttPhase) {
+        const stTotal = parseOtaExpectedTotal(j.ota_mqtt_rx);
+        const stRx = parseOtaRx(j.ota_mqtt_rx);
+        if (stTotal > 0) { total = stTotal; otaExpectedTotal = stTotal; }
+        rx = stRx;
+      }
+      if (mqttPhase || otaBrowserSent > 0) {
+        rx = Math.max(rx, otaBrowserSent, parseOtaRx(j.ota_mqtt_rx));
+      }
+      updateOtaProgressUi({ phase, rx, total, sent: otaBrowserSent });
       if (j.ota_error) {
         const detailEl = document.getElementById('otaProgressDetail');
         if (detailEl) detailEl.textContent = 'Σφάλμα: ' + j.ota_error;
@@ -2189,10 +2196,27 @@
       }
       return false;
     }
+    function isStuckPartialOta(s) {
+      if (!s) return false;
+      const rx = parseOtaRx(s.ota_mqtt_rx);
+      const total = parseOtaExpectedTotal(s.ota_mqtt_rx);
+      if (total > 0 && rx > 0 && rx < total) return true;
+      return s.ota_phase === 'mqtt_rx' && total > 0 && rx < total;
+    }
+    async function otaClearStuckSession(pw) {
+      pubCmd({ ota_abort: true });
+      await sleepMs(2000);
+      if (!isStuckPartialOta(lastStatus || {})) return true;
+      toast('Παλιό OTA κολλημένο — reboot ESP32…', 7000);
+      for (let i = 0; i < 5; i++) client.publish(cmdTopic, JSON.stringify({ password: pw, reboot: pw }), { qos: 1 });
+      await sleepMs(30000);
+      return true;
+    }
     async function otaPrepareDeviceQuiet() {
       toast('Προετοιμασία ESP32 (BLE off / Modbus pause)...', 4000);
       pubCmd({ ble_disconnect: true });
       pubCmd({ modbus_cfg: { enabled: false } });
+      pubCmd({ ota_abort: true });
       await sleepMs(4000);
     }
     async function remoteOtaBrowserPush(pw) {
@@ -2242,10 +2266,18 @@
     async function remoteOtaEspPull(pw) {
       updateOtaProgressUi({ phase: 'queued', rx: 0, total: 0, sent: 0 });
       client.publish(cmdTopic, JSON.stringify({ ota: pw }), { qos: 1 });
+      let sawDownload = false;
+      const queuedSince = Date.now();
       for (let i = 0; i < 100; i++) {
         await sleepMs(3000);
         const s = lastStatus || {};
+        const phase = s.ota_phase || '';
         refreshOtaProgressFromStatus(s);
+        if (phase.indexOf('download') >= 0 || phase.indexOf('connect') >= 0) sawDownload = true;
+        if (!sawDownload && phase === 'queued' && Date.now() - queuedSince > 45000) {
+          toast('ESP32 κολλημένο — δοκιμή browser push…', 7000);
+          return false;
+        }
         if (s.ota_error && s.ota_phase !== 'rebooting') {
           toast('ESP pull σφάλμα: ' + s.ota_error, 7000);
           return false;
@@ -2283,6 +2315,11 @@
       if (!confirm(`Απομακρυσμένη OTA v${EXPECTED_FIRMWARE}\n\nFirmware τώρα: v${s.firmware || '?'}\n\nΜΗΝ κλείσεις το tab.`)) return;
       closeDrawer();
       showOtaProgress();
+      if (isStuckPartialOta(s) || s.ota_error) {
+        if (confirm('Υπάρχει παλιό/κολλημένο OTA.\n\nΔοκιμή καθαρισμού + reboot ESP32;')) {
+          await otaClearStuckSession(pw);
+        }
+      }
       await otaPrepareDeviceQuiet();
       let ok = false;
       if (supportsEspHttpsPull(s.firmware)) {

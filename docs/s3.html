@@ -1200,7 +1200,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.36';
+    const EXPECTED_FIRMWARE = '3.0.37';
     const DASHBOARD_BUILD = '2026-07-12-stopfix';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
@@ -1317,14 +1317,21 @@
 
     function refreshOtaProgressFromStatus(j) {
       if (!otaUiActive || !j) return;
-      const total = parseOtaExpectedTotal(j.ota_mqtt_rx) || otaExpectedTotal || 0;
-      if (total > 0) otaExpectedTotal = total;
-      updateOtaProgressUi({
-        phase: j.ota_phase || 'starting',
-        rx: parseOtaRx(j.ota_mqtt_rx),
-        total,
-        sent: otaBrowserSent
-      });
+      const phase = j.ota_phase || 'starting';
+      let total = otaExpectedTotal || 0;
+      let rx = 0;
+      const pullPhase = phase.indexOf('download') >= 0 || phase.indexOf('connect') >= 0;
+      const mqttPhase = phase === 'mqtt_rx';
+      if (pullPhase || mqttPhase) {
+        const stTotal = parseOtaExpectedTotal(j.ota_mqtt_rx);
+        const stRx = parseOtaRx(j.ota_mqtt_rx);
+        if (stTotal > 0) { total = stTotal; otaExpectedTotal = stTotal; }
+        rx = stRx;
+      }
+      if (mqttPhase || otaBrowserSent > 0) {
+        rx = Math.max(rx, otaBrowserSent, parseOtaRx(j.ota_mqtt_rx));
+      }
+      updateOtaProgressUi({ phase, rx, total, sent: otaBrowserSent });
       if (j.ota_error) {
         const detailEl = document.getElementById('otaProgressDetail');
         if (detailEl) detailEl.textContent = 'Σφάλμα: ' + j.ota_error;
@@ -2363,6 +2370,23 @@
       return s.ota_phase === 'mqtt' && !!s.ota_error;
     }
 
+    function isStuckPartialOta(s) {
+      if (!s) return false;
+      const rx = parseOtaRx(s.ota_mqtt_rx);
+      const total = parseOtaExpectedTotal(s.ota_mqtt_rx);
+      if (total > 0 && rx > 0 && rx < total) return true;
+      return s.ota_phase === 'mqtt_rx' && total > 0 && rx < total;
+    }
+
+    async function otaClearStuckSession(pw) {
+      pubCmd({ ota_abort: true });
+      await sleepMs(2000);
+      const s = lastStatus || {};
+      if (!isStuckPartialOta(s) && s.ota_phase !== 'queued') return true;
+      toast('Παλιό OTA κολλημένο — reboot ESP32…', 7000);
+      return mqttRebootAndWait(pw);
+    }
+
     function sendMqttReboot(pw) {
       const payload = JSON.stringify({ password: pw, reboot: pw });
       for (let i = 0; i < 5; i++) {
@@ -2448,6 +2472,7 @@
       toast('Προετοιμασία ESP32 (αποσύνδεση BLE / παύση Modbus)...', 4000);
       pubCmd({ ble_disconnect: true });
       pubCmd({ modbus_cfg: { enabled: false } });
+      pubCmd({ ota_abort: true });
       await sleepMs(4000);
     }
 
@@ -2581,21 +2606,42 @@
       return true;
     }
 
-    async function remoteOtaEspPull(pw) {
+    async function remoteOtaEspPull(pw, rebootRetries = 1) {
       updateOtaProgressUi({ phase: 'queued', rx: 0, total: 0, sent: 0 });
       client.publish(cmdTopic, JSON.stringify({ ota: pw }), { qos: 1 });
-      let sawPull = false;
+      let sawDownload = false;
+      let lastRx = -1;
+      let lastProgressAt = Date.now();
+      const queuedSince = Date.now();
       for (let i = 0; i < 100; i++) {
         await sleepMs(3000);
         const s = lastStatus || {};
+        const phase = s.ota_phase || '';
         refreshOtaProgressFromStatus(s);
-        if (s.ota_phase === 'queued' || (s.ota_phase && s.ota_phase.indexOf('http') >= 0)) sawPull = true;
-        if (sawPull && s.ota_error && s.ota_phase !== 'rebooting') {
+        if (phase.indexOf('download') >= 0 || phase.indexOf('connect') >= 0) {
+          sawDownload = true;
+          const rx = parseOtaRx(s.ota_mqtt_rx);
+          if (rx > lastRx) { lastRx = rx; lastProgressAt = Date.now(); }
+        }
+        if (!sawDownload && phase === 'queued' && Date.now() - queuedSince > 45000) {
+          if (rebootRetries <= 0) {
+            toast('ESP32 δεν ξεκίνησε download — δοκιμή browser push…', 7000);
+            return false;
+          }
+          toast('ESP32 κολλημένο — reboot και ξανά…', 7000);
+          if (!await mqttRebootAndWait(pw)) return false;
+          return remoteOtaEspPull(pw, rebootRetries - 1);
+        }
+        if (sawDownload && lastRx >= 0 && Date.now() - lastProgressAt > 90000) {
+          toast('Download κόλλησε — δοκιμή browser push…', 7000);
+          return false;
+        }
+        if (s.ota_error && s.ota_phase !== 'rebooting') {
           toast('ESP pull σφάλμα: ' + s.ota_error, 7000);
           return false;
         }
         if (s.ota_phase === 'rebooting') return true;
-        if (i > 25 && !sawPull && !isStaleOtaFailure(s)) {
+        if (i > 25 && !sawDownload && !isStaleOtaFailure(s)) {
           toast('ESP32 δεν ξεκίνησε download — δοκιμή browser push…', 6000);
           return false;
         }
@@ -2651,9 +2697,9 @@
       if (!confirm(msg)) return;
       closeDrawer();
       showOtaProgress();
-      if (isStaleOtaFailure(s) || s.ota_error) {
-        if (confirm('Υπάρχει παλιό OTA σφάλμα.\n\nΔοκιμή reboot ESP32 πρώτα; (συνιστάται)')) {
-          if (!await mqttRebootAndWait(pw)) {
+      if (isStaleOtaFailure(s) || s.ota_error || isStuckPartialOta(s)) {
+        if (confirm('Υπάρχει παλιό/κολλημένο OTA.\n\nΔοκιμή καθαρισμού + reboot ESP32; (συνιστάται)')) {
+          if (!await otaClearStuckSession(pw)) {
             toast('Reboot απέτυχε — συνεχίζω OTA χωρίς reboot', 6000);
           } else {
             lastOtaErrorToast = '';

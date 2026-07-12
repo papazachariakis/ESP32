@@ -671,6 +671,16 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     ESP.restart();
   }
 
+  if (doc.containsKey("ota_abort")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: ota_abort rejected (bad password)");
+      return;
+    }
+    Serial.println("MQTT: OTA abort / reset");
+    otaAbortRemote();
+    publishStatus();
+  }
+
   if (doc.containsKey("ota")) {
     if (!mqttDocAuthorized(doc)) {
       Serial.println("MQTT: ota rejected (bad password)");

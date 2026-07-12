@@ -979,7 +979,7 @@
           <div class="card-title" style="margin:0;padding:0;border:0">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
           <label class="cfg-en" style="margin:0"><input type="checkbox" id="schedMaster" checked /> Ενεργό</label>
         </div>
-        <p class="small muted" style="margin-bottom:10px">Ο ESP32-S3 ξεκινά/σταματά τη γεννήτρια αυτόματα (NTP ώρα Ελλάδας). Χρειάζεται WiFi + Modbus γεννήτριας ενεργό.</p>
+        <p class="small muted" style="margin-bottom:10px">Ο ESP32-S3 ξεκινά/σταματά τη γεννήτρια αυτόματα (NTP ώρα Ελλάδας). Χρειάζεται WiFi + Modbus γεννήτριας ενεργό. Μετά τις αλλαγές πάτα <b>Αποθήκευση προγράμματος</b>.</p>
         <div class="sched-meta" id="schedMeta">Ώρα συσκευής: —</div>
         <div id="schedRows"></div>
         <div class="gen-actions" style="margin-top:8px">
@@ -1156,8 +1156,8 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.20';
-    const DASHBOARD_BUILD = '2026-07-11-toastfix';
+    const EXPECTED_FIRMWARE = '3.0.24';
+    const DASHBOARD_BUILD = '2026-07-12-sched-tz';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
     const MQTT_CMD_PW = 'esp32ota';
@@ -1457,18 +1457,22 @@
       const otaExp = document.getElementById('otaExpectedFw');
       if (otaExp) otaExp.textContent = EXPECTED_FIRMWARE;
       const label = fw ? ('v' + fw) : '—';
+      const curNum = firmwareNum(fw);
+      const expNum = firmwareNum(EXPECTED_FIRMWARE);
+      const upToDate = fw && curNum >= expNum;
+      const updateAvail = fw && expNum > curNum;
       if (el) {
         el.textContent = label;
-        el.style.color = !fw ? '' : (fw === EXPECTED_FIRMWARE ? 'var(--ok)' : 'var(--warn)');
+        el.style.color = !fw ? '' : (upToDate ? 'var(--ok)' : 'var(--warn)');
       }
       if (top) {
         top.classList.toggle('show', !!fw);
-        top.classList.toggle('ok', fw === EXPECTED_FIRMWARE);
-        top.classList.toggle('warn', !!fw && fw !== EXPECTED_FIRMWARE);
+        top.classList.toggle('ok', upToDate);
+        top.classList.toggle('warn', updateAvail);
         const b = top.querySelector('b');
         if (b) b.textContent = label;
         top.title = fw
-          ? (fw === EXPECTED_FIRMWARE ? 'Firmware ενημερωμένο' : `Firmware v${fw} — διαθέσιμο v${EXPECTED_FIRMWARE}`)
+          ? (upToDate ? 'Firmware ενημερωμένο' : `Firmware v${fw} — διαθέσιμο v${EXPECTED_FIRMWARE}`)
           : 'Firmware ESP32';
       }
       if (otaCur) otaCur.textContent = fw ? ('v' + fw) : '—';
@@ -1975,7 +1979,9 @@
     }
 
     const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
+    const SCHED_DEFAULT_DAYS = 0x3E; // Mon–Fri
     let schedEditing = false;
+    let schedDirty = false;
 
     function buildSchedRows() {
       const box = document.getElementById('schedRows');
@@ -1983,14 +1989,18 @@
       box.innerHTML = [0, 1, 2, 3].map(i => `
         <div class="sched-row" id="schedRow${i}">
           <div class="sched-row-top">
-            <label class="cfg-en"><input type="checkbox" id="schedEn${i}" onfocus="schedEditing=true" onblur="schedEditing=false" /> #${i + 1}</label>
-            <label>Ώρα <input type="time" id="schedTime${i}" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
-            <label>Διάρκεια (λεπτά) <input type="number" id="schedDur${i}" min="1" max="600" value="30" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
+            <label class="cfg-en"><input type="checkbox" id="schedEn${i}" onchange="schedDirty=true" onfocus="schedEditing=true" onblur="schedEditing=false" /> #${i + 1}</label>
+            <label>Ώρα <input type="time" id="schedTime${i}" onchange="schedDirty=true" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
+            <label>Διάρκεια (λεπτά) <input type="number" id="schedDur${i}" min="1" max="600" value="30" onchange="schedDirty=true" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
           </div>
           <div class="sched-days">${SCHED_DAY_BITS.map((d, b) =>
-            `<label><input type="checkbox" id="schedDay${i}_${b}" onfocus="schedEditing=true" onblur="schedEditing=false" /> ${d}</label>`
+            `<label><input type="checkbox" id="schedDay${i}_${b}" ${(SCHED_DEFAULT_DAYS & (1 << b)) ? 'checked' : ''} onchange="schedDirty=true" onfocus="schedEditing=true" onblur="schedEditing=false" /> ${d}</label>`
           ).join('')}</div>
         </div>`).join('');
+      [0, 1, 2, 3].forEach(i => {
+        const tm = document.getElementById('schedTime' + i);
+        if (tm && !tm.value) tm.value = i === 0 ? '07:00' : '00:00';
+      });
     }
     buildSchedRows();
 
@@ -2011,7 +2021,7 @@
     }
 
     function renderGensetSchedule(s) {
-      if (!s || schedEditing) return;
+      if (!s || schedEditing || schedDirty) return;
       const master = document.getElementById('schedMaster');
       if (master && s.master_enabled != null) master.checked = !!s.master_enabled;
       const meta = document.getElementById('schedMeta');
@@ -2063,7 +2073,14 @@
           slots
         }
       });
+      schedDirty = false;
       toast('Χρονοπρογραμματισμός αποθηκεύτηκε στο ESP32', 4000);
+    }
+
+    function schedDaysLabel(mask) {
+      const bits = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
+      const on = bits.filter((_, b) => mask & (1 << b));
+      return on.length ? on.join(' ') : '—';
     }
 
     function syncGenModeButtons(opMode) {

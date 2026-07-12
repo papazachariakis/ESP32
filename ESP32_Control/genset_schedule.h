@@ -111,9 +111,10 @@ struct GenSchedule {
   }
 
   void begin() {
+    // Explicit Greece offset — POSIX TZ alone often leaves ESP32 on UTC in Arduino builds
     setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1);
     tzset();
-    configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+    configTime(7200, 3600, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
     ntpStartedMs = millis();
   }
 

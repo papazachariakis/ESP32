@@ -113,6 +113,21 @@ inline int& mqttOtaReceived() {
   return received;
 }
 
+inline int& otaDownloadTotal() {
+  static int total = 0;
+  return total;
+}
+
+inline int& otaDownloadReceived() {
+  static int received = 0;
+  return received;
+}
+
+inline void otaResetDownloadProgress() {
+  otaDownloadTotal() = 0;
+  otaDownloadReceived() = 0;
+}
+
 inline bool otaErrorVisible() {
   if (!lastOtaError().length()) return false;
   if (mqttOtaActive() || otaInProgress()) return true;
@@ -122,6 +137,7 @@ inline bool otaErrorVisible() {
 inline void requestRemoteOta() {
   otaPhase() = "queued";
   lastOtaError() = "";
+  otaResetDownloadProgress();
   remoteOtaPending() = true;
   otaNotifyStatus();
 }
@@ -313,8 +329,13 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     return false;
   }
 
+  if (!unknownSize) otaDownloadTotal() = contentLen;
+  otaDownloadReceived() = hdrRead;
+  otaNotifyStatus();
+
   uint8_t buf[1024];
   int total = hdrRead;
+  int lastNotify = hdrRead;
   unsigned long lastData = millis();
   while (millis() - lastData < 180000) {
     if (!unknownSize && total >= contentLen) break;
@@ -342,12 +363,17 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
       return false;
     }
     total += n;
-    if ((total % 65536) == 0) {
+    otaDownloadReceived() = total;
+    if (total - lastNotify >= 8192) {
+      lastNotify = total;
       Serial.printf("OTA download: %d%s\n", total, unknownSize ? "" : (String(" / ") + contentLen).c_str());
       otaNotifyStatus();
     }
     otaPump();
   }
+
+  otaDownloadReceived() = total;
+  otaNotifyStatus();
 
   if ((!unknownSize && total != contentLen) || !Update.end(true)) {
     Update.printError(Serial);

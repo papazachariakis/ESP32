@@ -265,6 +265,10 @@ String buildStatusJson() {
     char buf[48];
     snprintf(buf, sizeof(buf), "%d/%d", mqttOtaReceived(), mqttOtaExpected());
     doc["ota_mqtt_rx"] = buf;
+  } else if (otaDownloadTotal() > 0) {
+    char buf[48];
+    snprintf(buf, sizeof(buf), "%d/%d", otaDownloadReceived(), otaDownloadTotal());
+    doc["ota_mqtt_rx"] = buf;
   }
 
   JsonArray outputs = doc.createNestedArray("outputs");

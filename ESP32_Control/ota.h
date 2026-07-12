@@ -129,7 +129,7 @@ inline void otaResetDownloadProgress() {
 }
 
 inline void otaForceReset() {
-  if (mqttOtaActive()) Update.abort();
+  Update.abort();
   mqttOtaActive() = false;
   mqttOtaExpected() = 0;
   mqttOtaReceived() = 0;
@@ -344,6 +344,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     return false;
   }
   if (Update.write(header, hdrRead) != (size_t)hdrRead) {
+    Update.abort();
     otaSetError("download", "write failed");
     return false;
   }
@@ -378,6 +379,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     if (n <= 0) break;
     if (Update.write(buf, n) != (size_t)n) {
       Update.printError(Serial);
+      Update.abort();
       otaSetError("download", "write failed");
       return false;
     }
@@ -396,6 +398,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
 
   if ((!unknownSize && total != contentLen) || !Update.end(true)) {
     Update.printError(Serial);
+    Update.abort();
     otaSetError("download", unknownSize ? "incomplete chunked image" : "incomplete image");
     return false;
   }
@@ -552,6 +555,7 @@ inline bool performRemoteOta() {
 
   otaInProgress() = false;
   otaSetError("failed", "GitHub/jsDelivr download failed");
+  Update.abort();
   return false;
 }
 
@@ -567,13 +571,11 @@ inline bool performPendingHttpOta() {
 }
 
 inline bool mqttOtaBegin(int size) {
-  if (mqttOtaActive()) {
-    Update.abort();
-    mqttOtaActive() = false;
-    mqttOtaExpected() = 0;
-    mqttOtaReceived() = 0;
-    otaInProgress() = false;
-  }
+  Update.abort();
+  mqttOtaActive() = false;
+  mqttOtaExpected() = 0;
+  mqttOtaReceived() = 0;
+  otaInProgress() = false;
   if (size < 500000 || size > 1966080) {
     otaSetError("mqtt", "bad size");
     return false;
@@ -581,6 +583,7 @@ inline bool mqttOtaBegin(int size) {
   otaPrepareFlash();
   if (!Update.begin(size)) {
     Update.printError(Serial);
+    Update.abort();
     otaSetError("mqtt", "Update.begin failed");
     return false;
   }
@@ -596,7 +599,6 @@ inline bool mqttOtaBegin(int size) {
 }
 
 inline void mqttOtaAbort(const char* why) {
-  if (!mqttOtaActive()) return;
   Update.abort();
   mqttOtaActive() = false;
   mqttOtaExpected() = 0;

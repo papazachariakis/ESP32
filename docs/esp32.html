@@ -2212,6 +2212,13 @@
       await sleepMs(30000);
       return true;
     }
+    async function otaReleaseFlashBeforePush(pw) {
+      updateOtaProgressUi({ phase: 'starting', rx: 0, total: 0, sent: 0 });
+      toast('Καθαρισμός flash πριν το browser push…', 4000);
+      pubCmd({ ota_abort: true });
+      await sleepMs(3000);
+      if ((lastStatus || {}).ota_error) await sleepMs(2000);
+    }
     async function otaPrepareDeviceQuiet() {
       toast('Προετοιμασία ESP32 (BLE off / Modbus pause)...', 4000);
       pubCmd({ ble_disconnect: true });
@@ -2328,7 +2335,10 @@
       } else {
         toast(`v${s.firmware || '?'} — MQTT browser push (pull από v3.0.23+)`, 7000);
       }
-      if (!ok) ok = await remoteOtaBrowserPush(pw);
+      if (!ok) {
+        await otaReleaseFlashBeforePush(pw);
+        ok = await remoteOtaBrowserPush(pw);
+      }
       if (ok) {
         hideOtaProgress(true);
         toast('OTA OK — επανεκκίνηση ESP32…', 5000);

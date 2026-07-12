@@ -278,7 +278,8 @@ inline bool otaReadHttpHeaders(Client& client, int& contentLen) {
 }
 
 inline bool otaDownloadBody(Client& client, int contentLen) {
-  if (contentLen < 500000 || contentLen > 1966080) {
+  const bool unknownSize = (contentLen <= 0);
+  if (!unknownSize && (contentLen < 500000 || contentLen > 1966080)) {
     otaSetError("download", "bad firmware size");
     return false;
   }
@@ -302,7 +303,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     return false;
   }
 
-  if (!Update.begin(contentLen)) {
+  if (!Update.begin(unknownSize ? UPDATE_SIZE_UNKNOWN : (size_t)contentLen)) {
     Update.printError(Serial);
     otaSetError("download", "Update.begin failed");
     return false;
@@ -315,11 +316,12 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
   uint8_t buf[1024];
   int total = hdrRead;
   unsigned long lastData = millis();
-  while (total < contentLen && millis() - lastData < 180000) {
+  while (millis() - lastData < 180000) {
+    if (!unknownSize && total >= contentLen) break;
     int avail = client.available();
     if (avail <= 0) {
       if (!client.connected()) {
-        if (total >= contentLen) break;
+        if (unknownSize || total >= contentLen) break;
         delay(10);
         yield();
         continue;
@@ -331,7 +333,7 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     lastData = millis();
     int chunk = avail;
     if (chunk > (int)sizeof(buf)) chunk = sizeof(buf);
-    if (chunk > contentLen - total) chunk = contentLen - total;
+    if (!unknownSize && chunk > contentLen - total) chunk = contentLen - total;
     int n = client.read(buf, chunk);
     if (n <= 0) break;
     if (Update.write(buf, n) != (size_t)n) {
@@ -341,15 +343,15 @@ inline bool otaDownloadBody(Client& client, int contentLen) {
     }
     total += n;
     if ((total % 65536) == 0) {
-      Serial.printf("OTA download: %d / %d\n", total, contentLen);
+      Serial.printf("OTA download: %d%s\n", total, unknownSize ? "" : (String(" / ") + contentLen).c_str());
       otaNotifyStatus();
     }
     otaPump();
   }
 
-  if (total != contentLen || !Update.end(true)) {
+  if ((!unknownSize && total != contentLen) || !Update.end(true)) {
     Update.printError(Serial);
-    otaSetError("download", "incomplete image");
+    otaSetError("download", unknownSize ? "incomplete chunked image" : "incomplete image");
     return false;
   }
   return true;

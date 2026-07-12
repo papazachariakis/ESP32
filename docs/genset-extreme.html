@@ -316,6 +316,14 @@
       border:2px solid var(--line);border-radius:8px;background:rgba(0,0,0,.4);
     }
     .mode-row .mode.active{opacity:1;border-style:solid;background:var(--l1);color:#000;border-color:var(--l1)}
+    .delay-row{
+      display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;
+      font-size:.62rem;color:var(--muted);text-align:center;
+    }
+    .delay-row span{
+      padding:8px 6px;border:1px solid var(--line);border-radius:8px;background:rgba(0,0,0,.35);
+    }
+    .delay-row strong{display:block;font-family:var(--display);font-size:.95rem;color:var(--warn);margin-top:2px}
 
     /* BOTTOM */
     .bottom{
@@ -608,6 +616,10 @@
             <span class="btn mode" data-mode="0">OFF</span>
             <span class="btn mode" data-mode="1">AUTO</span>
             <span class="btn mode" data-mode="2">MAN</span>
+          </div>
+          <div class="delay-row" title="Ρυθμίσεις PS0600 (reg 402355/402356)">
+            <span>DELAY START<strong id="delayStart">—</strong></span>
+            <span>DELAY STOP<strong id="delayStop">—</strong></span>
           </div>
         </div>
       </aside>
@@ -981,6 +993,16 @@
     function f0(x) { return Number.isFinite(+x) ? Number(x).toFixed(0) : '—'; }
     function f1(x) { return Number.isFinite(+x) ? Number(x).toFixed(1) : '—'; }
     function f2(x) { return Number.isFinite(+x) ? Number(x).toFixed(2) : '—'; }
+    function fmtDelaySec(x) {
+      const s = Number(x);
+      if (!Number.isFinite(s)) return '—';
+      if (s >= 60) {
+        const m = Math.floor(s / 60);
+        const r = +(s % 60).toFixed(1);
+        return r > 0 ? m + ' min ' + r + ' s' : m + ' min';
+      }
+      return s.toFixed(1) + ' s';
+    }
 
     function pubCmd(obj) {
       if (!client) return;
@@ -1148,6 +1170,9 @@
       document.querySelectorAll('.mode[data-mode]').forEach(btn => {
         btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
       });
+
+      document.getElementById('delayStart').textContent = fmtDelaySec(d.delay_start_sec);
+      document.getElementById('delayStop').textContent = fmtDelaySec(d.delay_stop_sec);
 
       // Sparkline
       if (Number.isFinite(kw) && valid) {

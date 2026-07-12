@@ -42,6 +42,8 @@
 #define CUMMINS_REG_TOTAL_RUNS    40069  // start attempts
 #define CUMMINS_REG_RUNTIME_HI    40070  // uint32 x0.05 hours
 #define CUMMINS_REG_RUNTIME_LO    40071
+#define CUMMINS_REG_DELAY_START   402355  // TDES, x0.1 sec
+#define CUMMINS_REG_DELAY_STOP    402356  // TDEC (cooldown), x0.1 sec
 #define CUMMINS_CMD_START         40300  // Modbus Remote Start 0/1
 #define CUMMINS_CMD_RESET         40301  // Modbus Fault Reset 0/1
 #define CUMMINS_CMD_ESTOP         40302  // Network Shutdown 0/1
@@ -92,6 +94,8 @@ struct GenData {
   uint16_t totalRuns = 0;
   uint32_t runTimeSec = 0;
   float runtimeHours = 0;
+  float delayStartSec = 0;
+  float delayStopSec = 0;
   String lastError;
   String lastScan;
   String lastCmd;
@@ -226,6 +230,8 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
   o["runtime_hours"] = g.runtimeHours;
+  o["delay_start_sec"] = g.delayStartSec;
+  o["delay_stop_sec"] = g.delayStopSec;
   if (g.lastError.length()) o["error"] = g.lastError;
   if (g.lastScan.length()) o["scan_result"] = g.lastScan;
   if (g.lastCmd.length()) {
@@ -764,6 +770,17 @@ struct GenManager {
         uint32_t rtRaw = ((uint32_t)r[2] << 16) | r[3];
         data.runtimeHours = rtRaw * 0.05f;
         data.runTimeSec = (uint32_t)(data.runtimeHours * 3600.0f);
+        pollStep = 11;
+        modbusBusGap();
+        return false;
+      }
+      case 11: {
+        uint16_t d[2];
+        if (readBlock(CUMMINS_REG_DELAY_START, 2, d)) {
+          data.delayStartSec = cumminsNaU(d[0]) ? 0 : d[0] * 0.1f;
+          data.delayStopSec = cumminsNaU(d[1]) ? 0 : d[1] * 0.1f;
+          markUpdated();
+        }
         data.pollComplete = true;
         data.lastError = "";
         markUpdated(true);
@@ -780,7 +797,7 @@ struct GenManager {
     pollReset();
     if (profile == MODBUS_PROFILE_ENTES) return pollEntesOnce();
     flushBus();
-    for (uint8_t i = 0; i < 14; i++) {
+    for (uint8_t i = 0; i < 16; i++) {
       if (pollStepOnce()) return true;
       modbusPump();
     }

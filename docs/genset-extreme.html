@@ -324,6 +324,27 @@
       padding:8px 6px;border:1px solid var(--line);border-radius:8px;background:rgba(0,0,0,.35);
     }
     .delay-row strong{display:block;font-family:var(--display);font-size:.95rem;color:var(--warn);margin-top:2px}
+    .delay-countdowns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+    .delay-cd{
+      padding:10px 8px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.45);
+      text-align:center;font-size:.58rem;color:var(--muted);min-height:58px;
+    }
+    .delay-cd.active{border-color:var(--warn);background:rgba(245,158,11,.12);animation:cdPulse 1.2s ease-in-out infinite}
+    .delay-cd .cd-label{display:block;letter-spacing:.08em;margin-bottom:4px}
+    .delay-cd .cd-val{display:block;font-family:var(--display);font-size:1.35rem;color:var(--warn);line-height:1}
+    .delay-cd.idle .cd-val{font-size:.85rem;color:var(--muted)}
+    @keyframes cdPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.0)}50%{box-shadow:0 0 14px rgba(245,158,11,.25)}}
+    .delay-edit{margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.35)}
+    .delay-edit .row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .delay-edit label{display:block;font-size:.58rem;color:var(--muted);margin-bottom:4px}
+    .delay-edit input{
+      width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);
+      background:#0a0f1a;color:var(--text);font-family:var(--display);font-size:.9rem;
+    }
+    .delay-edit button{
+      margin-top:8px;width:100%;padding:10px;border:0;border-radius:8px;
+      background:var(--warn);color:#000;font-weight:700;font-size:.72rem;cursor:pointer;
+    }
 
     /* BOTTOM */
     .bottom{
@@ -617,9 +638,26 @@
             <span class="btn mode" data-mode="1">AUTO</span>
             <span class="btn mode" data-mode="2">MAN</span>
           </div>
-          <div class="delay-row" title="Ρυθμίσεις PS0600 (reg 402355/402356)">
-            <span>DELAY START<strong id="delayStart">—</strong></span>
-            <span>DELAY STOP<strong id="delayStop">—</strong></span>
+          <div class="delay-countdowns">
+            <div class="delay-cd idle" id="delayCdStartBox">
+              <span class="cd-label">START COUNTDOWN</span>
+              <strong class="cd-val" id="delayCdStart">—</strong>
+            </div>
+            <div class="delay-cd idle" id="delayCdStopBox">
+              <span class="cd-label">STOP COUNTDOWN</span>
+              <strong class="cd-val" id="delayCdStop">—</strong>
+            </div>
+          </div>
+          <div class="delay-edit" title="Ρυθμίσεις PS0600 TDES/TDEC (reg 402355/402356)">
+            <div class="row">
+              <label>DELAY START (sec)
+                <input type="number" id="delayStartIn" min="0" max="3600" step="0.1" placeholder="—" />
+              </label>
+              <label>DELAY STOP (sec)
+                <input type="number" id="delayStopIn" min="0" max="3600" step="0.1" placeholder="—" />
+              </label>
+            </div>
+            <button type="button" id="delaySave">💾 ΑΠΟΘΗΚΕΥΣΗ DELAY</button>
           </div>
         </div>
       </aside>
@@ -706,6 +744,7 @@
     let gensetStable = null, lastGenset = null, lastStatus = {};
     let lastRxAt = 0, kwHistory = [];
     let lastSchedule = null;
+    let delayTick = { start: null, stop: null, t0: 0 };
 
     const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
     const SCHED_PRESETS = [
@@ -1004,6 +1043,94 @@
       return s.toFixed(1) + ' s';
     }
 
+    function fmtCountdown(sec) {
+      const s = Math.max(0, Number(sec));
+      if (!Number.isFinite(s)) return '—';
+      const m = Math.floor(s / 60);
+      const r = Math.floor(s % 60);
+      const ms = Math.floor((s % 1) * 10);
+      if (m > 0) return m + ':' + String(r).padStart(2, '0') + '.' + ms;
+      return r + '.' + ms + ' s';
+    }
+
+    function syncDelayInputs(d) {
+      const si = document.getElementById('delayStartIn');
+      const so = document.getElementById('delayStopIn');
+      if (si !== document.activeElement && d.delay_start_sec != null)
+        si.value = Number(d.delay_start_sec).toFixed(1);
+      if (so !== document.activeElement && d.delay_stop_sec != null)
+        so.value = Number(d.delay_stop_sec).toFixed(1);
+    }
+
+    function renderDelayCountdown(d) {
+      const startBox = document.getElementById('delayCdStartBox');
+      const stopBox = document.getElementById('delayCdStopBox');
+      const startEl = document.getElementById('delayCdStart');
+      const stopEl = document.getElementById('delayCdStop');
+
+      if (d.delay_start_active && Number.isFinite(+d.delay_start_remain_sec)) {
+        delayTick.start = Number(d.delay_start_remain_sec);
+        delayTick.t0 = Date.now();
+        startBox.classList.add('active');
+        startBox.classList.remove('idle');
+        startEl.textContent = fmtCountdown(delayTick.start);
+      } else {
+        delayTick.start = null;
+        startBox.classList.remove('active');
+        startBox.classList.add('idle');
+        startEl.textContent = Number.isFinite(+d.delay_start_sec) ? fmtDelaySec(d.delay_start_sec) : '—';
+      }
+
+      if (d.delay_stop_active && Number.isFinite(+d.delay_stop_remain_sec)) {
+        delayTick.stop = Number(d.delay_stop_remain_sec);
+        delayTick.t0 = Date.now();
+        stopBox.classList.add('active');
+        stopBox.classList.remove('idle');
+        stopEl.textContent = fmtCountdown(delayTick.stop);
+      } else {
+        delayTick.stop = null;
+        stopBox.classList.remove('active');
+        stopBox.classList.add('idle');
+        stopEl.textContent = Number.isFinite(+d.delay_stop_sec) ? fmtDelaySec(d.delay_stop_sec) : '—';
+      }
+    }
+
+    function tickDelayCountdown() {
+      const elapsed = (Date.now() - delayTick.t0) / 1000;
+      if (delayTick.start != null) {
+        const rem = Math.max(0, delayTick.start - elapsed);
+        document.getElementById('delayCdStart').textContent = fmtCountdown(rem);
+        if (rem <= 0) {
+          delayTick.start = null;
+          document.getElementById('delayCdStartBox').classList.remove('active');
+          document.getElementById('delayCdStartBox').classList.add('idle');
+        }
+      }
+      if (delayTick.stop != null) {
+        const rem = Math.max(0, delayTick.stop - elapsed);
+        document.getElementById('delayCdStop').textContent = fmtCountdown(rem);
+        if (rem <= 0) {
+          delayTick.stop = null;
+          document.getElementById('delayCdStopBox').classList.remove('active');
+          document.getElementById('delayCdStopBox').classList.add('idle');
+        }
+      }
+    }
+
+    function saveGensetDelay() {
+      const startSec = parseFloat(document.getElementById('delayStartIn').value);
+      const stopSec = parseFloat(document.getElementById('delayStopIn').value);
+      if (!Number.isFinite(startSec) && !Number.isFinite(stopSec)) {
+        toast('Συμπλήρωσε DELAY START ή STOP');
+        return;
+      }
+      const payload = { password: MQTT_CMD_PW, genset_delay: {} };
+      if (Number.isFinite(startSec)) payload.genset_delay.start_sec = startSec;
+      if (Number.isFinite(stopSec)) payload.genset_delay.stop_sec = stopSec;
+      pubCmd(payload);
+      toast('Αποστολή ρυθμίσεων delay...');
+    }
+
     function pubCmd(obj) {
       if (!client) return;
       client.publish(cmdTopic, JSON.stringify(Object.assign({ password: MQTT_CMD_PW }, obj)));
@@ -1171,8 +1298,8 @@
         btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
       });
 
-      document.getElementById('delayStart').textContent = fmtDelaySec(d.delay_start_sec);
-      document.getElementById('delayStop').textContent = fmtDelaySec(d.delay_stop_sec);
+      syncDelayInputs(d);
+      renderDelayCountdown(d);
 
       // Sparkline
       if (Number.isFinite(kw) && valid) {
@@ -1272,6 +1399,8 @@
       document.getElementById('overlay').classList.remove('hide');
     };
     document.getElementById('schedSave').onclick = saveGensetSchedule;
+    document.getElementById('delaySave').onclick = saveGensetDelay;
+    setInterval(tickDelayCountdown, 100);
     document.getElementById('schedFoot').onclick = () => {
       document.getElementById('schedPanel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };

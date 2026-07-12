@@ -563,6 +563,25 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     publishStatus();
   }
 
+  if (doc.containsKey("genset_delay")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: genset_delay rejected (bad password)");
+      return;
+    }
+    JsonObject gd = doc["genset_delay"];
+    float startSec = gd.containsKey("start_sec") ? gd["start_sec"].as<float>() : -1;
+    float stopSec = gd.containsKey("stop_sec") ? gd["stop_sec"].as<float>() : -1;
+    bool ok = genMgr.setDelaySeconds(startSec, stopSec);
+    if (!ok) {
+      Serial.printf("MQTT: genset_delay failed: %s\n", genMgr.data.lastError.c_str());
+    } else {
+      Serial.println("MQTT: genset_delay updated");
+    }
+    genMgr.pollOnce();
+    publishGensetMqtt();
+    publishStatus();
+  }
+
   if (doc.containsKey("modbus_cfg")) {
     if (!mqttDocAuthorized(doc)) {
       Serial.println("MQTT: modbus_cfg rejected (bad password)");

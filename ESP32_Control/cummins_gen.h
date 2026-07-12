@@ -591,19 +591,30 @@ struct GenManager {
       if (startSec > 3600) startSec = 3600;
       uint16_t raw = (uint16_t)(startSec * 10.0f + 0.5f);
       if (!writeHoldRetry(CUMMINS_REG_DELAY_START, raw)) ok = false;
-      else data.delayStartSec = raw * 0.1f;
+      modbusBusGap(80);
     }
     if (stopSec >= 0) {
       if (stopSec > 3600) stopSec = 3600;
       uint16_t raw = (uint16_t)(stopSec * 10.0f + 0.5f);
       if (!writeHoldRetry(CUMMINS_REG_DELAY_STOP, raw)) ok = false;
-      else data.delayStopSec = raw * 0.1f;
+      modbusBusGap(80);
     }
 
     uint16_t d[2];
-    if (readBlock(CUMMINS_REG_DELAY_START, 2, d)) {
+    if (!readBlock(CUMMINS_REG_DELAY_START, 2, d)) {
+      ok = false;
+      if (!data.lastError.length()) data.lastError = "delay readback failed";
+    } else {
       data.delayStartSec = cumminsNaU(d[0]) ? 0 : d[0] * 0.1f;
       data.delayStopSec = cumminsNaU(d[1]) ? 0 : d[1] * 0.1f;
+      if (startSec >= 0 && fabsf(data.delayStartSec - startSec) > 0.2f) {
+        ok = false;
+        data.lastError = "TDES readback " + String(data.delayStartSec, 1) + "s != " + String(startSec, 1) + "s";
+      }
+      if (stopSec >= 0 && ok && fabsf(data.delayStopSec - stopSec) > 0.2f) {
+        ok = false;
+        data.lastError = "TDEC readback " + String(data.delayStopSec, 1) + "s != " + String(stopSec, 1) + "s";
+      }
     }
 
     data.lastCmdOk = ok;

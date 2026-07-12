@@ -745,6 +745,7 @@
     let lastRxAt = 0, kwHistory = [];
     let lastSchedule = null;
     let delayTick = { start: null, stop: null, t0: 0 };
+    let pendingDelaySave = false;
 
     const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
     const SCHED_PRESETS = [
@@ -1054,12 +1055,25 @@
     }
 
     function syncDelayInputs(d) {
+      if (pendingDelaySave) return;
       const si = document.getElementById('delayStartIn');
       const so = document.getElementById('delayStopIn');
       if (si !== document.activeElement && d.delay_start_sec != null)
         si.value = Number(d.delay_start_sec).toFixed(1);
       if (so !== document.activeElement && d.delay_stop_sec != null)
         so.value = Number(d.delay_stop_sec).toFixed(1);
+    }
+
+    function onDelayCmdFeedback(d) {
+      if (!pendingDelaySave || d.last_cmd !== 'set_delay') return;
+      pendingDelaySave = false;
+      if (d.last_cmd_ok) {
+        toast('✓ Αποθηκεύτηκε: ' + (d.last_cmd_detail || 'TDES/TDEC OK'), 5000);
+        syncDelayInputs(d);
+        renderDelayCountdown(d);
+      } else {
+        toast('✗ Αποτυχία delay: ' + (d.last_cmd_detail || d.error || 'Modbus write'), 7000);
+      }
     }
 
     function renderDelayCountdown(d) {
@@ -1128,7 +1142,14 @@
       if (Number.isFinite(startSec)) payload.genset_delay.start_sec = startSec;
       if (Number.isFinite(stopSec)) payload.genset_delay.stop_sec = stopSec;
       pubCmd(payload);
+      pendingDelaySave = true;
       toast('Αποστολή ρυθμίσεων delay...');
+      setTimeout(() => {
+        if (pendingDelaySave) {
+          pendingDelaySave = false;
+          toast('⏱ Δεν ήρθε επιβεβαίωση — έλεγξε FW ≥ v3.0.27', 6000);
+        }
+      }, 12000);
     }
 
     function pubCmd(obj) {
@@ -1300,6 +1321,7 @@
 
       syncDelayInputs(d);
       renderDelayCountdown(d);
+      onDelayCmdFeedback(d);
 
       // Sparkline
       if (Number.isFinite(kw) && valid) {
@@ -1317,8 +1339,15 @@
     }
 
     function onGenset(j) {
-      if (j.poll_complete) gensetStable = Object.assign({}, j);
-      const d = (j.poll_complete || !gensetStable) ? j : gensetStable;
+      if (!j) return;
+      if (j.poll_complete) {
+        gensetStable = Object.assign({}, j);
+      } else if (gensetStable) {
+        Object.assign(gensetStable, j);
+      } else {
+        gensetStable = Object.assign({}, j);
+      }
+      const d = gensetStable || j;
       lastGenset = d;
       lastRxAt = Date.now();
       render(d);

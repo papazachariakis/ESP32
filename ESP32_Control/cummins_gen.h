@@ -238,8 +238,8 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
   o["runtime_hours"] = g.runtimeHours;
-  o["delay_start_sec"] = g.delayStartSec > 0.05f ? g.delayStartSec : g.delayStartPreSec;
-  o["delay_stop_sec"] = g.delayStopSec > 0.05f ? g.delayStopSec : g.delayStopPreSec;
+  o["delay_start_sec"] = g.delayStartPreSec;
+  o["delay_stop_sec"] = g.delayStopPreSec;
   o["delay_start_pre_sec"] = g.delayStartPreSec;
   o["delay_stop_pre_sec"] = g.delayStopPreSec;
   o["tdes_sec"] = g.delayStartSec;
@@ -282,6 +282,7 @@ struct GenManager {
   unsigned long startDelayT0 = 0;
   unsigned long stopDelayT0 = 0;
   uint16_t lastRemoteStart = 0xffff;
+  unsigned long lastDelayPublish = 0;
   static const uint8_t kPollBudgetMs = 35;
 
   void markUpdated(bool publish = false) {
@@ -581,13 +582,26 @@ struct GenManager {
   }
 
   float delayStartTotalSec() const {
-    if (data.delayStartSec > 0.05f) return data.delayStartSec;
     return data.delayStartPreSec;
   }
 
   float delayStopTotalSec() const {
-    if (data.delayStopSec > 0.05f) return data.delayStopSec;
     return data.delayStopPreSec;
+  }
+
+  bool delayCountdownActive() const {
+    return data.delayStartActive || data.delayStopActive
+      || startDelayArmed || stopDelayArmed;
+  }
+
+  void loopTickDelays() {
+    if (!enabled || pollPaused || !delayCountdownActive()) return;
+    if (millis() - lastDelayPublish < 500) return;
+    lastDelayPublish = millis();
+    readCmdRegs();
+    refreshStatusBlock();
+    updateDelayCountdown();
+    publishPending = true;
   }
 
   bool gensetRunning() const {
@@ -608,12 +622,10 @@ struct GenManager {
   }
 
   void armStopDelayCountdown() {
-    const float total = delayStopTotalSec();
-    if (total <= 0) return;
     stopDelayArmed = true;
     stopDelayT0 = millis();
     data.delayStopActive = true;
-    data.delayStopRemainSec = total;
+    data.delayStopRemainSec = delayStopTotalSec();
   }
 
   void updateDelayCountdown() {
@@ -622,15 +634,13 @@ struct GenManager {
     const bool running = gensetRunning();
     const bool stopped = gensetStopped();
 
-    if (rs == 1 && !running) {
+    if ((rs == 1 || startDelayArmed) && !running) {
       const float total = delayStartTotalSec();
-      if (total > 0) {
+      if (total > 0 || startDelayArmed) {
         if (!startDelayArmed) armStartDelayCountdown();
-        else {
-          float elapsed = (millis() - startDelayT0) / 1000.0f;
-          data.delayStartRemainSec = elapsed < total ? total - elapsed : 0;
-          data.delayStartActive = true;
-        }
+        float elapsed = (millis() - startDelayT0) / 1000.0f;
+        data.delayStartRemainSec = total > 0 && elapsed < total ? total - elapsed : 0;
+        data.delayStartActive = true;
       }
     } else {
       startDelayArmed = false;
@@ -638,21 +648,19 @@ struct GenManager {
       data.delayStartRemainSec = 0;
     }
 
-    if ((rs == 0 && running) || st == 13) {
+    if ((rs == 0 && running) || st == 13 || stopDelayArmed) {
       const float total = delayStopTotalSec();
-      if (total > 0) {
+      if (total > 0 || stopDelayArmed) {
         if (!stopDelayArmed) armStopDelayCountdown();
-        else {
-          float elapsed = (millis() - stopDelayT0) / 1000.0f;
-          data.delayStopRemainSec = elapsed < total ? total - elapsed : 0;
-          data.delayStopActive = true;
+        float elapsed = (millis() - stopDelayT0) / 1000.0f;
+        data.delayStopRemainSec = total > 0 && elapsed < total ? total - elapsed : 0;
+        data.delayStopActive = !stopped;
+        if (stopped) {
+          stopDelayArmed = false;
+          data.delayStopActive = false;
+          data.delayStopRemainSec = 0;
         }
       } else {
-        data.delayStopActive = false;
-        data.delayStopRemainSec = 0;
-      }
-      if (stopped) {
-        stopDelayArmed = false;
         data.delayStopActive = false;
         data.delayStopRemainSec = 0;
       }

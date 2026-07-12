@@ -1649,6 +1649,7 @@ void loop() {
   bmsMgr.maintain();
 
   genMgr.poll();
+  genMgr.loopTickDelays();
 
   genSched.tick(genMgr, prefs);
 
@@ -1660,6 +1661,7 @@ void loop() {
   static unsigned long lastGenMqtt = 0;
 
   if (genMgr.enabled && (genMgr.takePublishPending()
+      || genMgr.delayCountdownActive()
       || (genMgr.data.pollComplete && millis() - lastGenMqtt > MODBUS_POLL_INTERVAL_MS))) {
     lastGenMqtt = millis();
     publishGensetMqtt();

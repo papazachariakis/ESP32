@@ -1081,6 +1081,26 @@
       }
     }
 
+    function syncDelayTick(kind, active, remainSec) {
+      const rem = Number(remainSec);
+      if (!active || !Number.isFinite(rem)) {
+        delayTick[kind] = null;
+        return;
+      }
+      const now = Date.now();
+      if (delayTick[kind] == null) {
+        delayTick[kind] = rem;
+        delayTick.t0 = now;
+        return;
+      }
+      const elapsed = (now - delayTick.t0) / 1000;
+      const expected = Math.max(0, delayTick[kind] - elapsed);
+      if (Math.abs(rem - expected) > 1.5) {
+        delayTick[kind] = rem;
+        delayTick.t0 = now;
+      }
+    }
+
     function renderDelayCountdown(d) {
       const startBox = document.getElementById('delayCdStartBox');
       const stopBox = document.getElementById('delayCdStopBox');
@@ -1088,11 +1108,10 @@
       const stopEl = document.getElementById('delayCdStop');
 
       if (d.delay_start_active && Number.isFinite(+d.delay_start_remain_sec)) {
-        delayTick.start = Number(d.delay_start_remain_sec);
-        delayTick.t0 = Date.now();
+        syncDelayTick('start', true, d.delay_start_remain_sec);
         startBox.classList.add('active');
         startBox.classList.remove('idle');
-        startEl.textContent = fmtCountdown(delayTick.start);
+        startEl.textContent = fmtCountdown(Math.max(0, delayTick.start - (Date.now() - delayTick.t0) / 1000));
       } else {
         delayTick.start = null;
         startBox.classList.remove('active');
@@ -1101,12 +1120,11 @@
       }
 
       if (d.delay_stop_active && Number.isFinite(+d.delay_stop_remain_sec)) {
-        delayTick.stop = Number(d.delay_stop_remain_sec);
-        delayTick.t0 = Date.now();
+        syncDelayTick('stop', true, d.delay_stop_remain_sec);
         stopBox.classList.add('active');
         stopBox.classList.remove('idle');
         document.getElementById('delayCdStopLabel').textContent = 'STOP COUNTDOWN';
-        stopEl.textContent = fmtCountdown(delayTick.stop);
+        stopEl.textContent = fmtCountdown(Math.max(0, delayTick.stop - (Date.now() - delayTick.t0) / 1000));
       } else {
         delayTick.stop = null;
         stopBox.classList.remove('active');

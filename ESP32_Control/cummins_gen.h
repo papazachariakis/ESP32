@@ -670,7 +670,9 @@ struct GenManager {
     data.lastCmdOk = false;
     data.lastCmdDetail = "";
     if (!enabled || !bus || profile != MODBUS_PROFILE_PS0600) {
-      data.lastError = "delay write unavailable (enable PS0600 profile)";
+      data.lastError = "delay write unavailable — Modbus OFF";
+      data.lastCmdDetail = data.lastError;
+      publishPending = true;
       return false;
     }
     if (start403006 < 0 && stop403007 < 0) {
@@ -767,7 +769,10 @@ struct GenManager {
     data.lastCmdOk = false;
     data.lastCmdDetail = "";
     if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) {
-      data.lastError = "genset cmd unavailable (enable PS0600 profile)";
+      data.lastError = "genset cmd unavailable — Modbus OFF";
+      data.lastCmdDetail = data.lastError;
+      data.lastCmdOk = false;
+      publishPending = true;
       return false;
     }
 

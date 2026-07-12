@@ -297,6 +297,10 @@
     .alarm-block .t{font-weight:700;margin-bottom:4px;font-size:.75rem}
     .alarm-block ul{margin:0;padding-left:14px;color:var(--muted)}
     .alarm-ok{color:var(--ok);font-size:.75rem;padding:8px}
+    .modbus-off{
+      margin:8px 10px 0;padding:10px 12px;border-radius:8px;border:1px solid var(--bad);
+      background:rgba(239,68,68,.12);color:var(--bad);font-size:.72rem;font-weight:700;
+    }
 
     .ctrl{padding:8px 10px 12px;border-top:1px solid var(--line)}
     .ctrl-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
@@ -625,6 +629,7 @@
       <!-- SIDE -->
       <aside class="panel side area-side">
         <div class="panel-title">Συναγερμοί &amp; έλεγχος</div>
+        <div class="modbus-off hidden" id="modbusOffBanner">⚠ Modbus OFF — START/STOP και DELAY δεν λειτουργούν</div>
         <div class="side-scroll">
           <div class="alarms" id="alarms"><div class="alarm-ok">Χωρίς ενεργό σφάλμα</div></div>
         </div>
@@ -1123,6 +1128,7 @@
     }
 
     function saveGensetDelay() {
+      if (!isModbusOn(lastGenset)) { toast('⚠ Modbus OFF — ενεργοποίησε από s3.html'); return; }
       const startSec = parseFloat(document.getElementById('delayStartIn').value);
       const stopSec = parseFloat(document.getElementById('delayStopIn').value);
       if (!Number.isFinite(startSec) && !Number.isFinite(stopSec)) {
@@ -1200,6 +1206,13 @@
       document.getElementById('gridKw').textContent = f0(m.kw_total);
       document.getElementById('gridHz').textContent = f1(m.frequency);
       document.getElementById('gridKva').textContent = f0(m.kva_total);
+    }
+
+    function isModbusOn(d) {
+      if (!d) return true;
+      if (d.enabled === false) return false;
+      if (lastStatus.genset && lastStatus.genset.enabled === false) return false;
+      return true;
     }
 
     function render(d) {
@@ -1326,7 +1339,11 @@
         const ok = d.last_cmd_ok ? '✓' : '✗';
         document.getElementById('cmdFeedback').textContent = ok + ' ' + d.last_cmd + (d.last_cmd_detail ? ' — ' + d.last_cmd_detail : '');
       }
-      if (d.age_sec != null) document.getElementById('modbusAge').textContent = d.age_sec + 's';
+      const modbusOn = isModbusOn(d);
+      document.getElementById('modbusOffBanner').classList.toggle('hidden', modbusOn);
+      document.getElementById('modbusAge').textContent = modbusOn
+        ? (d.age_sec != null ? d.age_sec + 's' : '—')
+        : 'OFF';
     }
 
     function onGenset(j) {
@@ -1352,7 +1369,15 @@
         if (sl) sl.textContent = j.meter.slave_id != null ? String(j.meter.slave_id) : '—';
         renderMeter(j.meter);
       }
-      if (j.genset && Date.now() - lastRxAt > 5000) onGenset(j.genset);
+      if (j.genset) {
+        if (j.genset.enabled === false) {
+          const d = Object.assign({}, gensetStable || {}, j.genset);
+          lastGenset = d;
+          render(d);
+        } else if (Date.now() - lastRxAt > 5000) {
+          onGenset(j.genset);
+        }
+      }
       if (j.genset_schedule) renderGensetSchedule(j.genset_schedule);
     }
 
@@ -1427,12 +1452,14 @@
 
     document.getElementById('btnStart').onclick = () => {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!isModbusOn(lastGenset)) { toast('⚠ Modbus OFF — ενεργοποίησε από s3.html'); return; }
       if (!confirm('Εκκίνηση γεννήτριας;')) return;
       pubCmd({ genset: 'start' });
       toast('START στάλθηκε — περίμενε 10–30s', 6000);
     };
     document.getElementById('btnStop').onclick = () => {
       if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!isModbusOn(lastGenset)) { toast('⚠ Modbus OFF — ενεργοποίησε από s3.html'); return; }
       if (!confirm('Διακοπή γεννήτριας;')) return;
       pubCmd({ genset: 'stop' });
       toast('STOP στάλθηκε', 4000);

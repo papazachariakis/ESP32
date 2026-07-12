@@ -186,11 +186,17 @@ inline void startMdns() {
 
 
 void publishGensetMqtt() {
-  if (!mqtt.connected() || !genMgr.enabled) return;
+  if (!mqtt.connected()) return;
   StaticJsonDocument<2560> doc;
   JsonObject root = doc.to<JsonObject>();
   genFillJson(root, genMgr.data, genMgr.profile);
   root["enabled"] = genMgr.enabled;
+  if (!genMgr.enabled) {
+    root["valid"] = false;
+    root["poll_complete"] = true;
+    if (!genMgr.data.lastError.length())
+      root["error"] = "Modbus OFF — enable from dashboard";
+  }
   char payload[2560];
   serializeJson(doc, payload);
   mqtt.publish(topicGenset.c_str(), payload);

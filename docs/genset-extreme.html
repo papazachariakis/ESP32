@@ -507,6 +507,7 @@
             <div class="pct" id="pctL1">—</div>
             <div class="row"><strong id="aL1">—</strong> A</div>
             <div class="row"><strong id="kwL1">—</strong> kW · <span id="kvaL1">—</span> kVA</div>
+            <div class="row"><span id="vLnL1">—</span> V L-N</div>
             <div class="row"><span id="vL1">—</span> V L-L</div>
           </div>
           <div class="phase l2" id="phL2">
@@ -515,6 +516,7 @@
             <div class="pct" id="pctL2">—</div>
             <div class="row"><strong id="aL2">—</strong> A</div>
             <div class="row"><strong id="kwL2">—</strong> kW · <span id="kvaL2">—</span> kVA</div>
+            <div class="row"><span id="vLnL2">—</span> V L-N</div>
             <div class="row"><span id="vL2">—</span> V L-L</div>
           </div>
           <div class="phase l3" id="phL3">
@@ -523,6 +525,7 @@
             <div class="pct" id="pctL3">—</div>
             <div class="row"><strong id="aL3">—</strong> A</div>
             <div class="row"><strong id="kwL3">—</strong> kW · <span id="kvaL3">—</span> kVA</div>
+            <div class="row"><span id="vLnL3">—</span> V L-N</div>
             <div class="row"><span id="vL3">—</span> V L-L</div>
           </div>
         </div>
@@ -1080,9 +1083,9 @@
 
       // Phases
       const phases = [
-        { pct: d.load_l1_pct, a: d.curr_l1, kw: d.kw_l1, kva: d.kva_l1, vll: d.volt_l1l2, ids: ['towerL1','pctL1','aL1','kwL1','kvaL1','vL1','phL1'] },
-        { pct: d.load_l2_pct, a: d.curr_l2, kw: d.kw_l2, kva: d.kva_l2, vll: d.volt_l2l3, ids: ['towerL2','pctL2','aL2','kwL2','kvaL2','vL2','phL2'] },
-        { pct: d.load_l3_pct, a: d.curr_l3, kw: d.kw_l3, kva: d.kva_l3, vll: d.volt_l3l1, ids: ['towerL3','pctL3','aL3','kwL3','kvaL3','vL3','phL3'] }
+        { pct: d.load_l1_pct, a: d.curr_l1, kw: d.kw_l1, kva: d.kva_l1, vn: d.volt_l1n, vll: d.volt_l1l2, ids: ['towerL1','pctL1','aL1','kwL1','kvaL1','vLnL1','vL1','phL1'] },
+        { pct: d.load_l2_pct, a: d.curr_l2, kw: d.kw_l2, kva: d.kva_l2, vn: d.volt_l2n, vll: d.volt_l2l3, ids: ['towerL2','pctL2','aL2','kwL2','kvaL2','vLnL2','vL2','phL2'] },
+        { pct: d.load_l3_pct, a: d.curr_l3, kw: d.kw_l3, kva: d.kva_l3, vn: d.volt_l3n, vll: d.volt_l3l1, ids: ['towerL3','pctL3','aL3','kwL3','kvaL3','vLnL3','vL3','phL3'] }
       ];
       let maxLoad = 0;
       phases.forEach(p => {
@@ -1093,8 +1096,9 @@
         document.getElementById(p.ids[2]).textContent = f1(p.a);
         document.getElementById(p.ids[3]).textContent = f0(p.kw);
         document.getElementById(p.ids[4]).textContent = f0(p.kva);
-        document.getElementById(p.ids[5]).textContent = f0(p.vll);
-        document.getElementById(p.ids[6]).classList.toggle('hot', Number.isFinite(pct) && pct > 15);
+        document.getElementById(p.ids[5]).textContent = f0(p.vn);
+        document.getElementById(p.ids[6]).textContent = f0(p.vll);
+        document.getElementById(p.ids[7]).classList.toggle('hot', Number.isFinite(pct) && pct > 15);
       });
 
       document.getElementById('mVll').textContent = f0(d.volt_avg_ll) + ' V';

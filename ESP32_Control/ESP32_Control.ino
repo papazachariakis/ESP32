@@ -47,6 +47,7 @@
 #include "ota.h"
 #include "mqtt_auth.h"
 #include "cummins_gen.h"
+#include "genset_schedule.h"
 #ifndef ESP32_SLIM_BUILD
 #include "entes_meter.h"
 #endif
@@ -63,6 +64,7 @@ Preferences prefs;
 
 BmsManager bmsMgr;
 GenManager genMgr;
+GenSchedule genSched;
 #ifndef ESP32_SLIM_BUILD
 MeterManager meterMgr;
 #endif
@@ -346,6 +348,9 @@ String buildStatusJson() {
   meter["slave_id"] = meterMgr.slaveId;
 #endif
 
+  JsonObject sched = doc.createNestedObject("genset_schedule");
+  genSched.fillJson(sched);
+
 
 
   String out;
@@ -510,7 +515,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<1024> doc;
 
   if (deserializeJson(doc, payload, length)) return;
 
@@ -544,6 +549,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     genMgr.pollOnce();
     publishGensetMqtt();
+    publishStatus();
+  }
+
+  if (doc.containsKey("genset_schedule")) {
+    if (!mqttDocAuthorized(doc)) {
+      Serial.println("MQTT: genset_schedule rejected (bad password)");
+      return;
+    }
+    genSched.applyJson(doc["genset_schedule"].as<JsonObject>());
+    genSched.save(prefs);
+    Serial.println("MQTT: genset_schedule updated");
     publishStatus();
   }
 
@@ -822,6 +838,7 @@ void loadSettings() {
 
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
+  genSched.load(prefs);
 #ifndef ESP32_SLIM_BUILD
   meterMgr.load(prefs);
 #endif
@@ -1153,6 +1170,38 @@ void handleGensetCmd() {
 
 
 
+void handleGensetScheduleGet() {
+  StaticJsonDocument<1024> doc;
+  JsonObject o = doc.to<JsonObject>();
+  genSched.fillJson(o);
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
+
+
+void handleGensetSchedulePost() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"ok\":false}");
+    return;
+  }
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "application/json", "{\"ok\":false}");
+    return;
+  }
+  if (!webJsonPasswordOk(doc)) { webRejectAuth(); return; }
+  JsonObject cfg = doc.containsKey("genset_schedule")
+    ? doc["genset_schedule"].as<JsonObject>() : doc.as<JsonObject>();
+  genSched.applyJson(cfg);
+  genSched.save(prefs);
+  publishStatus();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+
+
 void handleModbusSave() {
 
   if (!server.hasArg("plain")) {
@@ -1353,6 +1402,8 @@ void setupRoutes() {
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
   server.on("/api/genset", HTTP_GET, handleGenset);
   server.on("/api/genset/cmd", HTTP_POST, handleGensetCmd);
+  server.on("/api/genset/schedule", HTTP_GET, handleGensetScheduleGet);
+  server.on("/api/genset/schedule", HTTP_POST, handleGensetSchedulePost);
   server.on("/api/modbus", HTTP_POST, handleModbusSave);
   server.on("/api/modbus/scan", HTTP_POST, handleModbusScan);
   server.on("/api/modbus/loopback", HTTP_POST, handleModbusLoopback);
@@ -1420,6 +1471,7 @@ void setup() {
 
   setupRoutes();
   setupArduinoOta();
+  genSched.begin();
   otaPrepHook() = []() {
     if (bmsMgr.client && bmsMgr.client->isConnected()) {
       bmsMgr.client->disconnect();
@@ -1568,6 +1620,8 @@ void loop() {
   bmsMgr.maintain();
 
   genMgr.poll();
+
+  genSched.tick(genMgr, prefs);
 
 #ifndef ESP32_SLIM_BUILD
   if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600)

@@ -497,6 +497,7 @@
       <span>FW <strong id="fwVer">—</strong></span>
       <span>Modbus <strong id="modbusAge">—</strong></span>
       <span>Τελευταίο <strong id="lastRx">—</strong></span>
+      <span id="schedFoot" style="color:var(--muted)">Πρόγραμμα: —</span>
       <span id="cmdFeedback" style="color:var(--muted)"></span>
     </footer>
   </div>
@@ -760,6 +761,20 @@
         renderMeter(j.meter);
       }
       if (j.genset && Date.now() - lastRxAt > 5000) onGenset(j.genset);
+      const sf = document.getElementById('schedFoot');
+      const sch = j.genset_schedule;
+      if (sf && sch) {
+        if (sch.active_slot >= 0) {
+          sf.textContent = 'Πρόγραμμα #' + (sch.active_slot + 1) + ' ενεργό · ~' + (sch.remaining_sec || '?') + 's';
+          sf.style.color = 'var(--ok)';
+        } else if (sch.time_synced && sch.slots) {
+          const on = sch.slots.filter(s => s.enabled);
+          sf.textContent = on.length ? ('Πρόγραμμα: ' + on.length + ' slot(s) · ' + (sch.local_time || '')) : 'Πρόγραμμα: off';
+          sf.style.color = 'var(--muted)';
+        } else {
+          sf.textContent = 'Πρόγραμμα: NTP...';
+        }
+      }
     }
 
     function updateClock() {

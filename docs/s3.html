@@ -423,6 +423,19 @@
     .cfg-grid .cfg-en{flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:.85rem}
     .cfg-grid .cfg-en input{width:auto}
 
+    .sched-card .sched-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+    .sched-card .sched-meta{font-size:.72rem;color:var(--muted)}
+    .sched-row{
+      border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--surface2);
+    }
+    .sched-row.disabled{opacity:.55}
+    .sched-row-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .sched-row-top input[type=time]{padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)}
+    .sched-row-top input[type=number]{width:72px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text)}
+    .sched-days{display:flex;flex-wrap:wrap;gap:6px}
+    .sched-days label{font-size:.68rem;display:flex;align-items:center;gap:3px;color:var(--muted);cursor:pointer}
+    .sched-active{font-size:.75rem;color:var(--ok);margin-top:8px}
+
   /* Relays */
     .toggle{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
     .toggle:last-child{border:0}
@@ -959,6 +972,20 @@
             <p class="small muted" id="scanResult" style="margin-top:8px"></p>
           </div>
         </div>
+      </div>
+
+      <div class="card sched-card">
+        <div class="sched-head">
+          <div class="card-title" style="margin:0;padding:0;border:0">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
+          <label class="cfg-en" style="margin:0"><input type="checkbox" id="schedMaster" checked /> Ενεργό</label>
+        </div>
+        <p class="small muted" style="margin-bottom:10px">Ο ESP32-S3 ξεκινά/σταματά τη γεννήτρια αυτόματα (NTP ώρα Ελλάδας). Χρειάζεται WiFi + Modbus γεννήτριας ενεργό.</p>
+        <div class="sched-meta" id="schedMeta">Ώρα συσκευής: —</div>
+        <div id="schedRows"></div>
+        <div class="gen-actions" style="margin-top:8px">
+          <button class="sec" onclick="saveGensetSchedule()">💾 Αποθήκευση προγράμματος</button>
+        </div>
+        <div class="sched-active" id="schedActive" style="display:none"></div>
       </div>
 
       <div class="grid-2">
@@ -1900,6 +1927,7 @@
       if (j.meter) renderMeter(j.meter, j.meter);
       renderOverview(j.bms, j.genset);
       renderDiagnostics(j);
+      if (j.genset_schedule) renderGensetSchedule(j.genset_schedule);
       const wSsid = document.getElementById('wifiCurrentSsid');
       const wIp = document.getElementById('wifiCurrentIp');
       if (wSsid) wSsid.textContent = wifiSsidDisplay(j) || (j.wifi_connected ? '(συνδεδεμένο)' : '—');
@@ -1944,6 +1972,98 @@
       pendingGenCmd = action;
       pubCmd({ genset: action });
       toast(action === 'start' ? 'Εκκίνηση στάλθηκε — περίμενε 10–30s' : 'Εντολή στάλθηκε: ' + action, 5000);
+    }
+
+    const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
+    let schedEditing = false;
+
+    function buildSchedRows() {
+      const box = document.getElementById('schedRows');
+      if (!box) return;
+      box.innerHTML = [0, 1, 2, 3].map(i => `
+        <div class="sched-row" id="schedRow${i}">
+          <div class="sched-row-top">
+            <label class="cfg-en"><input type="checkbox" id="schedEn${i}" onfocus="schedEditing=true" onblur="schedEditing=false" /> #${i + 1}</label>
+            <label>Ώρα <input type="time" id="schedTime${i}" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
+            <label>Διάρκεια (λεπτά) <input type="number" id="schedDur${i}" min="1" max="600" value="30" onfocus="schedEditing=true" onblur="schedEditing=false" /></label>
+          </div>
+          <div class="sched-days">${SCHED_DAY_BITS.map((d, b) =>
+            `<label><input type="checkbox" id="schedDay${i}_${b}" onfocus="schedEditing=true" onblur="schedEditing=false" /> ${d}</label>`
+          ).join('')}</div>
+        </div>`).join('');
+    }
+    buildSchedRows();
+
+    function readSchedDays(i) {
+      let mask = 0;
+      for (let b = 0; b < 7; b++) {
+        const el = document.getElementById('schedDay' + i + '_' + b);
+        if (el && el.checked) mask |= (1 << b);
+      }
+      return mask;
+    }
+
+    function setSchedDays(i, mask) {
+      for (let b = 0; b < 7; b++) {
+        const el = document.getElementById('schedDay' + i + '_' + b);
+        if (el) el.checked = !!(mask & (1 << b));
+      }
+    }
+
+    function renderGensetSchedule(s) {
+      if (!s || schedEditing) return;
+      const master = document.getElementById('schedMaster');
+      if (master && s.master_enabled != null) master.checked = !!s.master_enabled;
+      const meta = document.getElementById('schedMeta');
+      if (meta) {
+        meta.textContent = s.time_synced
+          ? ('Ώρα ESP32: ' + (s.local_time || '—') + (s.time_synced ? '' : ' (αναμονή NTP)'))
+          : 'Αναμονή συγχρονισμού ώρας (NTP)...';
+      }
+      (s.slots || []).forEach((slot, i) => {
+        if (i > 3) return;
+        const en = document.getElementById('schedEn' + i);
+        const tm = document.getElementById('schedTime' + i);
+        const dur = document.getElementById('schedDur' + i);
+        const row = document.getElementById('schedRow' + i);
+        if (en) en.checked = !!slot.enabled;
+        if (tm) tm.value = String(slot.hour || 0).padStart(2, '0') + ':' + String(slot.minute || 0).padStart(2, '0');
+        if (dur) dur.value = slot.duration_min || 30;
+        if (row) row.classList.toggle('disabled', !slot.enabled);
+        setSchedDays(i, slot.days != null ? slot.days : 0x3E);
+      });
+      const act = document.getElementById('schedActive');
+      if (act) {
+        if (s.active_slot >= 0) {
+          const rem = s.remaining_sec != null ? Math.max(0, s.remaining_sec) : '?';
+          act.style.display = 'block';
+          act.textContent = '▶ Ενεργό πρόγραμμα #' + (s.active_slot + 1) + ' — απομένουν ~' + rem + 's μέχρι STOP';
+        } else {
+          act.style.display = 'none';
+          act.textContent = '';
+        }
+      }
+    }
+
+    function saveGensetSchedule() {
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      const slots = [0, 1, 2, 3].map(i => {
+        const tm = (document.getElementById('schedTime' + i).value || '07:00').split(':');
+        return {
+          enabled: document.getElementById('schedEn' + i).checked,
+          hour: +tm[0] || 0,
+          minute: +tm[1] || 0,
+          duration_min: +(document.getElementById('schedDur' + i).value || 30),
+          days: readSchedDays(i)
+        };
+      });
+      pubCmd({
+        genset_schedule: {
+          master_enabled: document.getElementById('schedMaster').checked,
+          slots
+        }
+      });
+      toast('Χρονοπρογραμματισμός αποθηκεύτηκε στο ESP32', 4000);
     }
 
     function syncGenModeButtons(opMode) {

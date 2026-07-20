@@ -196,9 +196,11 @@ inline bool modbusWriteSingle(
 }
 
 // Cummins docs use 4xxxx (5-digit) or 40xxxx (6-digit) holding register numbers.
-// 5-digit: wire = reg - 40001.  6-digit: wire = reg - 400001 (same wire as 5-digit form).
+// 5-digit: wire = reg - 40001.
+// 6-digit: wire = reg - 400001 (also written as 402355/403745 without an extra digit).
 inline uint16_t modbusHoldAddr(uint32_t reg40001) {
   if (reg40001 >= 400001u) return (uint16_t)(reg40001 - 400001u);
+  if (reg40001 >= 100000u) return (uint16_t)(reg40001 - 400001u);
   return (uint16_t)(reg40001 - 40001u);
 }
 

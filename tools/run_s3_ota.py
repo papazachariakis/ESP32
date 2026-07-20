@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 DEVICE = "1CDBD47A3C50"
 BROKER = "broker.hivemq.com"
 PW = "esp32ota"
-TARGET = "3.0.39"
+TARGET = "3.0.40"
 CMD = f"home/{DEVICE}/cmd"
 STATUS = f"home/{DEVICE}/status"
 

@@ -46,6 +46,8 @@
 #define CUMMINS_REG_DELAY_STOP    402356  // TDEC (cooldown), x0.1 sec
 #define CUMMINS_REG_TIME_DELAY_START 403006  // pre-crank delay, x1 sec
 #define CUMMINS_REG_TIME_DELAY_STOP  403007  // pre-cooldown delay, x1 sec
+#define CUMMINS_REG_FUEL_PCT         403745  // Fuel Level Percent, x1 %
+#define CUMMINS_REG_FUEL_L           403746  // Fuel Level Sensor, x1 litre
 #define CUMMINS_CMD_START         40300  // Modbus Remote Start 0/1
 #define CUMMINS_CMD_RESET         40301  // Modbus Fault Reset 0/1
 #define CUMMINS_CMD_ESTOP         40302  // Network Shutdown 0/1
@@ -92,6 +94,9 @@ struct GenData {
   float batteryV = 0;
   float oilKpa = 0;
   float coolantC = 0;
+  float fuelPct = 0;
+  float fuelLitres = 0;
+  bool fuelValid = false;
   uint16_t engineRpm = 0;
   uint16_t totalRuns = 0;
   uint32_t runTimeSec = 0;
@@ -234,6 +239,9 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["battery_v"] = g.batteryV;
   o["oil_kpa"] = g.oilKpa;
   o["coolant_c"] = g.coolantC;
+  o["fuel_pct"] = g.fuelPct;
+  o["fuel_litres"] = g.fuelLitres;
+  o["fuel_valid"] = g.fuelValid;
   o["engine_rpm"] = g.engineRpm;
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
@@ -1061,6 +1069,22 @@ struct GenManager {
           markUpdated();
         }
         updateDelayCountdown();
+        pollStep = 12;
+        modbusBusGap();
+        return false;
+      }
+      case 12: {
+        uint16_t fl[2];
+        if (readBlock(CUMMINS_REG_FUEL_PCT, 2, fl)) {
+          const bool pctOk = !cumminsNaU(fl[0]) && fl[0] <= 100;
+          const bool litOk = !cumminsNaU(fl[1]) && fl[1] <= 9999;
+          data.fuelValid = pctOk || litOk;
+          data.fuelPct = pctOk ? (float)fl[0] : 0;
+          data.fuelLitres = litOk ? (float)fl[1] : 0;
+          markUpdated();
+        } else {
+          data.fuelValid = false;
+        }
         data.pollComplete = true;
         data.lastError = "";
         markUpdated(true);

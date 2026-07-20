@@ -881,6 +881,10 @@
               <div class="txt"><div class="l">Ψύξη</div><div class="v"><span id="gCool">—</span> °C</div></div>
             </div>
             <div class="gen-engine-item">
+              <div class="ico" id="gFuelIco">⛽</div>
+              <div class="txt"><div class="l">Καύσιμο</div><div class="v" id="gFuel">—</div></div>
+            </div>
+            <div class="gen-engine-item">
               <div class="ico ok">⏱</div>
               <div class="txt"><div class="l">Ώρες λειτ.</div><div class="v" id="gHours">—</div></div>
             </div>
@@ -1200,7 +1204,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.39';
+    const EXPECTED_FIRMWARE = '3.0.40';
     const DASHBOARD_BUILD = '2026-07-12-stopfix';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
@@ -1997,9 +2001,22 @@
       setGenBattery(d.battery_v);
       document.getElementById('gOil').textContent = f0(d.oil_kpa);
       document.getElementById('gCool').textContent = f2(d.coolant_c, 1);
+      const gFuel = document.getElementById('gFuel');
+      if (gFuel) {
+        if (d.fuel_valid) {
+          const pct = Number(d.fuel_pct);
+          const lit = Number(d.fuel_litres);
+          let txt = Number.isFinite(pct) ? f0(pct) + '%' : '—';
+          if (Number.isFinite(lit) && lit > 0) txt += ' · ' + f0(lit) + ' L';
+          gFuel.textContent = txt;
+        } else {
+          gFuel.textContent = '—';
+        }
+      }
       setEngineIco('gBattIco', d.battery_v, 24, 28, 22, 30);
       setEngineIco('gOilIco', d.oil_kpa, 200, 600, 150, 700);
       setEngineIco('gCoolIco', d.coolant_c, 70, 95, 60, 105);
+      if (d.fuel_valid) setEngineIco('gFuelIco', d.fuel_pct, 35, 100, 20, 100);
       updateGenGauges(d, running);
       document.getElementById('gCtrl').textContent = d.controller_type ?? '—';
       document.getElementById('gRuns').textContent = d.total_runs ?? '—';

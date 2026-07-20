@@ -286,6 +286,7 @@
     .eng .ico{font-size:1.3rem;opacity:.9}
     .eng .l{font-size:.58rem;color:var(--muted);letter-spacing:.06em}
     .eng .v{font-family:var(--display);font-size:1.1rem;font-weight:700}
+    .eng .v.ok{color:var(--ok)}.eng .v.warn{color:var(--warn)}.eng .v.bad{color:var(--bad)}
 
     /* SIDE PANEL */
     .side{display:flex;flex-direction:column;min-height:0}
@@ -672,7 +673,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-sched-stuck</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-fuel</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -696,6 +697,7 @@
         <div class="eng"><div class="ico">🔋</div><div><div class="l">Μπαταρία γενν.</div><div class="v" id="eBatt">—</div></div></div>
         <div class="eng"><div class="ico">🛢</div><div><div class="l">Λάδι</div><div class="v" id="eOil">—</div></div></div>
         <div class="eng"><div class="ico">🌡</div><div><div class="l">Ψύξη</div><div class="v" id="eCool">—</div></div></div>
+        <div class="eng"><div class="ico">⛽</div><div><div class="l">Καύσιμο</div><div class="v" id="eFuel">—</div></div></div>
         <div class="eng"><div class="ico">⏱</div><div><div class="l">Ώρες λειτ.</div><div class="v" id="eHours">—</div></div></div>
         <div class="eng"><div class="ico">🔄</div><div><div class="l">Εκκινήσεις</div><div class="v" id="eRuns">—</div></div></div>
         <div class="eng"><div class="ico">🎛</div><div><div class="l">Controller</div><div class="v" id="eCtrl">—</div></div></div>
@@ -1319,6 +1321,20 @@
       document.getElementById('eBatt').className = 'v ' + (batt >= 24 && batt <= 28 ? 'ok' : batt < 22 && batt > 0 ? 'bad' : '');
       document.getElementById('eOil').textContent = f0(d.oil_kpa) + ' kPa';
       document.getElementById('eCool').textContent = f1(d.coolant_c) + ' °C';
+      const fuelEl = document.getElementById('eFuel');
+      if (fuelEl) {
+        if (d.fuel_valid) {
+          const pct = Number(d.fuel_pct);
+          const lit = Number(d.fuel_litres);
+          let txt = Number.isFinite(pct) ? f0(pct) + '%' : '—';
+          if (Number.isFinite(lit) && lit > 0) txt += ' · ' + f0(lit) + ' L';
+          fuelEl.textContent = txt;
+          fuelEl.className = 'v ' + (pct <= 20 ? 'bad' : pct <= 35 ? 'warn' : 'ok');
+        } else {
+          fuelEl.textContent = '—';
+          fuelEl.className = 'v';
+        }
+      }
       document.getElementById('eHours').textContent = d.runtime_hours != null ? f1(d.runtime_hours) + ' h' : '—';
       document.getElementById('eRuns').textContent = d.total_runs ?? '—';
       document.getElementById('eCtrl').textContent = d.controller_type ?? '—';

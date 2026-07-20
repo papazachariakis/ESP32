@@ -22,10 +22,13 @@ struct GenSchedule {
   bool masterEnabled = true;
   bool timeSynced = false;
   int activeSlot = -1;
+  time_t startedAt = 0;
   time_t stopAt = 0;
   uint32_t lastFireDay[GEN_SCHED_SLOTS] = {0};
   unsigned long lastTickMs = 0;
   unsigned long ntpStartedMs = 0;
+  unsigned long lastStartRetryMs = 0;
+  uint8_t startRetries = 0;
 
   static uint32_t dateKey(const struct tm& t) {
     return (uint32_t)(t.tm_year + 1900) * 10000u + (uint32_t)(t.tm_mon + 1) * 100u + (uint32_t)t.tm_mday;
@@ -36,6 +39,30 @@ struct GenSchedule {
     return (t.tm_wday == 0) ? 6 : (t.tm_wday - 1);
   }
 
+  void clearActive(bool clearFireDay) {
+    if (clearFireDay && activeSlot >= 0 && activeSlot < GEN_SCHED_SLOTS)
+      lastFireDay[activeSlot] = 0;
+    activeSlot = -1;
+    startedAt = 0;
+    stopAt = 0;
+    startRetries = 0;
+    lastStartRetryMs = 0;
+  }
+
+  void sanitizeActiveWindow() {
+    if (activeSlot < 0 || activeSlot >= GEN_SCHED_SLOTS) {
+      clearActive(false);
+      return;
+    }
+    uint16_t dur = slots[activeSlot].durationMin;
+    if (dur < 1) dur = 1;
+    if (dur > 600) dur = 600;
+    if (startedAt <= 0 && stopAt > 0)
+      startedAt = stopAt - (time_t)dur * 60;
+    if (startedAt > 0)
+      stopAt = startedAt + (time_t)dur * 60;
+  }
+
   void load(Preferences& prefs) {
     masterEnabled = prefs.getBool("gs_en", true);
     for (int i = 0; i < GEN_SCHED_SLOTS; i++) {
@@ -44,11 +71,19 @@ struct GenSchedule {
       slots[i].hour = (uint8_t)prefs.getUChar((p + "h").c_str(), (i == 0) ? 7 : 0);
       slots[i].minute = (uint8_t)prefs.getUChar((p + "m").c_str(), 0);
       slots[i].durationMin = prefs.getUShort((p + "dur").c_str(), 30);
+      if (slots[i].durationMin < 1) slots[i].durationMin = 1;
+      if (slots[i].durationMin > 600) slots[i].durationMin = 600;
       slots[i].days = (uint8_t)prefs.getUChar((p + "d").c_str(), 0x3E);
       lastFireDay[i] = prefs.getUInt((p + "lf").c_str(), 0);
     }
     activeSlot = prefs.getChar("gs_act", -1);
+    startedAt = (time_t)prefs.getLong("gs_start", 0);
     stopAt = (time_t)prefs.getLong("gs_stop", 0);
+    if (activeSlot < 0 || activeSlot >= GEN_SCHED_SLOTS) {
+      clearActive(false);
+    } else {
+      sanitizeActiveWindow();
+    }
   }
 
   void save(Preferences& prefs) {
@@ -63,6 +98,7 @@ struct GenSchedule {
       prefs.putUInt((p + "lf").c_str(), lastFireDay[i]);
     }
     prefs.putChar("gs_act", (int8_t)activeSlot);
+    prefs.putLong("gs_start", (long)startedAt);
     prefs.putLong("gs_stop", (long)stopAt);
   }
 
@@ -72,8 +108,10 @@ struct GenSchedule {
     o["active_slot"] = activeSlot;
     if (activeSlot >= 0 && stopAt > 0) {
       o["stop_at_epoch"] = (long)stopAt;
+      if (startedAt > 0) o["started_at_epoch"] = (long)startedAt;
       time_t now = time(nullptr);
       if (now > 0 && stopAt > now) o["remaining_sec"] = (long)(stopAt - now);
+      else o["remaining_sec"] = 0;
     }
     struct tm ti;
     if (timeSynced && getLocalTime(&ti, 0)) {
@@ -107,14 +145,18 @@ struct GenSchedule {
         if (s.containsKey("days")) slots[i].days = (uint8_t)(s["days"].as<int>() & 0x7F);
       }
     }
+    // Any schedule edit cancels a stuck/active run so UI save can unstick the ESP32.
+    // Also clears last-fire so the same slot can run again today after a failed start.
+    clearActive(true);
+    for (int i = 0; i < GEN_SCHED_SLOTS; i++) lastFireDay[i] = 0;
     return true;
   }
 
   void begin() {
-    // Explicit Greece offset — POSIX TZ alone often leaves ESP32 on UTC in Arduino builds
+    // Use POSIX TZ only — configTime(offset) + TZ double-applies on many ESP32 cores.
     setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1);
     tzset();
-    configTime(7200, 3600, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+    configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
     ntpStartedMs = millis();
   }
 
@@ -129,8 +171,7 @@ struct GenSchedule {
   void cancelActive(GenManager& genMgr, Preferences& prefs) {
     if (activeSlot < 0) return;
     genMgr.runGensetCmd("stop");
-    activeSlot = -1;
-    stopAt = 0;
+    clearActive(false);
     save(prefs);
   }
 };
@@ -155,13 +196,43 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
   if (!getLocalTime(&ti, 0)) return;
 
   if (activeSlot >= 0) {
+    sanitizeActiveWindow();
+
+    // Expired → STOP
     if (now >= stopAt) {
       Serial.printf("Schedule: slot %d stop after %u min\n", activeSlot + 1,
                     slots[activeSlot].durationMin);
       genMgr.runGensetCmd("stop");
-      activeSlot = -1;
-      stopAt = 0;
+      clearActive(false);
       save(prefs);
+      return;
+    }
+
+    // Still within window but engine idle → START did not stick; retry.
+    const bool starting = genMgr.startDelayArmed || genMgr.data.delayStartActive
+                          || (genMgr.data.gensetState >= 2 && genMgr.data.gensetState <= 7);
+    const bool running = genMgr.gensetRunning();
+    if (!running && !starting && genMgr.gensetStopped()) {
+      if (startRetries < 5 && (lastStartRetryMs == 0 || nowMs - lastStartRetryMs >= 20000)) {
+        Serial.printf("Schedule: slot %d retry START (%u)\n", activeSlot + 1, startRetries + 1);
+        if (genMgr.runGensetCmd("start")) {
+          startRetries++;
+          lastStartRetryMs = nowMs;
+          // Keep original stopAt based on first start intent
+          if (startedAt <= 0) {
+            startedAt = now;
+            sanitizeActiveWindow();
+          }
+          save(prefs);
+        } else {
+          startRetries++;
+          lastStartRetryMs = nowMs;
+        }
+      } else if (startRetries >= 5) {
+        Serial.printf("Schedule: slot %d giving up START retries — clearing active\n", activeSlot + 1);
+        clearActive(true);  // allow re-fire later today
+        save(prefs);
+      }
     }
     return;
   }
@@ -177,15 +248,23 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     if (!(s.days & (1 << dayBit))) continue;
     if (lastFireDay[i] == today) continue;
     if (ti.tm_hour != s.hour || ti.tm_min != s.minute) continue;
-    if (ti.tm_sec > 45) continue;
+    // Fire anytime within the target minute (lastFireDay prevents double-start)
 
     Serial.printf("Schedule: slot %d start %02u:%02u for %u min\n", i + 1, s.hour, s.minute,
                   s.durationMin);
     if (genMgr.runGensetCmd("start")) {
       activeSlot = i;
-      stopAt = now + (time_t)s.durationMin * 60;
+      startedAt = now;
+      startRetries = 0;
+      lastStartRetryMs = nowMs;
+      sanitizeActiveWindow();
       lastFireDay[i] = today;
       save(prefs);
+    } else {
+      // Mark fired attempt so we don't spam every second; UI save clears lastFireDay.
+      lastFireDay[i] = today;
+      save(prefs);
+      Serial.printf("Schedule: slot %d START failed — %s\n", i + 1, genMgr.data.lastError.c_str());
     }
     break;
   }

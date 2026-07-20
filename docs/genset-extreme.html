@@ -672,7 +672,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-12-delayfix</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-sched-stuck</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -902,6 +902,15 @@
       return m > 0 ? m + 'λ ' + s + 'δ' : s + 'δ';
     }
 
+    function scheduleRemainingSec(s) {
+      let rem = s.remaining_sec != null ? Math.max(0, Number(s.remaining_sec)) : null;
+      if (rem == null || !Number.isFinite(rem)) return null;
+      const slot = (s.slots || [])[s.active_slot];
+      const durSec = slot ? (Number(slot.duration_min) || 30) * 60 : null;
+      if (durSec && rem > durSec + 90) rem = durSec;
+      return rem;
+    }
+
     function renderGensetSchedule(s) {
       if (!s) return;
       lastSchedule = s;
@@ -955,15 +964,19 @@
       const panel = document.getElementById('schedPanel');
       if (!bar) return;
       if (s.active_slot >= 0 && s.master_enabled) {
-        const rem = s.remaining_sec != null ? Math.max(0, s.remaining_sec) : null;
+        const rem = scheduleRemainingSec(s);
         const slot = (s.slots || [])[s.active_slot];
         const durSec = slot ? (slot.duration_min || 30) * 60 : null;
+        const rawRem = s.remaining_sec != null ? Number(s.remaining_sec) : null;
+        const stuck = Number.isFinite(rawRem) && durSec && rawRem > durSec + 90;
         bar.classList.add('show');
-        txt.textContent = '▶ Πρόγραμμα #' + (s.active_slot + 1) + ' ενεργό — STOP σε ' + formatRemaining(rem);
+        txt.textContent = stuck
+          ? '⚠ Κολλημένο πρόγραμμα #' + (s.active_slot + 1) + ' — πάτα ΑΠΟΘΗΚΕΥΣΗ (χρειάζεται FW ≥ 3.0.39)'
+          : '▶ Πρόγραμμα #' + (s.active_slot + 1) + ' ενεργό — STOP σε ' + formatRemaining(rem);
         if (prog && rem != null && durSec) {
           prog.style.width = clamp((1 - rem / durSec) * 100, 0, 100) + '%';
         }
-        if (panel) panel.style.borderColor = 'rgba(34,197,94,.5)';
+        if (panel) panel.style.borderColor = stuck ? 'rgba(239,68,68,.55)' : 'rgba(34,197,94,.5)';
       } else {
         bar.classList.remove('show');
         if (panel) panel.style.borderColor = '';
@@ -978,7 +991,7 @@
       const sf = document.getElementById('schedFoot');
       if (!sf || !s) return;
       if (s.active_slot >= 0 && s.master_enabled) {
-        sf.textContent = '⏰ #' + (s.active_slot + 1) + ' ενεργό · ' + formatRemaining(s.remaining_sec);
+        sf.textContent = '⏰ #' + (s.active_slot + 1) + ' ενεργό · ' + formatRemaining(scheduleRemainingSec(s));
         sf.style.color = 'var(--ok)';
       } else if (s.time_synced && s.slots) {
         const on = s.slots.filter(sl => sl.enabled);

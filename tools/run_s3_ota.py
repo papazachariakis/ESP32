@@ -47,8 +47,8 @@ def main():
     pub({"modbus_cfg": {"enabled": False}})
     time.sleep(5)
 
-    print("Wait 30s for GitHub CDN...")
-    time.sleep(30)
+    print("Wait 90s for GitHub CDN...")
+    time.sleep(90)
 
     print("Trigger ESP HTTPS OTA pull...")
     pub({"ota": PW})

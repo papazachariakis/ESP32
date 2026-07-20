@@ -152,18 +152,26 @@ struct GenSchedule {
     return true;
   }
 
-  void begin() {
-    // Use POSIX TZ only — configTime(offset) + TZ double-applies on many ESP32 cores.
-    setenv("TZ", "EET-2EEST,M3.5.0/3,M10.5.0/4", 1);
-    tzset();
-    configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+  // Greece: EET/EEST with EU DST. Do NOT call configTime(0,0) after setenv —
+  // Arduino-ESP32 configTime overwrites TZ with UTC0 and leaves the clock on UTC.
+  static constexpr const char* kTzGreece = "EET-2EEST,M3.5.0/3,M10.5.0/4";
+
+  void beginNtp() {
+    configTzTime(kTzGreece, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
     ntpStartedMs = millis();
   }
+
+  void begin() { beginNtp(); }
 
   void refreshTimeSynced() {
     if (timeSynced) return;
     struct tm ti;
-    if (getLocalTime(&ti, 0) && ti.tm_year + 1900 >= 2024) timeSynced = true;
+    if (getLocalTime(&ti, 0) && ti.tm_year + 1900 >= 2024) {
+      // Re-apply TZ in case an earlier configTime(0,0) left UTC0.
+      setenv("TZ", kTzGreece, 1);
+      tzset();
+      timeSynced = true;
+    }
   }
 
   void tick(GenManager& genMgr, Preferences& prefs);
@@ -184,8 +192,7 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
 
   refreshTimeSynced();
   if (!timeSynced && ntpStartedMs && nowMs - ntpStartedMs > 120000) {
-    configTime(0, 0, "pool.ntp.org", "time.google.com");
-    ntpStartedMs = nowMs;
+    beginNtp();
   }
   if (!timeSynced) return;
 

@@ -2010,7 +2010,8 @@
           if (Number.isFinite(lit) && lit > 0) txt += ' · ' + f0(lit) + ' L';
           gFuel.textContent = txt;
         } else {
-          gFuel.textContent = '—';
+          gFuel.textContent = 'N/A';
+          gFuel.title = 'Χωρίς έγκυρο σήμα καυσίμου από PS0600 (αισθητήρας / AUX config)';
         }
       }
       setEngineIco('gBattIco', d.battery_v, 24, 28, 22, 30);

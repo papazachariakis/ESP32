@@ -1331,8 +1331,9 @@
           fuelEl.textContent = txt;
           fuelEl.className = 'v ' + (pct <= 20 ? 'bad' : pct <= 35 ? 'warn' : 'ok');
         } else {
-          fuelEl.textContent = '—';
+          fuelEl.textContent = 'N/A';
           fuelEl.className = 'v';
+          fuelEl.title = 'Χωρίς έγκυρο σήμα καυσίμου από PS0600 (αισθητήρας / AUX config)';
         }
       }
       document.getElementById('eHours').textContent = d.runtime_hours != null ? f1(d.runtime_hours) + ' h' : '—';

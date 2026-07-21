@@ -64,6 +64,7 @@ struct GenData {
   unsigned long lastUpdate = 0;
   uint8_t controllerType = 0;
   uint8_t opMode = 0;
+  uint8_t remoteMode = 1;  // ESP remote Off/Auto/Manual (0/1/2) — gates START + schedule
   uint8_t gensetState = 0;
   uint16_t activeFault = 0;
   uint8_t faultType = 0;
@@ -205,6 +206,9 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["op_mode"] = g.opMode;
   o["op_mode_label"] = cumminsOpModeLabel(g.opMode);
   o["op_mode_label_el"] = cumminsOpModeLabelEl(g.opMode);
+  o["remote_mode"] = g.remoteMode;
+  o["remote_mode_label"] = cumminsOpModeLabel(g.remoteMode);
+  o["remote_mode_label_el"] = cumminsOpModeLabelEl(g.remoteMode);
   o["genset_state"] = g.gensetState;
   o["genset_state_label"] = cumminsStateLabel(g.gensetState);
   o["genset_state_label_el"] = cumminsStateLabelEl(g.gensetState);
@@ -453,6 +457,7 @@ struct GenManager {
     slaveId = (uint8_t)prefs.getUInt("modbus_id", MODBUS_DEFAULT_SLAVE_ID);
     baud = prefs.getUInt("modbus_baud", MODBUS_DEFAULT_BAUD);
     probeReg = (uint16_t)prefs.getUInt("modbus_probe", CUMMINS_REG_CONTROLLER);
+    data.remoteMode = (uint8_t)constrain((int)prefs.getUInt("gen_rmode", 1), 0, 2);
   }
 
   void save(Preferences& prefs) {
@@ -461,6 +466,7 @@ struct GenManager {
     prefs.putUInt("modbus_id", slaveId);
     prefs.putUInt("modbus_baud", baud);
     prefs.putUInt("modbus_probe", probeReg);
+    prefs.putUInt("gen_rmode", data.remoteMode);
   }
 
   void begin() {
@@ -582,12 +588,28 @@ struct GenManager {
   }
 
   bool cmdSetOpMode(uint8_t mode) {
-    (void)mode;
-    refreshStatusBlock();
-    // PS0600 register 40010 mirrors the physical panel switch — writes return exc 4.
-    data.lastError = "Το 40010 είναι read-only — άλλαξε Off/Auto/Manual μόνο από τον διακόπτη στο panel";
-    return false;
+    if (mode > 2) mode = 0;
+    // PS0600 40010 is the physical key switch (read-only). Remote Off/Auto/Manual is
+    // an ESP control gate for START/STOP + schedule — panel switch still required in Auto
+    // for the Cummins controller to accept remote start.
+    data.remoteMode = mode;
+    const char* label = cumminsOpModeLabelEl(mode);
+    if (mode == 0) {
+      bool stopped = true;
+      if (!gensetStopped()) stopped = cmdStop();
+      data.lastError = stopped
+        ? String("Απομακρυσμένο OFF — STOP OK · panel: ") + cumminsOpModeLabelEl(data.opMode)
+        : String("Απομακρυσμένο OFF · STOP απέτυχε · panel: ") + cumminsOpModeLabelEl(data.opMode);
+      return stopped;
+    }
+    data.lastError = String("Απομακρυσμένο ") + label
+      + " · φυσικό panel: " + cumminsOpModeLabelEl(data.opMode)
+      + (data.opMode == 1 ? "" : " (για START βάλε panel σε AUTO)");
+    return true;
   }
+
+  bool remoteAllowsStart() const { return data.remoteMode != 0; }
+  bool remoteAllowsSchedule() const { return data.remoteMode == 1; }
 
   float delayStartTotalSec() const {
     return data.delayStartPreSec;
@@ -800,6 +822,14 @@ struct GenManager {
 
     bool ok = false;
     if (strcmp(action, "start") == 0) {
+      if (!remoteAllowsStart()) {
+        data.lastError = "START κλειδωμένο — απομακρυσμένο Off (διάλεξε Auto ή Manual)";
+        data.lastCmdOk = false;
+        data.lastCmdDetail = data.lastError;
+        publishPending = true;
+        pollPaused = false;
+        return false;
+      }
       ok = cmdStart();
       if (ok) {
         armStartDelayCountdown();

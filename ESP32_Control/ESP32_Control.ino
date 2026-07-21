@@ -551,6 +551,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     const char* action = doc["genset"];
     bool ok = action && genMgr.runGensetCmd(action);
+    if (ok && action && strncmp(action, "mode_", 5) == 0) {
+      genMgr.save(prefs);
+    }
     if (!ok) {
       Serial.printf("MQTT: genset cmd '%s' failed: %s\n",
                     action ? action : "?", genMgr.data.lastError.c_str());
@@ -1200,6 +1203,8 @@ void handleGensetCmd() {
     return;
 
   }
+
+  if (strncmp(action, "mode_", 5) == 0) genMgr.save(prefs);
 
   genMgr.pollOnce();
 

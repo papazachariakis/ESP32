@@ -245,6 +245,7 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
   }
 
   if (!masterEnabled || !genMgr.enabled) return;
+  if (!genMgr.remoteAllowsSchedule()) return;
 
   uint32_t today = dateKey(ti);
   int dayBit = dayBitFromTm(ti);

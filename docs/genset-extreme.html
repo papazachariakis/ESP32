@@ -319,7 +319,9 @@
     .mode-row .mode{
       display:block;font-size:.65rem;padding:10px 4px;text-align:center;opacity:.55;
       border:2px solid var(--line);border-radius:8px;background:rgba(0,0,0,.4);
+      cursor:pointer;user-select:none;
     }
+    .mode-row .mode:hover{opacity:.9;filter:brightness(1.1)}
     .mode-row .mode.active{opacity:1;border-style:solid;background:var(--l1);color:#000;border-color:var(--l1)}
     .delay-row{
       display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;
@@ -639,11 +641,12 @@
             <button type="button" class="btn start" id="btnStart">▶ START</button>
             <button type="button" class="btn stop" id="btnStop">■ STOP</button>
           </div>
-          <div class="mode-row" title="Αλλαγή μόνο από φυσικό διακόπτη στο panel">
-            <span class="btn mode" data-mode="0">OFF</span>
-            <span class="btn mode" data-mode="1">AUTO</span>
-            <span class="btn mode" data-mode="2">MAN</span>
+          <div class="mode-row" title="Απομακρυσμένη λειτουργία ESP (Off / Auto / Manual)">
+            <button type="button" class="btn mode" data-mode="0">OFF</button>
+            <button type="button" class="btn mode" data-mode="1">AUTO</button>
+            <button type="button" class="btn mode" data-mode="2">MAN</button>
           </div>
+          <div class="mode-line" id="modeHint" style="margin-top:6px">Απομακρυσμένο · panel φυσικό —</div>
           <div class="delay-countdowns">
             <div class="delay-cd idle" id="delayCdStartBox">
               <span class="cd-label">START COUNTDOWN</span>
@@ -673,7 +676,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-fuel</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-mode</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -1263,7 +1266,15 @@
       stateEl.className = 'state-banner ' + (running ? 'run' : crank ? 'crank' : fault ? 'fault' : 'idle');
 
       document.getElementById('modeLine').textContent =
-        (d.op_mode_label_el || d.op_mode_label || '—') + ' · PS0600 · Controller ' + (d.controller_type ?? '—');
+        'Απομ. ' + (d.remote_mode_label_el || d.remote_mode_label || d.op_mode_label_el || '—')
+        + ' · Panel ' + (d.op_mode_label_el || d.op_mode_label || '—')
+        + ' · PS0600 · Ctrl ' + (d.controller_type ?? '—');
+      const modeHint = document.getElementById('modeHint');
+      if (modeHint) {
+        modeHint.textContent = 'Απομακρυσμένο: '
+          + (d.remote_mode_label_el || d.remote_mode_label || '—')
+          + ' · Φυσικό panel: ' + (d.op_mode_label_el || d.op_mode_label || '—');
+      }
 
       const statePill = document.getElementById('statePill');
       statePill.textContent = running ? 'RUNNING' : valid ? 'READY' : 'OFFLINE';
@@ -1365,8 +1376,8 @@
         alEl.innerHTML = '<div class="alarm-ok">✓ Χωρίς ενεργό σφάλμα</div>';
       }
 
-      // Mode buttons
-      const mode = Number(d.op_mode);
+      // Mode buttons — highlight ESP remote mode (falls back to panel)
+      const mode = Number(d.remote_mode != null ? d.remote_mode : d.op_mode);
       document.querySelectorAll('.mode[data-mode]').forEach(btn => {
         btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
       });
@@ -1512,6 +1523,21 @@
       pubCmd({ genset: 'stop' });
       toast('STOP στάλθηκε', 4000);
     };
+
+    const MODE_CMDS = { 0: 'mode_off', 1: 'mode_auto', 2: 'mode_manual' };
+    const MODE_LABELS = { 0: 'OFF', 1: 'AUTO', 2: 'MANUAL' };
+    document.querySelectorAll('.mode[data-mode]').forEach(btn => {
+      btn.onclick = () => {
+        if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+        if (!isModbusOn(lastGenset)) { toast('⚠ Modbus OFF'); return; }
+        const m = Number(btn.dataset.mode);
+        const cmd = MODE_CMDS[m];
+        if (!cmd) return;
+        if (!confirm('Απομακρυσμένη λειτουργία: ' + MODE_LABELS[m] + ';')) return;
+        pubCmd({ genset: cmd });
+        toast('Λειτουργία → ' + MODE_LABELS[m], 4000);
+      };
+    });
 
     window.addEventListener('resize', drawSparkline);
 

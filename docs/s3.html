@@ -946,12 +946,12 @@
         <div class="gen-cmd-grid">
           <div class="gen-cmd-panel">
             <h4>Λειτουργία &amp; εντολές</h4>
-            <div class="gen-mode-btns gen-mode-readonly" title="Αλλαγή μόνο από φυσικό διακόπτη στο panel PS0600">
-              <span class="sec mode-btn" id="modeOff">Off</span>
-              <span class="sec mode-btn" id="modeAuto">Auto</span>
-              <span class="sec mode-btn" id="modeManual">Manual</span>
+            <div class="gen-mode-btns" title="Απομακρυσμένη λειτουργία ESP (Off / Auto / Manual)">
+              <button type="button" class="sec mode-btn" id="modeOff" onclick="genModeCmd(0)">Off</button>
+              <button type="button" class="sec mode-btn" id="modeAuto" onclick="genModeCmd(1)">Auto</button>
+              <button type="button" class="sec mode-btn" id="modeManual" onclick="genModeCmd(2)">Manual</button>
             </div>
-            <p class="small muted" id="genModeHint" style="margin-bottom:10px">Ο διακόπτης <b>Off/Auto/Manual</b> αλλάζει μόνο στο <b>panel</b> της γεννήτριας (το 40010 είναι ένδειξη, όχι εντολή). Για εκκίνηση πάτα <b>▶ Εκκίνηση</b> και περίμενε 10–30s. Το #141 λάδι χαμηλό είναι φυσιολογικό όταν ο κινητήρας είναι σταματημένος.</p>
+            <p class="small muted" id="genModeHint" style="margin-bottom:10px">Απομακρυσμένο Off/Auto/Manual από το ESP (κλειδώνει START &amp; χρονοπρόγραμμα). Ο <b>φυσικός</b> διακόπτης panel φαίνεται στην κατάσταση — για εκκίνηση το panel πρέπει να είναι σε <b>AUTO</b>.</p>
             <div class="gen-cmd-btns">
               <button class="start" onclick="genCmd('start')">▶ Εκκίνηση</button>
               <button class="stop" onclick="genCmd('stop')">■ Διακοπή</button>
@@ -1204,7 +1204,7 @@
     const BOARD_EXPECT = 'esp32s3-rs485';
     const BOARD_LABEL = 'ESP32-S3 RS485';
     const OTA_FIRMWARE_FILE = 'firmware-s3.bin';
-    const EXPECTED_FIRMWARE = '3.0.41';
+    const EXPECTED_FIRMWARE = '3.0.42';
     const DASHBOARD_BUILD = '2026-07-12-stopfix';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware-s3.bin';
     const BOARD_PAGE = 's3';
@@ -1938,7 +1938,15 @@
         return;
       }
 
-      syncGenModeButtons(g.op_mode != null ? g.op_mode : d.op_mode);
+      syncGenModeButtons(g.remote_mode != null ? g.remote_mode : (g.op_mode != null ? g.op_mode : d.op_mode));
+      const hint = document.getElementById('genModeHint');
+      if (hint && (g.remote_mode != null || g.op_mode != null)) {
+        hint.innerHTML = 'Απομακρυσμένο: <b>'
+          + (g.remote_mode_label_el || g.remote_mode_label || '—')
+          + '</b> · Φυσικό panel: <b>'
+          + (g.op_mode_label_el || g.op_mode_label || '—')
+          + '</b>. Για εκκίνηση το panel πρέπει να είναι σε <b>AUTO</b>.';
+      }
 
       if (isEntes) {
         document.getElementById('genState').textContent = 'ENTES MPR-46S';
@@ -2253,6 +2261,18 @@
         const el = document.getElementById(id);
         if (el) el.classList.toggle('active', m === i);
       });
+    }
+
+    function genModeCmd(mode) {
+      const cmds = ['mode_off', 'mode_auto', 'mode_manual'];
+      const labels = ['OFF', 'AUTO', 'MANUAL'];
+      const cmd = cmds[mode];
+      if (!cmd) return;
+      if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
+      if (!confirm('Απομακρυσμένη λειτουργία: ' + labels[mode] + ';')) return;
+      pendingGenCmd = cmd;
+      pubCmd({ genset: cmd });
+      toast('Λειτουργία → ' + labels[mode], 4000);
     }
 
     function applyBaudRemote() {

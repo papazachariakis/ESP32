@@ -57,8 +57,17 @@
     .pill.ok{border-color:rgba(34,197,94,.5);color:var(--ok);box-shadow:0 0 12px var(--glow-ok)}
     .pill.warn{border-color:rgba(245,158,11,.5);color:var(--warn);animation:blink 1.2s ease infinite}
     .pill.bad{border-color:rgba(239,68,68,.6);color:var(--bad);animation:blink .7s ease infinite}
+    .pill.bad.fuel-blink{
+      animation:fuelBlink .85s ease-in-out infinite;
+      box-shadow:0 0 14px rgba(239,68,68,.55);
+      background:rgba(239,68,68,.18);
+    }
     .pill.off{color:var(--muted)}
     @keyframes blink{50%{opacity:.55}}
+    @keyframes fuelBlink{
+      0%,100%{opacity:1;transform:scale(1);box-shadow:0 0 8px rgba(239,68,68,.35)}
+      50%{opacity:.35;transform:scale(1.04);box-shadow:0 0 22px rgba(239,68,68,.85)}
+    }
 
     .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px}
     .conn-dot.on{background:var(--ok);box-shadow:0 0 8px var(--glow-ok);animation:pulse-dot 2s ease infinite}
@@ -699,7 +708,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-events</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-21-fault1573</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -1311,11 +1320,21 @@
 
       const faultPill = document.getElementById('faultPill');
       if (Number(d.active_fault) > 0) {
+        const code = Number(d.active_fault);
+        const fuelLow = window.GensetDecode && GensetDecode.isFuelLowFault
+          ? GensetDecode.isFuelLowFault(code)
+          : (code === 1573);
         faultPill.style.display = '';
-        faultPill.textContent = 'FAULT #' + d.active_fault;
-        faultPill.className = 'pill bad';
+        faultPill.textContent = (window.GensetDecode && GensetDecode.faultPillText)
+          ? GensetDecode.faultPillText(code)
+          : ('FAULT #' + code);
+        faultPill.className = 'pill bad' + (fuelLow ? ' fuel-blink' : '');
+        faultPill.title = (window.GensetDecode && GensetDecode.faultNameEl)
+          ? (GensetDecode.faultNameEl(code) || '')
+          : '';
       } else {
         faultPill.style.display = 'none';
+        faultPill.className = 'pill off';
       }
 
       // RPM

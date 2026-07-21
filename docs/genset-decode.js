@@ -50,6 +50,18 @@
   let faultDb = null;
   let codeIndex = null;
 
+  // Site / PS0600 codes not always present in official bitmap (confirmed on this genset).
+  const SITE_FAULTS = {
+    1573: {
+      name: 'Low Fuel Level',
+      name_el: 'Χαμηλή στάθμη καυσίμου',
+      resp: 'Warning',
+      reg: 0,
+      bit: -1,
+      fuel_low: true
+    }
+  };
+
   function setFaultDb(db) {
     faultDb = db || null;
     codeIndex = new Map();
@@ -65,8 +77,33 @@
 
   function lookupFaultCode(code) {
     const c = Number(code);
-    if (!c || !codeIndex) return [];
+    if (!c) return [];
+    const site = SITE_FAULTS[c];
+    if (site) return [Object.assign({}, site)];
+    if (!codeIndex) return [];
     return codeIndex.get(c) || [];
+  }
+
+  function faultNameEl(code) {
+    const primary = lookupFaultCode(code)[0];
+    if (!primary) return null;
+    return primary.name_el || NFPA_EL[primary.name] || primary.name;
+  }
+
+  function isFuelLowFault(code) {
+    const primary = lookupFaultCode(code)[0];
+    if (!primary) return false;
+    if (primary.fuel_low) return true;
+    const n = String(primary.name || '');
+    return /Low Fuel|Fuel Level/i.test(n);
+  }
+
+  function faultPillText(code) {
+    const c = Number(code);
+    if (!c) return '';
+    if (isFuelLowFault(c)) return '⛽ ΧΑΜΗΛΟ ΚΑΥΣΙΜΟ #' + c;
+    const name = faultNameEl(c);
+    return name ? ('FAULT #' + c + ' · ' + name) : ('FAULT #' + c);
   }
 
   function labelEl(en, map) {
@@ -119,10 +156,14 @@
       const primary = matches[0];
       const items = [];
       if (primary) {
-        items.push('Modbus register: ' + primary.reg + ', bit ' + primary.bit);
+        if (primary.name_el) items.push(primary.name_el);
+        if (primary.reg > 0) items.push('Modbus register: ' + primary.reg + ', bit ' + primary.bit);
         items.push('Απόκριση controller: ' + (RESP_EL[primary.resp] || primary.resp));
-        if (matches.length > 1) {
+        if (matches.length > 1 && primary.reg > 0) {
           items.push('Σχετικά registers: ' + matches.map(m => m.reg).join(', '));
+        }
+        if (isFuelLowFault(code)) {
+          items.push('Έλεγχος δεξαμενής καυσίμου / αισθητήρα χαμηλής στάθμης.');
         }
       } else {
         items.push('Άγνωστος κωδικός — δεν βρέθηκε στο fault bitmap.');
@@ -130,10 +171,13 @@
       if (g.fault_type_label) {
         items.push('Κατάσταση panel: ' + g.fault_type_label + ' (fault_type=' + (g.fault_type ?? '—') + ')');
       }
+      const titleName = primary
+        ? (primary.name_el || primary.name)
+        : null;
       sections.push({
-        title: primary ? ('Σφάλμα #' + code + ' — ' + primary.name) : ('Σφάλμα #' + code),
+        title: titleName ? ('Σφάλμα #' + code + ' — ' + titleName) : ('Σφάλμα #' + code),
         items,
-        level: respLevel(primary && primary.resp, g.fault_type)
+        level: isFuelLowFault(code) ? 'bad' : respLevel(primary && primary.resp, g.fault_type)
       });
     }
 
@@ -181,10 +225,20 @@
     const code = Number(g && g.active_fault);
     if (!code) return 'Κανένα';
     const primary = lookupFaultCode(code)[0];
-    let name = primary ? primary.name : 'Άγνωστο';
+    let name = primary ? (primary.name_el || primary.name) : 'Άγνωστο';
     if (name.length > 42) name = name.slice(0, 40) + '…';
     const ft = g.fault_type_label ? ' · ' + g.fault_type_label : '';
     return '#' + code + ft + '\n' + name;
+  }
+
+  function overviewFaultHint(g) {
+    const code = Number(g && g.active_fault);
+    if (!code) return null;
+    const primary = lookupFaultCode(code)[0];
+    if (!primary) return 'Σφάλμα γεννήτριας #' + code;
+    let n = primary.name_el || primary.name;
+    if (n.length > 48) n = n.slice(0, 46) + '…';
+    return '⚠ #' + code + ' — ' + n;
   }
 
   function nfpaListItems(g) {
@@ -196,16 +250,6 @@
     return out;
   }
 
-  function overviewFaultHint(g) {
-    const code = Number(g && g.active_fault);
-    if (!code) return null;
-    const primary = lookupFaultCode(code)[0];
-    if (!primary) return 'Σφάλμα γεννήτριας #' + code;
-    let n = primary.name;
-    if (n.length > 48) n = n.slice(0, 46) + '…';
-    return '⚠ #' + code + ' — ' + n;
-  }
-
   global.GensetDecode = {
     setFaultDb,
     lookupFaultCode,
@@ -215,6 +259,9 @@
     formatActiveFaultShort,
     nfpaListItems,
     overviewFaultHint,
+    faultNameEl,
+    faultPillText,
+    isFuelLowFault,
     RESP_EL
   };
 })(typeof window !== 'undefined' ? window : global);

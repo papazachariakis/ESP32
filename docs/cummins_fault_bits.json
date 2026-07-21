@@ -1002,6 +1002,13 @@
         "code": 1446,
         "name": "High AC Voltage",
         "resp": "Shutdown"
+      },
+      {
+        "reg": 40407,
+        "bit": -1,
+        "code": 1573,
+        "name": "Low Fuel Level",
+        "resp": "Warning"
       }
     ],
     "40408": [

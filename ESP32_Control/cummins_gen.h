@@ -99,6 +99,12 @@ struct GenData {
   float fuelPct = 0;
   float fuelLitres = 0;
   bool fuelValid = false;
+  uint16_t fuelRawPct = 0;
+  uint16_t fuelRawLitres = 0;
+  bool fuelRegOk = false;
+  int8_t custInput1 = -1;
+  int8_t custInput2 = -1;
+  int8_t custInput3 = -1;
   uint16_t engineRpm = 0;
   uint16_t totalRuns = 0;
   uint32_t runTimeSec = 0;
@@ -247,6 +253,12 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
   o["fuel_pct"] = g.fuelPct;
   o["fuel_litres"] = g.fuelLitres;
   o["fuel_valid"] = g.fuelValid;
+  o["fuel_raw_pct"] = g.fuelRawPct;
+  o["fuel_raw_litres"] = g.fuelRawLitres;
+  o["fuel_reg_ok"] = g.fuelRegOk;
+  if (g.custInput1 >= 0) o["customer_in1"] = g.custInput1 != 0;
+  if (g.custInput2 >= 0) o["customer_in2"] = g.custInput2 != 0;
+  if (g.custInput3 >= 0) o["customer_in3"] = g.custInput3 != 0;
   o["engine_rpm"] = g.engineRpm;
   o["total_runs"] = g.totalRuns;
   o["runtime_sec"] = g.runTimeSec;
@@ -1125,7 +1137,10 @@ struct GenManager {
       }
       case 12: {
         uint16_t fl[2];
-        if (readBlock(CUMMINS_REG_FUEL_PCT, 2, fl)) {
+        data.fuelRegOk = readBlock(CUMMINS_REG_FUEL_PCT, 2, fl);
+        if (data.fuelRegOk) {
+          data.fuelRawPct = fl[0];
+          data.fuelRawLitres = fl[1];
           const bool pctOk = !cumminsNaU(fl[0]) && fl[0] <= 100;
           const bool litOk = !cumminsNaU(fl[1]) && fl[1] <= 9999;
           data.fuelValid = pctOk || litOk;
@@ -1134,6 +1149,14 @@ struct GenManager {
           markUpdated();
         } else {
           data.fuelValid = false;
+          data.fuelRawPct = 0;
+          data.fuelRawLitres = 0;
+        }
+        uint16_t ci[3];
+        if (readBlock(403793, 3, ci)) {
+          data.custInput1 = ci[0] ? 1 : 0;
+          data.custInput2 = ci[1] ? 1 : 0;
+          data.custInput3 = ci[2] ? 1 : 0;
         }
         data.pollComplete = true;
         data.lastError = "";

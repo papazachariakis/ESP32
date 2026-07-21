@@ -187,7 +187,7 @@ inline void startMdns() {
 
 void publishGensetMqtt() {
   if (!mqtt.connected()) return;
-  StaticJsonDocument<2560> doc;
+  StaticJsonDocument<4096> doc;
   JsonObject root = doc.to<JsonObject>();
   genFillJson(root, genMgr.data, genMgr.profile);
   root["enabled"] = genMgr.enabled;
@@ -197,7 +197,7 @@ void publishGensetMqtt() {
     if (!genMgr.data.lastError.length())
       root["error"] = "Modbus OFF — enable from dashboard";
   }
-  char payload[2560];
+  char payload[4096];
   serializeJson(doc, payload);
   mqtt.publish(topicGenset.c_str(), payload);
 }
@@ -885,6 +885,7 @@ void loadSettings() {
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
   genSched.load(prefs);
+  genEvents().begin(prefs);
 #ifndef ESP32_SLIM_BUILD
   meterMgr.load(prefs);
 #endif

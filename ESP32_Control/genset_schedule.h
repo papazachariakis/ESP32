@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include "genset_events.h"
 
 struct GenManager;
 
@@ -209,7 +210,10 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     if (now >= stopAt) {
       Serial.printf("Schedule: slot %d stop after %u min\n", activeSlot + 1,
                     slots[activeSlot].durationMin);
-      genMgr.runGensetCmd("stop");
+      bool ok = genMgr.runGensetCmd("stop");
+      // runGensetCmd already logs "stop"; add schedule marker
+      genEvents().push("sched_stop", ok,
+                       (String("Slot #") + String(activeSlot + 1)).c_str());
       clearActive(false);
       save(prefs);
       return;
@@ -261,6 +265,10 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     Serial.printf("Schedule: slot %d start %02u:%02u for %u min\n", i + 1, s.hour, s.minute,
                   s.durationMin);
     if (genMgr.runGensetCmd("start")) {
+      genEvents().push("sched_start", true,
+                       (String("Slot #") + String(i + 1) + " " +
+                        String(s.hour) + ":" + (s.minute < 10 ? "0" : "") + String(s.minute))
+                           .c_str());
       activeSlot = i;
       startedAt = now;
       startRetries = 0;
@@ -272,6 +280,10 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
       // Mark fired attempt so we don't spam every second; UI save clears lastFireDay.
       lastFireDay[i] = today;
       save(prefs);
+      genEvents().push("sched_start", false,
+                       genMgr.data.lastError.length()
+                         ? genMgr.data.lastError.c_str()
+                         : (String("Slot #") + String(i + 1) + " FAIL").c_str());
       Serial.printf("Schedule: slot %d START failed — %s\n", i + 1, genMgr.data.lastError.c_str());
     }
     break;

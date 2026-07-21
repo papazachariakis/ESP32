@@ -5,6 +5,7 @@
 #include <HardwareSerial.h>
 #include <Preferences.h>
 #include "modbus_rtu.h"
+#include "genset_events.h"
 
 // PS0600 Modbus map (A029X159 Issue 23). 5-digit form: offset = reg - 40001,
 // identical to the doc's 6-digit "4000xx" form (offset = addr - 400001).
@@ -273,6 +274,7 @@ inline void genFillJson(JsonObject& o, const GenData& g, uint8_t profile) {
     o["last_update_ms"] = g.lastUpdate;
     o["age_sec"] = (millis() - g.lastUpdate) / 1000;
   }
+  genEvents().fillJson(o);
 }
 
 struct GenManager {
@@ -448,6 +450,7 @@ struct GenManager {
     data.lastUpdate = millis();
     data.valid = true;
     publishPending = true;
+    genEvents().noteFault(data.activeFault);
     return true;
   }
 
@@ -826,6 +829,7 @@ struct GenManager {
         data.lastError = "START κλειδωμένο — απομακρυσμένο Off (διάλεξε Auto ή Manual)";
         data.lastCmdOk = false;
         data.lastCmdDetail = data.lastError;
+        genEvents().push("start", false, data.lastError.c_str());
         publishPending = true;
         pollPaused = false;
         return false;
@@ -875,6 +879,21 @@ struct GenManager {
     data.lastCmdDetail = data.lastError;
     if (!ok && data.lastCmdDetail.length() == 0)
       data.lastCmdDetail = "εντολή απέτυχε";
+
+    // Audit log: start / stop / faults-related commands
+    if (strcmp(action, "start") == 0) {
+      genEvents().push("start", ok, data.lastCmdDetail.c_str());
+    } else if (strcmp(action, "stop") == 0 || strcmp(action, "stop_hard") == 0) {
+      genEvents().push(strcmp(action, "stop_hard") == 0 ? "stop_hard" : "stop", ok,
+                       data.lastCmdDetail.c_str());
+    } else if (strcmp(action, "reset") == 0) {
+      genEvents().push("reset", ok, data.lastCmdDetail.c_str());
+    } else if (strncmp(action, "mode_", 5) == 0) {
+      genEvents().push("mode", ok, data.lastCmdDetail.c_str());
+    } else if (strncmp(action, "estop_", 6) == 0) {
+      genEvents().push("estop", ok, action);
+    }
+
     publishPending = true;
     pollPaused = false;
     return ok;
@@ -940,6 +959,7 @@ struct GenManager {
         data.activeFault = a[3];
         data.faultType = (uint8_t)a[4];
         markUpdated();
+        genEvents().noteFault(data.activeFault);
         pollStep = 1;
         modbusBusGap();
         return false;

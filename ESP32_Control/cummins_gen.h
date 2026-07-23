@@ -611,7 +611,10 @@ struct GenManager {
     const char* label = cumminsOpModeLabelEl(mode);
     if (mode == 0) {
       bool stopped = true;
-      if (!gensetStopped()) stopped = cmdStop();
+      if (!gensetStopped()) {
+        stopped = cmdStop();
+        if (stopped && gensetRunning()) armStopDelayCountdown();
+      }
       data.lastError = stopped
         ? String("Απομακρυσμένο OFF — STOP OK · panel: ") + cumminsOpModeLabelEl(data.opMode)
         : String("Απομακρυσμένο OFF · STOP απέτυχε · panel: ") + cumminsOpModeLabelEl(data.opMode);
@@ -631,7 +634,8 @@ struct GenManager {
   }
 
   float delayStopTotalSec() const {
-    return data.delayStopPreSec;
+    // Real panel stop wait = 403007 (pre) + TDEC (cooldown).
+    return data.delayStopPreSec + data.delayStopSec;
   }
 
   bool delayCountdownActive() const {
@@ -693,7 +697,12 @@ struct GenManager {
       data.delayStartRemainSec = 0;
     }
 
-    if ((rs == 0 && running) || st == 13 || stopDelayArmed) {
+    // New START while running must clear any leftover STOP countdown.
+    if (rs == 1 && running) {
+      stopDelayArmed = false;
+      data.delayStopActive = false;
+      data.delayStopRemainSec = 0;
+    } else if ((rs == 0 && running) || st == 13 || stopDelayArmed) {
       const float total = delayStopTotalSec();
       if (total > 0 || stopDelayArmed) {
         if (!stopDelayArmed) armStopDelayCountdown();
@@ -706,10 +715,11 @@ struct GenManager {
           data.delayStopRemainSec = 0;
         }
       } else {
+        stopDelayArmed = false;
         data.delayStopActive = false;
         data.delayStopRemainSec = 0;
       }
-    } else if (stopped || (rs == 1 && running)) {
+    } else if (stopped) {
       stopDelayArmed = false;
       data.delayStopActive = false;
       data.delayStopRemainSec = 0;

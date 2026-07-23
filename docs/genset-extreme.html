@@ -673,12 +673,12 @@
             <button type="button" class="btn start" id="btnStart">▶ START</button>
             <button type="button" class="btn stop" id="btnStop">■ STOP</button>
           </div>
-          <div class="mode-row" title="Απομακρυσμένη λειτουργία ESP (Off / Auto / Manual)">
+          <div class="mode-row" title="Απομακρυσμένη πύλη ESP — ΔΕΝ αλλάζει το φυσικό κλειδί Off/Auto/Manual στο panel PS0600">
             <button type="button" class="btn mode" data-mode="0">OFF</button>
             <button type="button" class="btn mode" data-mode="1">AUTO</button>
             <button type="button" class="btn mode" data-mode="2">MAN</button>
           </div>
-          <div class="mode-line" id="modeHint" style="margin-top:6px">Απομακρυσμένο · panel φυσικό —</div>
+          <div class="mode-line" id="modeHint" style="margin-top:6px">Απομακρυσμένο ESP · panel φυσικό —</div>
           <div class="delay-countdowns">
             <div class="delay-cd idle" id="delayCdStartBox">
               <span class="cd-label">START COUNTDOWN</span>
@@ -708,7 +708,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-23-stopcd</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-23-modefix</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -794,6 +794,8 @@
     let lastSchedule = null;
     let delayTick = { start: null, stop: null, t0Start: 0, t0Stop: 0 };
     let pendingDelaySave = false;
+    let pendingRemoteMode = null;
+    let pendingRemoteModeAt = 0;
 
     const SCHED_DAY_BITS = ['Δε','Τρ','Τε','Πε','Πα','Σα','Κυ'];
     const SCHED_PRESETS = [
@@ -1306,15 +1308,29 @@
       stateEl.textContent = stateLabel.toUpperCase();
       stateEl.className = 'state-banner ' + (running ? 'run' : crank ? 'crank' : fault ? 'fault' : 'idle');
 
+      // Mode buttons — ESP remote gate (not the physical PS0600 key)
+      const mode = (pendingRemoteMode != null && Date.now() - pendingRemoteModeAt < 15000)
+        ? pendingRemoteMode
+        : Number(d.remote_mode != null ? d.remote_mode : d.op_mode);
+      if (pendingRemoteMode != null && d.remote_mode != null && Number(d.remote_mode) === pendingRemoteMode) {
+        pendingRemoteMode = null;
+      }
+      document.querySelectorAll('.mode[data-mode]').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
+      });
+
+      const remoteLabel = (pendingRemoteMode != null && Date.now() - pendingRemoteModeAt < 15000)
+        ? ({ 0: 'Off', 1: 'Auto', 2: 'Manual' }[pendingRemoteMode] || '—')
+        : (d.remote_mode_label_el || d.remote_mode_label || '—');
+      const panelLabel = d.op_mode_label_el || d.op_mode_label || '—';
       document.getElementById('modeLine').textContent =
-        'Απομ. ' + (d.remote_mode_label_el || d.remote_mode_label || d.op_mode_label_el || '—')
-        + ' · Panel ' + (d.op_mode_label_el || d.op_mode_label || '—')
+        'ESP ' + remoteLabel + ' · Panel (φυσικό) ' + panelLabel
         + ' · PS0600 · Ctrl ' + (d.controller_type ?? '—');
       const modeHint = document.getElementById('modeHint');
       if (modeHint) {
-        modeHint.textContent = 'Απομακρυσμένο: '
-          + (d.remote_mode_label_el || d.remote_mode_label || '—')
-          + ' · Φυσικό panel: ' + (d.op_mode_label_el || d.op_mode_label || '—');
+        modeHint.textContent = 'ESP πύλη: ' + remoteLabel
+          + ' · Φυσικό κλειδί panel: ' + panelLabel
+          + ' (το app ΔΕΝ γυρνάει το κλειδί)';
       }
 
       const statePill = document.getElementById('statePill');
@@ -1433,12 +1449,6 @@
       } else {
         alEl.innerHTML = '<div class="alarm-ok">✓ Χωρίς ενεργό σφάλμα</div>';
       }
-
-      // Mode buttons — highlight ESP remote mode (falls back to panel)
-      const mode = Number(d.remote_mode != null ? d.remote_mode : d.op_mode);
-      document.querySelectorAll('.mode[data-mode]').forEach(btn => {
-        btn.classList.toggle('active', Number(btn.dataset.mode) === mode);
-      });
 
       syncDelayInputs(d);
       renderDelayCountdown(d);
@@ -1612,6 +1622,30 @@
 
     const MODE_CMDS = { 0: 'mode_off', 1: 'mode_auto', 2: 'mode_manual' };
     const MODE_LABELS = { 0: 'OFF', 1: 'AUTO', 2: 'MANUAL' };
+    const MODE_LABELS_EL = { 0: 'Off', 1: 'Auto', 2: 'Manual' };
+
+    function applyRemoteModeUi(m) {
+      pendingRemoteMode = m;
+      pendingRemoteModeAt = Date.now();
+      document.querySelectorAll('.mode[data-mode]').forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.mode) === m);
+      });
+      const panelLabel = (lastGenset && (lastGenset.op_mode_label_el || lastGenset.op_mode_label)) || '—';
+      const remoteLabel = MODE_LABELS_EL[m] || '—';
+      const modeLine = document.getElementById('modeLine');
+      if (modeLine) {
+        modeLine.textContent = 'ESP ' + remoteLabel + ' · Panel (φυσικό) ' + panelLabel
+          + ' · PS0600 · Ctrl ' + ((lastGenset && lastGenset.controller_type) ?? '—');
+      }
+      const modeHint = document.getElementById('modeHint');
+      if (modeHint) {
+        modeHint.textContent = 'ESP πύλη: ' + remoteLabel
+          + ' · Φυσικό κλειδί panel: ' + panelLabel
+          + ' (το app ΔΕΝ γυρνάει το κλειδί)';
+      }
+      if (lastGenset) lastGenset.remote_mode = m;
+    }
+
     document.querySelectorAll('.mode[data-mode]').forEach(btn => {
       btn.onclick = () => {
         if (!client) { toast('Σύνδεση MQTT απαιτείται'); return; }
@@ -1619,9 +1653,21 @@
         const m = Number(btn.dataset.mode);
         const cmd = MODE_CMDS[m];
         if (!cmd) return;
-        if (!confirm('Απομακρυσμένη λειτουργία: ' + MODE_LABELS[m] + ';')) return;
+        const msg = [
+          'Αλλαγή ESP πύλης → ' + MODE_LABELS[m],
+          '',
+          '⚠ Δεν αλλάζει το φυσικό κλειδί Off/Auto/Manual στο panel PS0600.',
+          '',
+          'OFF = μπλοκάρει START + στέλνει STOP',
+          'AUTO = επιτρέπει START + χρονοπρόγραμμα',
+          'MAN = επιτρέπει START (χωρίς schedule)',
+          '',
+          'Συνέχεια;'
+        ].join('\n');
+        if (!confirm(msg)) return;
+        applyRemoteModeUi(m);
         pubCmd({ genset: cmd });
-        toast('Λειτουργία → ' + MODE_LABELS[m], 4000);
+        toast('ESP πύλη → ' + MODE_LABELS[m] + ' (panel κλειδί άθικτο)', 5000);
       };
     });
 

@@ -551,8 +551,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     const char* action = doc["genset"];
     bool ok = action && genMgr.runGensetCmd(action);
-    if (ok && action && strncmp(action, "mode_", 5) == 0) {
-      genMgr.save(prefs);
+    if (action && strncmp(action, "mode_", 5) == 0) {
+      genMgr.save(prefs);  // persist ESP remote gate even if STOP part failed
     }
     if (!ok) {
       Serial.printf("MQTT: genset cmd '%s' failed: %s\n",

@@ -7,7 +7,7 @@
 #include <string.h>
 
 #ifndef GEN_EVENT_MAX
-#define GEN_EVENT_MAX 40
+#define GEN_EVENT_MAX 32
 #endif
 
 #ifndef GEN_EVENT_NVS_KEY
@@ -117,10 +117,10 @@ struct GenEventLog {
   }
 
   bool loadBlob(Preferences& p) {
-    GenEventStoreHdr store;
-    size_t need = sizeof(store);
+    // static: avoid ~2KB stack use from MQTT/poll callbacks
+    static GenEventStoreHdr store;
     size_t got = p.getBytesLength(GEN_EVENT_NVS_BLOB);
-    if (got < 4 || got > need) return false;
+    if (got < 4 || got > sizeof(store)) return false;
     memset(&store, 0, sizeof(store));
     size_t n = p.getBytes(GEN_EVENT_NVS_BLOB, &store, sizeof(store));
     if (n < 4 || store.magic != 'G' || store.version != 1) return false;
@@ -140,13 +140,14 @@ struct GenEventLog {
       count++;
     }
     head = count % GEN_EVENT_MAX;
-    return count > 0 || got >= 4;
+    return true;
   }
 
   bool loadLegacyJson(Preferences& p) {
     String raw = p.getString(GEN_EVENT_NVS_KEY, "");
     if (!raw.length() || raw == "[]") return false;
-    StaticJsonDocument<4096> doc;
+    static StaticJsonDocument<4096> doc;
+    doc.clear();
     if (deserializeJson(doc, raw) || !doc.is<JsonArray>()) return false;
     JsonArray arr = doc.as<JsonArray>();
     count = 0;
@@ -185,12 +186,13 @@ struct GenEventLog {
   }
 
   bool save(Preferences& p) {
-    GenEventStoreHdr store;
+    // static: avoid ~2KB stack use from MQTT/poll callbacks
+    static GenEventStoreHdr store;
     memset(&store, 0, sizeof(store));
     store.magic = 'G';
     store.version = 1;
-    store.count = count;
-    for (uint8_t i = 0; i < count; i++) {
+    store.count = count > GEN_EVENT_MAX ? GEN_EVENT_MAX : count;
+    for (uint8_t i = 0; i < store.count; i++) {
       uint8_t idx = (head + GEN_EVENT_MAX - count + i) % GEN_EVENT_MAX;
       const GenEvent& e = items[idx];
       GenEventBlob& b = store.items[i];

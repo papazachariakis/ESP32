@@ -708,7 +708,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-23-modefix</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-23-eventlog</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -1472,7 +1472,42 @@
         ? (d.age_sec != null ? d.age_sec + 's' : '—')
         : 'OFF';
 
-      renderEventLog(d.events);
+      renderEventLog(mergeEventLog(d.events));
+    }
+
+    const EVENT_LS_KEY = 'genset_extreme_events_v1';
+    const EVENT_LOG_MAX = 80;
+
+    function eventKey(e) {
+      return String(e.t || 0) + '|' + String(e.type || '') + '|' + String(e.detail || '') + '|' + String(e.ok !== false);
+    }
+
+    function loadLocalEventLog() {
+      try {
+        const raw = localStorage.getItem(EVENT_LS_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) { return []; }
+    }
+
+    function saveLocalEventLog(events) {
+      try {
+        localStorage.setItem(EVENT_LS_KEY, JSON.stringify((events || []).slice(0, EVENT_LOG_MAX)));
+      } catch (e) {}
+    }
+
+    function mergeEventLog(incoming) {
+      const local = loadLocalEventLog();
+      const map = new Map();
+      // Keep local history even if device briefly sends empty list (reboot/OTA).
+      local.forEach(e => { if (e && e.type) map.set(eventKey(e), e); });
+      if (Array.isArray(incoming)) {
+        incoming.forEach(e => { if (e && e.type) map.set(eventKey(e), e); });
+      }
+      const merged = Array.from(map.values()).sort((a, b) => (Number(b.t) || 0) - (Number(a.t) || 0));
+      if (merged.length) saveLocalEventLog(merged);
+      return merged;
     }
 
     function renderEventLog(events) {
@@ -1487,7 +1522,7 @@
         fault: 'FAULT', fault_clear: 'CLEAR', mode: 'MODE', estop: 'E-STOP',
         sched_start: 'SCHED▶', sched_stop: 'SCHED■'
       };
-      box.innerHTML = events.slice(0, 24).map(e => {
+      box.innerHTML = events.slice(0, 40).map(e => {
         const typ = String(e.type || '');
         const ok = e.ok !== false;
         const when = e.local || (e.t ? new Date(e.t * 1000).toLocaleString('el-GR') : '—');

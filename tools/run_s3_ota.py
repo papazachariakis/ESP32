@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 DEVICE = "1CDBD47A3C50"
 BROKER = "broker.hivemq.com"
 PW = "esp32ota"
-TARGET = "3.0.44"
+TARGET = "3.0.46"
 CMD = f"home/{DEVICE}/cmd"
 STATUS = f"home/{DEVICE}/status"
 
@@ -33,12 +33,19 @@ def main():
     client.connect(BROKER, 1883, 60)
     client.subscribe(STATUS)
     client.loop_start()
-    time.sleep(2)
+    time.sleep(3)
 
     def pub(obj):
         client.publish(CMD, json.dumps({"password": PW, **obj}), qos=1)
 
+    start_fw = last.get("firmware")
     print("Start:", {k: last.get(k) for k in ("firmware", "ip", "ota_phase", "ota_error")})
+    print("Target:", TARGET)
+
+    if start_fw == TARGET and last.get("wifi_connected"):
+        print("Already on target:", TARGET)
+        client.loop_stop()
+        return 0
 
     print("Prep: ota_abort + BLE off + Modbus off...")
     pub({"ota_abort": True})
@@ -47,8 +54,8 @@ def main():
     pub({"modbus_cfg": {"enabled": False}})
     time.sleep(5)
 
-    print("Wait 90s for GitHub CDN...")
-    time.sleep(90)
+    print("Wait 45s for GitHub CDN...")
+    time.sleep(45)
 
     print("Trigger ESP HTTPS OTA pull...")
     pub({"ota": PW})
@@ -63,6 +70,7 @@ def main():
         "rebooting",
     }
     last_rx = ""
+    saw_download = False
     for i in range(300):
         time.sleep(2)
         phase = last.get("ota_phase")
@@ -70,6 +78,8 @@ def main():
         rx = last.get("ota_mqtt_rx")
         fw = last.get("firmware")
         wifi = last.get("wifi_connected")
+        if phase and ("download" in phase or "connect" in phase):
+            saw_download = True
         if rx != last_rx or i % 15 == 0:
             print(f"  {i * 2}s phase={phase} rx={rx} err={err} fw={fw} wifi={wifi}")
             last_rx = rx or last_rx
@@ -80,7 +90,8 @@ def main():
         if phase == "rebooting":
             print("Rebooting...")
             break
-        if fw == TARGET:
+        # Only accept SUCCESS after we saw download/reboot, or if FW changed.
+        if fw == TARGET and (saw_download or fw != start_fw):
             print("SUCCESS (during pull):", fw)
             client.loop_stop()
             return 0

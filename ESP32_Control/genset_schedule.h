@@ -210,10 +210,10 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     if (now >= stopAt) {
       Serial.printf("Schedule: slot %d stop after %u min\n", activeSlot + 1,
                     slots[activeSlot].durationMin);
-      bool ok = genMgr.runGensetCmd("stop");
-      // runGensetCmd already logs "stop"; add schedule marker
-      genEvents().push("sched_stop", ok,
-                       (String("Slot #") + String(activeSlot + 1)).c_str());
+      char slotStop[24];
+      snprintf(slotStop, sizeof(slotStop), "slot #%d", activeSlot + 1);
+      bool ok = genMgr.runGensetCmd("stop", "sched", slotStop);
+      (void)ok;
       clearActive(false);
       save(prefs);
       return;
@@ -226,7 +226,7 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     if (!running && !starting && genMgr.gensetStopped()) {
       if (startRetries < 5 && (lastStartRetryMs == 0 || nowMs - lastStartRetryMs >= 20000)) {
         Serial.printf("Schedule: slot %d retry START (%u)\n", activeSlot + 1, startRetries + 1);
-        if (genMgr.runGensetCmd("start")) {
+        if (genMgr.runGensetCmd("start", "sched")) {
           startRetries++;
           lastStartRetryMs = nowMs;
           // Keep original stopAt based on first start intent
@@ -264,12 +264,9 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
 
     Serial.printf("Schedule: slot %d start %02u:%02u for %u min\n", i + 1, s.hour, s.minute,
                   s.durationMin);
-    if (genMgr.runGensetCmd("start")) {
-      genEvents().markCommandEvent();
-      genEvents().push("sched_start", true,
-                       (String("Slot #") + String(i + 1) + " " +
-                        String(s.hour) + ":" + (s.minute < 10 ? "0" : "") + String(s.minute))
-                           .c_str());
+    char slotInfo[40];
+    snprintf(slotInfo, sizeof(slotInfo), "slot #%d %02u:%02u", i + 1, s.hour, s.minute);
+    if (genMgr.runGensetCmd("start", "sched", slotInfo)) {
       activeSlot = i;
       startedAt = now;
       startRetries = 0;
@@ -281,10 +278,6 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
       // Mark fired attempt so we don't spam every second; UI save clears lastFireDay.
       lastFireDay[i] = today;
       save(prefs);
-      genEvents().push("sched_start", false,
-                       genMgr.data.lastError.length()
-                         ? genMgr.data.lastError.c_str()
-                         : (String("Slot #") + String(i + 1) + " FAIL").c_str());
       Serial.printf("Schedule: slot %d START failed — %s\n", i + 1, genMgr.data.lastError.c_str());
     }
     break;

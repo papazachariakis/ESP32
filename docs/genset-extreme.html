@@ -534,7 +534,8 @@
     .event-row.bad{border-left:3px solid var(--bad)}
     .event-row .t{color:var(--muted);white-space:nowrap}
     .event-row .k{font-weight:700;letter-spacing:.04em;text-transform:uppercase}
-    .event-row .k.start,.event-row .k.sched_start{color:var(--ok)}
+    .event-row .k.start,.event-row .k.start_app,.event-row .k.start_panel,.event-row .k.start_sched,.event-row .k.sched_start{color:var(--ok)}
+    .event-row .k.stop,.event-row .k.stop_app,.event-row .k.stop_panel,.event-row .k.stop_sched,.event-row .k.sched_stop,.event-row .k.stop_hard{color:var(--warn)}
     .event-row .k.stop,.event-row .k.stop_hard,.event-row .k.sched_stop{color:var(--warn)}
     .event-row .k.fault{color:var(--bad)}
     .event-row .d{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -708,7 +709,7 @@
         <div class="panel-title">⏰ Χρονοπρογραμματισμός γεννήτριας</div>
         <div class="sched-panel">
           <div class="sched-inline-head">
-            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-23-eventlog</span></div>
+            <div class="title">AUTO START/STOP<span id="uiBuildTag">UI 2026-07-24-src</span></div>
             <div class="sched-clock-inline" id="schedClock">
               <div class="time" id="schedClockTime">—:—:—</div>
               <div class="meta" id="schedClockMeta">NTP...</div>
@@ -729,7 +730,7 @@
 
       <!-- EVENT LOG -->
       <section class="panel area-events" id="eventsPanel">
-        <div class="panel-title">📋 Καταγραφή συμβάντων <span style="font-weight:400;color:var(--muted);font-size:.7rem">(START / STOP / σφάλματα)</span></div>
+        <div class="panel-title">📋 Καταγραφή συμβάντων <span style="font-weight:400;color:var(--muted);font-size:.7rem">(START/STOP · ΕΦΑΡΜΟΓΗ / PANEL / ΧΡΟΝΟΠΡΟΓΡ.)</span></div>
         <div class="event-log" id="eventLog"><div class="event-empty">Αναμονή δεδομένων…</div></div>
       </section>
 
@@ -1518,9 +1519,22 @@
         return;
       }
       const labels = {
-        start: 'START', stop: 'STOP', stop_hard: 'STOP!', reset: 'RESET',
-        fault: 'FAULT', fault_clear: 'CLEAR', mode: 'MODE', estop: 'E-STOP',
-        sched_start: 'SCHED▶', sched_stop: 'SCHED■'
+        start: 'START · ?',
+        start_app: 'START · ΕΦΑΡΜΟΓΗ',
+        start_panel: 'START · PANEL',
+        start_sched: 'START · ΧΡΟΝΟΠΡ.',
+        sched_start: 'START · ΧΡΟΝΟΠΡ.',
+        stop: 'STOP · ?',
+        stop_app: 'STOP · ΕΦΑΡΜΟΓΗ',
+        stop_panel: 'STOP · PANEL',
+        stop_sched: 'STOP · ΧΡΟΝΟΠΡ.',
+        sched_stop: 'STOP · ΧΡΟΝΟΠΡ.',
+        stop_hard: 'STOP! · ΕΦΑΡΜΟΓΗ',
+        reset: 'RESET',
+        fault: 'FAULT',
+        fault_clear: 'CLEAR',
+        mode: 'MODE',
+        estop: 'E-STOP'
       };
       box.innerHTML = events.slice(0, 40).map(e => {
         const typ = String(e.type || '');

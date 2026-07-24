@@ -827,10 +827,12 @@ struct GenManager {
     return ok;
   }
 
-  bool runGensetCmd(const char* action) {
+  bool runGensetCmd(const char* action, const char* source = "app", const char* extra = nullptr) {
     data.lastCmd = action ? action : "";
     data.lastCmdOk = false;
     data.lastCmdDetail = "";
+    // source: "app" | "sched" — used for event log origin
+    const bool fromSched = source && strcmp(source, "sched") == 0;
     if (!enabled || !bus || !action || profile != MODBUS_PROFILE_PS0600) {
       data.lastError = "genset cmd unavailable — Modbus OFF";
       data.lastCmdDetail = data.lastError;
@@ -851,7 +853,8 @@ struct GenManager {
         data.lastError = "START κλειδωμένο — απομακρυσμένο Off (διάλεξε Auto ή Manual)";
         data.lastCmdOk = false;
         data.lastCmdDetail = data.lastError;
-        genEvents().push("start", false, data.lastError.c_str());
+        genEvents().markCommandEvent();
+        genEvents().push(fromSched ? "start_sched" : "start_app", false, data.lastError.c_str());
         publishPending = true;
         pollPaused = false;
         return false;
@@ -902,14 +905,36 @@ struct GenManager {
     if (!ok && data.lastCmdDetail.length() == 0)
       data.lastCmdDetail = "εντολή απέτυχε";
 
-    // Audit log: start / stop / faults-related commands
+    // Audit log with origin: app / schedule / (panel via noteEngineRun)
     if (strcmp(action, "start") == 0) {
       genEvents().markCommandEvent();
-      genEvents().push("start", ok, data.lastCmdDetail.c_str());
+      char detail[72];
+      if (fromSched) {
+        if (extra && extra[0])
+          snprintf(detail, sizeof(detail), "πηγή: ΧΡΟΝΟΠΡΟΓΡ · %s", extra);
+        else
+          snprintf(detail, sizeof(detail), "πηγή: ΧΡΟΝΟΠΡΟΓΡ · %s", data.lastCmdDetail.c_str());
+        genEvents().push("start_sched", ok, detail);
+      } else {
+        snprintf(detail, sizeof(detail), "πηγή: ΕΦΑΡΜΟΓΗ · %s", data.lastCmdDetail.c_str());
+        genEvents().push("start_app", ok, detail);
+      }
     } else if (strcmp(action, "stop") == 0 || strcmp(action, "stop_hard") == 0) {
       genEvents().markCommandEvent();
-      genEvents().push(strcmp(action, "stop_hard") == 0 ? "stop_hard" : "stop", ok,
-                       data.lastCmdDetail.c_str());
+      char detail[72];
+      if (fromSched) {
+        if (extra && extra[0])
+          snprintf(detail, sizeof(detail), "πηγή: ΧΡΟΝΟΠΡΟΓΡ · %s", extra);
+        else
+          snprintf(detail, sizeof(detail), "πηγή: ΧΡΟΝΟΠΡΟΓΡ · %s", data.lastCmdDetail.c_str());
+        genEvents().push("stop_sched", ok, detail);
+      } else if (strcmp(action, "stop_hard") == 0) {
+        snprintf(detail, sizeof(detail), "πηγή: ΕΦΑΡΜΟΓΗ · %s", data.lastCmdDetail.c_str());
+        genEvents().push("stop_hard", ok, detail);
+      } else {
+        snprintf(detail, sizeof(detail), "πηγή: ΕΦΑΡΜΟΓΗ · %s", data.lastCmdDetail.c_str());
+        genEvents().push("stop_app", ok, detail);
+      }
     } else if (strcmp(action, "reset") == 0) {
       genEvents().push("reset", ok, data.lastCmdDetail.c_str());
     } else if (strncmp(action, "mode_", 5) == 0) {

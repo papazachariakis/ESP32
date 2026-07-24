@@ -123,7 +123,7 @@ struct GenEventLog {
     lastFaultCode = faultCode;
   }
 
-  // Log START/STOP even when started from panel / Auto (no ESP command).
+  // Log START/STOP when engine changes without ESP/app/schedule command (= panel/Auto).
   void noteEngineRun(bool running, uint16_t rpm, uint16_t remoteStart, uint8_t state) {
     if (!runPrimed) {
       lastRunning = running;
@@ -132,18 +132,18 @@ struct GenEventLog {
     }
     if (running == lastRunning) return;
     lastRunning = running;
-    // ESP/schedule command already wrote start/stop recently — avoid duplicate.
+    // App/schedule already logged within 90s — skip duplicate.
     if (lastCmdEventMs && (millis() - lastCmdEventMs) < 90000UL) return;
 
     char buf[56];
     if (running) {
-      snprintf(buf, sizeof(buf), "ανίχνευση START · rs=%u · %u rpm",
+      snprintf(buf, sizeof(buf), "πηγή: PANEL · rs=%u · %u rpm",
                (unsigned)remoteStart, (unsigned)rpm);
-      push("start", true, buf);
+      push("start_panel", true, buf);
     } else {
-      snprintf(buf, sizeof(buf), "ανίχνευση STOP · state=%u · %u rpm",
+      snprintf(buf, sizeof(buf), "πηγή: PANEL · state=%u · %u rpm",
                (unsigned)state, (unsigned)rpm);
-      push("stop", true, buf);
+      push("stop_panel", true, buf);
     }
   }
 

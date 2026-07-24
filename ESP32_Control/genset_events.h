@@ -51,11 +51,18 @@ struct GenEventLog {
   bool faultPrimed = false;
   bool dirty = false;
   unsigned long lastSaveMs = 0;
+  bool runPrimed = false;
+  bool lastRunning = false;
+  unsigned long lastCmdEventMs = 0;
 
   void begin(Preferences& p) {
     prefs = &p;
     load();
     Serial.printf("GenEventLog: loaded %u events from NVS\n", (unsigned)count);
+  }
+
+  void markCommandEvent() {
+    lastCmdEventMs = millis();
   }
 
   void formatLocal(time_t epoch, char* out, size_t outLen) {
@@ -114,6 +121,30 @@ struct GenEventLog {
       push("fault_clear", true, buf);
     }
     lastFaultCode = faultCode;
+  }
+
+  // Log START/STOP even when started from panel / Auto (no ESP command).
+  void noteEngineRun(bool running, uint16_t rpm, uint16_t remoteStart, uint8_t state) {
+    if (!runPrimed) {
+      lastRunning = running;
+      runPrimed = true;
+      return;
+    }
+    if (running == lastRunning) return;
+    lastRunning = running;
+    // ESP/schedule command already wrote start/stop recently — avoid duplicate.
+    if (lastCmdEventMs && (millis() - lastCmdEventMs) < 90000UL) return;
+
+    char buf[56];
+    if (running) {
+      snprintf(buf, sizeof(buf), "ανίχνευση START · rs=%u · %u rpm",
+               (unsigned)remoteStart, (unsigned)rpm);
+      push("start", true, buf);
+    } else {
+      snprintf(buf, sizeof(buf), "ανίχνευση STOP · state=%u · %u rpm",
+               (unsigned)state, (unsigned)rpm);
+      push("stop", true, buf);
+    }
   }
 
   bool loadBlob(Preferences& p) {

@@ -904,8 +904,10 @@ struct GenManager {
 
     // Audit log: start / stop / faults-related commands
     if (strcmp(action, "start") == 0) {
+      genEvents().markCommandEvent();
       genEvents().push("start", ok, data.lastCmdDetail.c_str());
     } else if (strcmp(action, "stop") == 0 || strcmp(action, "stop_hard") == 0) {
+      genEvents().markCommandEvent();
       genEvents().push(strcmp(action, "stop_hard") == 0 ? "stop_hard" : "stop", ok,
                        data.lastCmdDetail.c_str());
     } else if (strcmp(action, "reset") == 0) {
@@ -1171,6 +1173,11 @@ struct GenManager {
         data.pollComplete = true;
         data.lastError = "";
         markUpdated(true);
+        genEvents().noteEngineRun(
+          (data.gensetState == 8 || data.engineRpm > 100),
+          data.engineRpm,
+          data.remoteStartReg,
+          data.gensetState);
         pollStep = 0;
         return true;
       }

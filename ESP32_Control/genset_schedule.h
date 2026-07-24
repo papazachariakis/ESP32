@@ -265,6 +265,7 @@ inline void GenSchedule::tick(GenManager& genMgr, Preferences& prefs) {
     Serial.printf("Schedule: slot %d start %02u:%02u for %u min\n", i + 1, s.hour, s.minute,
                   s.durationMin);
     if (genMgr.runGensetCmd("start")) {
+      genEvents().markCommandEvent();
       genEvents().push("sched_start", true,
                        (String("Slot #") + String(i + 1) + " " +
                         String(s.hour) + ":" + (s.minute < 10 ? "0" : "") + String(s.minute))

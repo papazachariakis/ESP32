@@ -17,15 +17,17 @@
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
 #if defined(ESP32_SLIM_BUILD)
-// Classic: kick STA without blocking the Arduino loop (blocking waits froze HTTP/MQTT).
-#define WIFI_RECONNECT_INTERVAL_MS 10000
-#define WIFI_RECONNECT_FAIL_RESTART 6
+// Classic: gentle recovery — aggressive begin()/BLE was dropping STA in a loop.
+#define WIFI_RECONNECT_INTERVAL_MS 30000
+#define WIFI_RECONNECT_FAIL_RESTART 15
 #define WIFI_SOFT_WAIT_MS 2000
 #define WIFI_BEGIN_WAIT_MS 4000
 #define WIFI_RECOVERY_ALLOW_SCAN 0
 #define WIFI_RECOVERY_NONBLOCK 1
-#define WIFI_KICK_GRACE_MS 20000
-#define BLE_PAUSE_WIFI_DOWN_MS 1000
+#define WIFI_KICK_GRACE_MS 45000
+#define WIFI_DOWN_DEBOUNCE_MS 5000
+#define BLE_PAUSE_WIFI_DOWN_MS 500
+#define BLE_AUTO_RECONNECT 0
 #else
 #define WIFI_RECONNECT_INTERVAL_MS 15000
 #define WIFI_RECONNECT_FAIL_RESTART 5
@@ -34,7 +36,9 @@
 #define WIFI_RECOVERY_ALLOW_SCAN 1
 #define WIFI_RECOVERY_NONBLOCK 0
 #define WIFI_KICK_GRACE_MS 0
+#define WIFI_DOWN_DEBOUNCE_MS 0
 #define BLE_PAUSE_WIFI_DOWN_MS 8000
+#define BLE_AUTO_RECONNECT 1
 #endif
 
 // Default WiFi SSIDs (passwords in wifi_secrets.h — gitignored)
@@ -42,7 +46,7 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.60"
+#define FIRMWARE_VERSION "3.0.61"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -68,10 +72,10 @@
 #define BLE_SCAN_SECONDS 3
 #define BLE_SCAN_INTERVAL_MS 160
 #define BLE_SCAN_WINDOW_MS 80
-#define BLE_RECONNECT_MS 20000
-#define BLE_POLL_MS 12000
+#define BLE_RECONNECT_MS 300000
+#define BLE_POLL_MS 15000
 // Wait for STA to settle before any BLE activity after boot/reconnect.
-#define BLE_WIFI_STABLE_MS 20000
+#define BLE_WIFI_STABLE_MS 60000
 #else
 #define BLE_SCAN_SECONDS 15
 #define BLE_SCAN_INTERVAL_MS 80

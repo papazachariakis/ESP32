@@ -1603,8 +1603,14 @@ void loop() {
 
     if (!wifiDownSince) wifiDownSince = millis();
 
-    // Free BLE radio quickly so STA can recover (Classic: ~1s, S3: ~8s).
-    if (!blePausedForWifi && (millis() - wifiDownSince > BLE_PAUSE_WIFI_DOWN_MS)) {
+#if WIFI_DOWN_DEBOUNCE_MS > 0
+    // Ignore brief WiFi status glitches — kicking STA made Classic drop in a loop.
+    if (millis() - wifiDownSince < WIFI_DOWN_DEBOUNCE_MS) {
+      // still pause BLE quickly below after debounce window via separate check
+    } else
+#endif
+    // Free BLE radio quickly so STA can recover (Classic: ~0.5s after debounce, S3: ~8s).
+    if (!blePausedForWifi && (millis() - wifiDownSince > BLE_PAUSE_WIFI_DOWN_MS + WIFI_DOWN_DEBOUNCE_MS)) {
       if (bmsMgr.connected || (bmsMgr.client && bmsMgr.client->isConnected())) {
         Serial.println("WiFi down — pausing BLE for radio recovery");
         bmsMgr.dropLink();
@@ -1633,6 +1639,12 @@ void loop() {
 #endif
 
     if (millis() - lastWifiTry > WIFI_RECONNECT_INTERVAL_MS) {
+#if WIFI_DOWN_DEBOUNCE_MS > 0
+      if (millis() - wifiDownSince < WIFI_DOWN_DEBOUNCE_MS) {
+        // wait out glitch before kicking radio
+      } else
+#endif
+      {
       lastWifiTry = millis();
       wifiApplyStaTuning();
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -1673,6 +1685,7 @@ void loop() {
           ESP.restart();
         }
 #endif
+      }
       }
     }
   } else {
@@ -1769,16 +1782,25 @@ void loop() {
   }
 
   if (gBleConnectPending && !otaInProgress()) {
-    gBleConnectPending = false;
-    runBleConnectJob();
+#if defined(ESP32_SLIM_BUILD)
+    if (!bleRadioOk) {
+      // Keep pending until WiFi has been stable — BLE connect blocks Classic loop.
+    } else
+#endif
+    {
+      gBleConnectPending = false;
+      runBleConnectJob();
+    }
   }
 
   // Do not fight WiFi recovery with BLE reconnect on Classic coexistence.
+#if BLE_AUTO_RECONNECT
   if (bleRadioOk && bmsMgr.mac.length() > 0 && !bmsMgr.connected
       && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
     lastBleReconnect = millis();
     bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
   }
+#endif
 
   static unsigned long lastBmsMqtt = 0;
 

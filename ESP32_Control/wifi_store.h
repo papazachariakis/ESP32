@@ -167,10 +167,10 @@ inline bool wifiStoreTrySoftReconnect(Preferences& prefs) {
   wifiApplyStaTuning();
 
 #if WIFI_RECOVERY_NONBLOCK
-  // Kick only — do not sit in wifiWaitConnected (that froze Classic HTTP/MQTT).
-  Serial.printf("WiFi soft kick: %s\n", ssid.c_str());
-  WiFi.disconnect(false);
-  delay(20);
+  // Prefer reconnect(); avoid disconnect()+begin() every cycle (that caused drop loops).
+  Serial.printf("WiFi soft kick reconnect: %s\n", ssid.c_str());
+  if (WiFi.reconnect()) return WiFi.status() == WL_CONNECTED;
+  Serial.printf("WiFi soft kick begin: %s\n", ssid.c_str());
   WiFi.begin(ssid.c_str(), pass.c_str());
   return WiFi.status() == WL_CONNECTED;
 #else

@@ -1599,11 +1599,12 @@ void loop() {
 
     if (!wifiDownSince) wifiDownSince = millis();
 
-    // Classic: only free BLE after WiFi stays down a bit — brief blips shouldn't kill BMS.
-    if (!blePausedForWifi && (millis() - wifiDownSince > 8000)
-        && (bmsMgr.connected || (bmsMgr.client && bmsMgr.client->isConnected()))) {
-      Serial.println("WiFi down — pausing BLE for radio recovery");
-      bmsMgr.dropLink();
+    // Free BLE radio quickly so STA can recover (Classic: ~1s, S3: ~8s).
+    if (!blePausedForWifi && (millis() - wifiDownSince > BLE_PAUSE_WIFI_DOWN_MS)) {
+      if (bmsMgr.connected || (bmsMgr.client && bmsMgr.client->isConnected())) {
+        Serial.println("WiFi down — pausing BLE for radio recovery");
+        bmsMgr.dropLink();
+      }
       blePausedForWifi = true;
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
       esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
@@ -1618,14 +1619,17 @@ void loop() {
 #endif
 
       bool ok = wifiStoreTrySoftReconnect(prefs);
+#if WIFI_RECOVERY_ALLOW_SCAN
       if (!ok) ok = wifiStoreTryConnect(prefs);
+#endif
 
       if (ok) {
         wifiFailStreak = 0;
         blePausedForWifi = false;
         wifiDownSince = 0;
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
-        esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+        // Stay WiFi-biased — BALANCE after reconnect was letting BLE starve STA.
+        esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
 #endif
         Serial.println("WiFi reconnected");
         startMdns();

@@ -53,7 +53,12 @@ inline String wifiStoreCurrentSsid(Preferences& prefs) {
 
 inline void wifiApplyStaTuning() {
   WiFi.setSleep(false);
+#if defined(ESP32_SLIM_BUILD)
+  // Own reconnect in loop — auto-reconnect races soft begin and can stick the radio.
+  WiFi.setAutoReconnect(false);
+#else
   WiFi.setAutoReconnect(true);
+#endif
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
   // Classic shares one radio with BLE — keep WiFi prioritized except during BLE scan.
   esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
@@ -64,7 +69,8 @@ inline bool wifiWaitConnected(uint32_t timeoutMs = 12000) {
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
     modbusPump();
-    delay(200);
+    yield();
+    delay(50);
   }
   if (WiFi.status() != WL_CONNECTED) return false;
   wifiApplyStaTuning();
@@ -149,7 +155,7 @@ inline bool wifiStoreConnect(Preferences& prefs, const String& ssid, String pass
   delay(200);
   Serial.printf("WiFi connect: %s\n", ssid.c_str());
   WiFi.begin(ssid.c_str(), pass.c_str());
-  bool ok = wifiWaitConnected(15000);
+  bool ok = wifiWaitConnected(WIFI_BEGIN_WAIT_MS + 3000);
   if (ok) wifiStoreRememberSsid(prefs, ssid);
   return ok;
 }
@@ -164,21 +170,22 @@ inline bool wifiStoreTrySoftReconnect(Preferences& prefs) {
   wifiApplyStaTuning();
 
   Serial.printf("WiFi soft reconnect: %s\n", ssid.c_str());
-  if (WiFi.reconnect() && wifiWaitConnected(8000)) {
+  if (WiFi.reconnect() && wifiWaitConnected(WIFI_SOFT_WAIT_MS)) {
     wifiStoreRememberSsid(prefs, ssid);
     return true;
   }
 
   // begin without wipe — keeps credentials in driver if possible
   WiFi.disconnect(false);
-  delay(100);
+  delay(50);
   Serial.printf("WiFi begin (no scan): %s\n", ssid.c_str());
   WiFi.begin(ssid.c_str(), pass.c_str());
-  if (!wifiWaitConnected(12000)) return false;
+  if (!wifiWaitConnected(WIFI_BEGIN_WAIT_MS)) return false;
   wifiStoreRememberSsid(prefs, ssid);
   return true;
 }
 
+// Boot / portal / explicit connect only — sync AP scan blocks the radio for a long time.
 inline bool wifiStoreTryConnect(Preferences& prefs) {
   StaticJsonDocument<1536> doc;
   if (deserializeJson(doc, prefs.getString(WIFI_STORE_KEY, "[]"))) return false;
@@ -212,7 +219,7 @@ inline bool wifiStoreTryConnect(Preferences& prefs) {
     if (ssid.length() == 0) return false;
     Serial.printf("WiFi connect: %s (RSSI %d)\n", ssid.c_str(), bestRssi);
     WiFi.begin(ssid.c_str(), pass.c_str());
-    if (!wifiWaitConnected(12000)) return false;
+    if (!wifiWaitConnected(WIFI_BEGIN_WAIT_MS)) return false;
     wifiStoreRememberSsid(prefs, ssid);
     return true;
   };

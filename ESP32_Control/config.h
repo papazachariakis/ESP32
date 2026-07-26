@@ -16,15 +16,29 @@
 #define WIFI_STORE_MAX 5
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
+#if defined(ESP32_SLIM_BUILD)
+// Classic: soft reconnect only in loop — never block on AP scan while recovering.
+#define WIFI_RECONNECT_INTERVAL_MS 12000
+#define WIFI_RECONNECT_FAIL_RESTART 8
+#define WIFI_SOFT_WAIT_MS 4500
+#define WIFI_BEGIN_WAIT_MS 7000
+#define WIFI_RECOVERY_ALLOW_SCAN 0
+#define BLE_PAUSE_WIFI_DOWN_MS 1000
+#else
 #define WIFI_RECONNECT_INTERVAL_MS 15000
 #define WIFI_RECONNECT_FAIL_RESTART 5
+#define WIFI_SOFT_WAIT_MS 8000
+#define WIFI_BEGIN_WAIT_MS 12000
+#define WIFI_RECOVERY_ALLOW_SCAN 1
+#define BLE_PAUSE_WIFI_DOWN_MS 8000
+#endif
 
 // Default WiFi SSIDs (passwords in wifi_secrets.h — gitignored)
 #define WIFI_DEFAULT_SSID_PRIMARY   "mikrotik"
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.54"
+#define FIRMWARE_VERSION "3.0.55"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -45,14 +59,17 @@
 #define MQTT_PUBLISH_INTERVAL_MS 2000
 #define MQTT_BMS_PUBLISH_INTERVAL_MS 2000
 
+#if defined(ESP32_SLIM_BUILD)
+// Classic: short BLE scan — long PREFER_BT scans drop STA.
+#define BLE_SCAN_SECONDS 4
+#define BLE_SCAN_INTERVAL_MS 160
+#define BLE_SCAN_WINDOW_MS 80
+#define BLE_RECONNECT_MS 12000
+#define BLE_POLL_MS 10000
+#else
 #define BLE_SCAN_SECONDS 15
 #define BLE_SCAN_INTERVAL_MS 80
 #define BLE_SCAN_WINDOW_MS 79
-#if defined(ESP32_SLIM_BUILD)
-// Classic: one radio for WiFi+BLE — slow BLE churn so STA stays associated.
-#define BLE_RECONNECT_MS 10000
-#define BLE_POLL_MS 8000
-#else
 #define BLE_RECONNECT_MS 2000
 #define BLE_POLL_MS 5000
 #endif

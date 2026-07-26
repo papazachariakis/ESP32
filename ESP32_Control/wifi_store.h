@@ -5,6 +5,10 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include "modbus_rtu.h"
+#include "config.h"
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+#include <esp_coexist.h>
+#endif
 
 #if __has_include("wifi_secrets.h")
 #include "wifi_secrets.h"
@@ -47,13 +51,24 @@ inline String wifiStoreCurrentSsid(Preferences& prefs) {
   return "";
 }
 
+inline void wifiApplyStaTuning() {
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+  // Classic shares one radio with BLE — keep WiFi prioritized except during BLE scan.
+  esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+#endif
+}
+
 inline bool wifiWaitConnected(uint32_t timeoutMs = 12000) {
   uint32_t start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
     modbusPump();
     delay(200);
   }
-  return WiFi.status() == WL_CONNECTED;
+  if (WiFi.status() != WL_CONNECTED) return false;
+  wifiApplyStaTuning();
+  return true;
 }
 
 inline void wifiStoreUpsert(Preferences& prefs, const String& ssid, const String& pass) {
@@ -129,6 +144,7 @@ inline bool wifiStoreConnect(Preferences& prefs, const String& ssid, String pass
 
   wifiStoreUpsert(prefs, ssid, pass);
   WiFi.mode(WIFI_STA);
+  wifiApplyStaTuning();
   WiFi.disconnect(true);
   delay(200);
   Serial.printf("WiFi connect: %s\n", ssid.c_str());
@@ -138,6 +154,31 @@ inline bool wifiStoreConnect(Preferences& prefs, const String& ssid, String pass
   return ok;
 }
 
+// Soft path for runtime drops: last SSID first, no full scan / no erase of STA config.
+inline bool wifiStoreTrySoftReconnect(Preferences& prefs) {
+  String ssid = wifiStoreCurrentSsid(prefs);
+  String pass;
+  if (ssid.length() == 0 || !wifiStoreGetPass(prefs, ssid, pass)) return false;
+
+  WiFi.mode(WIFI_STA);
+  wifiApplyStaTuning();
+
+  Serial.printf("WiFi soft reconnect: %s\n", ssid.c_str());
+  if (WiFi.reconnect() && wifiWaitConnected(8000)) {
+    wifiStoreRememberSsid(prefs, ssid);
+    return true;
+  }
+
+  // begin without wipe — keeps credentials in driver if possible
+  WiFi.disconnect(false);
+  delay(100);
+  Serial.printf("WiFi begin (no scan): %s\n", ssid.c_str());
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  if (!wifiWaitConnected(12000)) return false;
+  wifiStoreRememberSsid(prefs, ssid);
+  return true;
+}
+
 inline bool wifiStoreTryConnect(Preferences& prefs) {
   StaticJsonDocument<1536> doc;
   if (deserializeJson(doc, prefs.getString(WIFI_STORE_KEY, "[]"))) return false;
@@ -145,6 +186,7 @@ inline bool wifiStoreTryConnect(Preferences& prefs) {
 
   JsonArray arr = doc.as<JsonArray>();
   WiFi.mode(WIFI_STA);
+  wifiApplyStaTuning();
   WiFi.disconnect(true);
   delay(200);
 

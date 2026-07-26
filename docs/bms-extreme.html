@@ -664,7 +664,8 @@
       }
       if (j.firmware) document.getElementById('fwVer').textContent = 'v' + j.firmware;
       if (j.ble) renderBle(j.ble);
-      if (j.bms && (!lastBms || !lastBms.valid)) onBms(j.bms);
+      // Prefer nested status.bms whenever present — keeps age/UI fresh even if /bms topic gaps.
+      if (j.bms && j.bms.valid) onBms(j.bms);
       else if (lastBms) render(lastBms, j.ble);
     }
 

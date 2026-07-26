@@ -40,7 +40,11 @@
 #include "config.h"
 #include "ble_radio.h"
 
+#if defined(ESP32_SLIM_BUILD)
+#include "webui_slim.h"
+#else
 #include "webui.h"
+#endif
 #include "bms_manager.h"
 #include "wifi_store.h"
 #include "hub_reset.h"
@@ -912,6 +916,7 @@ void setupWiFi() {
   if (forcePortal) prefs.putBool(WIFI_FORCE_PORTAL_KEY, false);
 
   if (!forcePortal && wifiStoreTryConnect(prefs)) {
+    wifiApplyStaTuning();
     Serial.print("WiFi OK (saved list): ");
     Serial.println(WiFi.localIP());
     startMdns();
@@ -942,6 +947,7 @@ void setupWiFi() {
 
   wifiStoreUpsert(prefs, wm.getWiFiSSID(), wm.getWiFiPass(false));
   wifiStoreRememberSsid(prefs, wm.getWiFiSSID());
+  wifiApplyStaTuning();
 
   Serial.print("WiFi OK: ");
 
@@ -1020,7 +1026,9 @@ void startBleScan() {
   scan->clearResults();
   pumpNetwork();
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
-  esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+  // Restore WiFi priority after temporary BT bias during scan.
+  esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+  WiFi.setSleep(false);
 #endif
   Serial.printf("BLE scan done: %d devices, %d BMS\n", count, bmsCount);
 }
@@ -1582,16 +1590,71 @@ void loop() {
 
   if (otaInProgress() && !mqttOtaActive()) return;
 
+  static bool blePausedForWifi = false;
+  static unsigned long wifiDownSince = 0;
+
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWifiTry = 0;
-    if (millis() - lastWifiTry > 45000) {
+    static uint8_t wifiFailStreak = 0;
+
+    if (!wifiDownSince) wifiDownSince = millis();
+
+    // Classic: only free BLE after WiFi stays down a bit — brief blips shouldn't kill BMS.
+    if (!blePausedForWifi && (millis() - wifiDownSince > 8000)
+        && (bmsMgr.connected || (bmsMgr.client && bmsMgr.client->isConnected()))) {
+      Serial.println("WiFi down — pausing BLE for radio recovery");
+      bmsMgr.dropLink();
+      blePausedForWifi = true;
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+      esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+#endif
+    }
+
+    if (millis() - lastWifiTry > WIFI_RECONNECT_INTERVAL_MS) {
       lastWifiTry = millis();
-      if (wifiStoreTryConnect(prefs)) {
-        Serial.println("WiFi reconnected via saved list");
+      wifiApplyStaTuning();
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+      esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+#endif
+
+      bool ok = wifiStoreTrySoftReconnect(prefs);
+      if (!ok) ok = wifiStoreTryConnect(prefs);
+
+      if (ok) {
+        wifiFailStreak = 0;
+        blePausedForWifi = false;
+        wifiDownSince = 0;
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+        esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+#endif
+        Serial.println("WiFi reconnected");
         startMdns();
         mqttConnect();
+      } else {
+        wifiFailStreak++;
+        Serial.printf("WiFi reconnect failed (%u/%u)\n",
+                      wifiFailStreak, WIFI_RECONNECT_FAIL_RESTART);
+        if (wifiFailStreak >= WIFI_RECONNECT_FAIL_RESTART) {
+          Serial.println("WiFi reconnect exhausted, restarting...");
+          delay(500);
+          ESP.restart();
+        }
       }
     }
+  } else {
+    // Connected: keep Classic radio biased to WiFi so BLE BMS doesn't kick STA off.
+    if (wifiDownSince || blePausedForWifi) {
+      wifiDownSince = 0;
+      blePausedForWifi = false;
+    }
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+    static unsigned long lastCoexWifi = 0;
+    if (millis() - lastCoexWifi > 30000) {
+      lastCoexWifi = millis();
+      esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+      WiFi.setSleep(false);
+    }
+#endif
   }
 
   if (!mqtt.connected()) {
@@ -1654,7 +1717,9 @@ void loop() {
     runBleConnectJob();
   }
 
-  if (bmsMgr.mac.length() > 0 && !bmsMgr.connected && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
+  // Do not fight WiFi recovery with BLE reconnect on Classic coexistence.
+  if (WiFi.status() == WL_CONNECTED && bmsMgr.mac.length() > 0 && !bmsMgr.connected
+      && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
     lastBleReconnect = millis();
     bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
   }
@@ -1666,7 +1731,9 @@ void loop() {
     publishBmsMqtt();
   }
 
-  bmsMgr.maintain();
+  if (!blePausedForWifi) {
+    bmsMgr.maintain();
+  }
 
   genMgr.poll();
   genMgr.loopTickDelays();

@@ -16,13 +16,15 @@
 #define WIFI_STORE_MAX 5
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
+#define WIFI_RECONNECT_INTERVAL_MS 15000
+#define WIFI_RECONNECT_FAIL_RESTART 5
 
 // Default WiFi SSIDs (passwords in wifi_secrets.h — gitignored)
 #define WIFI_DEFAULT_SSID_PRIMARY   "mikrotik"
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.50"
+#define FIRMWARE_VERSION "3.0.54"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -46,8 +48,14 @@
 #define BLE_SCAN_SECONDS 15
 #define BLE_SCAN_INTERVAL_MS 80
 #define BLE_SCAN_WINDOW_MS 79
+#if defined(ESP32_SLIM_BUILD)
+// Classic: one radio for WiFi+BLE — slow BLE churn so STA stays associated.
+#define BLE_RECONNECT_MS 10000
+#define BLE_POLL_MS 8000
+#else
 #define BLE_RECONNECT_MS 2000
 #define BLE_POLL_MS 5000
+#endif
 #define BLE_NOTIFY_KICK_MS 8000
 #define BLE_NOTIFY_RESET_MS 30000
 #define BLE_CELL_STALE_MS 25000

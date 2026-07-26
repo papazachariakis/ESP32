@@ -1147,7 +1147,7 @@
     <button class="btn sec" onclick="openLocalOta()">📡 OTA από τοπικό δίκτυο (WiFi σπιτιού)</button>
     <button class="btn danger" onclick="remoteReboot()">↻ Επανεκκίνηση ESP32</button>
     <button class="btn danger" style="margin-top:8px;background:#7f1d1d" onclick="remoteFactoryReset()">⚠ Εργοστασιακή επαναφορά</button>
-    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.19</span></b> · esp32ota · ~2 λεπτά reboot</p>
+    <p class="small muted" style="margin-top:8px">Τρέχον firmware: <b id="otaCurrentFw">—</b> · Διαθέσιμο OTA: <b>v<span id="otaExpectedFw">3.0.51</span></b> · esp32ota · ~2 λεπτά reboot</p>
   </aside>
 
   <div class="toast-wrap" id="toasts"></div>
@@ -1184,7 +1184,7 @@
     const BOARD_LABEL = 'ESP32 Classic';
     const OTA_FIRMWARE_FILE = 'firmware.bin';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware.bin';
-    const EXPECTED_FIRMWARE = '3.0.37';
+    const EXPECTED_FIRMWARE = '3.0.54';
     const MQTT_CMD_PW = 'esp32ota';
 
     function pubCmd(obj) {

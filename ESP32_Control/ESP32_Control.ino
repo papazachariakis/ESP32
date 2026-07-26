@@ -1691,6 +1691,21 @@ void loop() {
 #endif
   }
 
+  // Classic: track continuous WiFi-up time before allowing BLE.
+  static unsigned long wifiStableSince = 0;
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!wifiStableSince) wifiStableSince = millis();
+  } else {
+    wifiStableSince = 0;
+  }
+#if defined(ESP32_SLIM_BUILD)
+  const bool bleRadioOk = !blePausedForWifi
+      && wifiStableSince
+      && (millis() - wifiStableSince >= BLE_WIFI_STABLE_MS);
+#else
+  const bool bleRadioOk = !blePausedForWifi;
+#endif
+
   if (!mqtt.connected()) {
     static unsigned long lastTry = 0;
     if (WiFi.status() == WL_CONNECTED && millis() - lastTry > 10000) {
@@ -1741,9 +1756,16 @@ void loop() {
   }
 
   if (gBleScanPending && !otaInProgress()) {
-    gBleScanPending = false;
-    Serial.println("Running BLE scan...");
-    publishBleScan();
+#if defined(ESP32_SLIM_BUILD)
+    if (!bleRadioOk) {
+      // Defer scan until WiFi has been stable — sync BLE scan drops STA.
+    } else
+#endif
+    {
+      gBleScanPending = false;
+      Serial.println("Running BLE scan...");
+      publishBleScan();
+    }
   }
 
   if (gBleConnectPending && !otaInProgress()) {
@@ -1752,7 +1774,7 @@ void loop() {
   }
 
   // Do not fight WiFi recovery with BLE reconnect on Classic coexistence.
-  if (WiFi.status() == WL_CONNECTED && bmsMgr.mac.length() > 0 && !bmsMgr.connected
+  if (bleRadioOk && bmsMgr.mac.length() > 0 && !bmsMgr.connected
       && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
     lastBleReconnect = millis();
     bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
@@ -1765,7 +1787,7 @@ void loop() {
     publishBmsMqtt();
   }
 
-  if (!blePausedForWifi) {
+  if (bleRadioOk) {
     bmsMgr.maintain();
   }
 

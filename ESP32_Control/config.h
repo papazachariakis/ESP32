@@ -42,7 +42,7 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.56"
+#define FIRMWARE_VERSION "3.0.60"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -65,17 +65,20 @@
 
 #if defined(ESP32_SLIM_BUILD)
 // Classic: short BLE scan — long PREFER_BT scans drop STA.
-#define BLE_SCAN_SECONDS 4
+#define BLE_SCAN_SECONDS 3
 #define BLE_SCAN_INTERVAL_MS 160
 #define BLE_SCAN_WINDOW_MS 80
-#define BLE_RECONNECT_MS 12000
-#define BLE_POLL_MS 10000
+#define BLE_RECONNECT_MS 20000
+#define BLE_POLL_MS 12000
+// Wait for STA to settle before any BLE activity after boot/reconnect.
+#define BLE_WIFI_STABLE_MS 20000
 #else
 #define BLE_SCAN_SECONDS 15
 #define BLE_SCAN_INTERVAL_MS 80
 #define BLE_SCAN_WINDOW_MS 79
 #define BLE_RECONNECT_MS 2000
 #define BLE_POLL_MS 5000
+#define BLE_WIFI_STABLE_MS 0
 #endif
 #define BLE_NOTIFY_KICK_MS 8000
 #define BLE_NOTIFY_RESET_MS 30000

@@ -17,12 +17,14 @@
 #define WIFI_FORCE_PORTAL_KEY "wifi_force_portal"
 #define WIFI_NO_SEED_KEY "wifi_no_seed"
 #if defined(ESP32_SLIM_BUILD)
-// Classic: soft reconnect only in loop — never block on AP scan while recovering.
-#define WIFI_RECONNECT_INTERVAL_MS 12000
-#define WIFI_RECONNECT_FAIL_RESTART 8
-#define WIFI_SOFT_WAIT_MS 4500
-#define WIFI_BEGIN_WAIT_MS 7000
+// Classic: kick STA without blocking the Arduino loop (blocking waits froze HTTP/MQTT).
+#define WIFI_RECONNECT_INTERVAL_MS 10000
+#define WIFI_RECONNECT_FAIL_RESTART 6
+#define WIFI_SOFT_WAIT_MS 2000
+#define WIFI_BEGIN_WAIT_MS 4000
 #define WIFI_RECOVERY_ALLOW_SCAN 0
+#define WIFI_RECOVERY_NONBLOCK 1
+#define WIFI_KICK_GRACE_MS 20000
 #define BLE_PAUSE_WIFI_DOWN_MS 1000
 #else
 #define WIFI_RECONNECT_INTERVAL_MS 15000
@@ -30,6 +32,8 @@
 #define WIFI_SOFT_WAIT_MS 8000
 #define WIFI_BEGIN_WAIT_MS 12000
 #define WIFI_RECOVERY_ALLOW_SCAN 1
+#define WIFI_RECOVERY_NONBLOCK 0
+#define WIFI_KICK_GRACE_MS 0
 #define BLE_PAUSE_WIFI_DOWN_MS 8000
 #endif
 
@@ -38,7 +42,7 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.55"
+#define FIRMWARE_VERSION "3.0.56"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"

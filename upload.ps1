@@ -2,12 +2,13 @@ param([string]$Port = "auto")
 
 $cli = "$env:LOCALAPPDATA\arduino-cli\arduino-cli.exe"
 $sketch = Join-Path $PSScriptRoot "ESP32_Control"
-$fqbn = "esp32:esp32:esp32:PartitionScheme=huge_app,FlashSize=4M,UploadSpeed=115200"
+# Must match publish-firmware.ps1 so USB and OTA images stay compatible.
+$fqbn = "esp32:esp32:esp32:PartitionScheme=min_spiffs,FlashSize=4M,UploadSpeed=115200"
 
 Write-Host "=== ESP32 Upload (USB) ===" -ForegroundColor Cyan
 
 if ($Port -eq "auto") {
-  $ports = & $cli board list | Select-String "serial|usb|cp210|ch340" -CaseSensitive:$false
+  $ports = & $cli board list | Select-String "serial|usb|ch340|cp210" -CaseSensitive:$false
   if (-not $ports) {
     Write-Host ""
     Write-Host "ERROR: ESP32 not found." -ForegroundColor Red

@@ -11,7 +11,7 @@ import paho.mqtt.client as mqtt
 
 DEV = "38182B8BD5CC"
 BIN = os.path.join(os.path.dirname(__file__), "..", "docs", "firmware.bin")
-EXPECT = "3.0.55"
+EXPECT = "3.0.56"
 PASSWORD = "esp32ota"
 WAIT_SEC = 900
 

@@ -53,12 +53,9 @@ inline String wifiStoreCurrentSsid(Preferences& prefs) {
 
 inline void wifiApplyStaTuning() {
   WiFi.setSleep(false);
-#if defined(ESP32_SLIM_BUILD)
-  // Own reconnect in loop — auto-reconnect races soft begin and can stick the radio.
-  WiFi.setAutoReconnect(false);
-#else
+  // Keep IDF auto-reconnect on — Classic still kicks begin() from loop, but must not
+  // disable background recovery (that left STA associated with a dead Arduino loop).
   WiFi.setAutoReconnect(true);
-#endif
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
   // Classic shares one radio with BLE — keep WiFi prioritized except during BLE scan.
   esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
@@ -169,6 +166,14 @@ inline bool wifiStoreTrySoftReconnect(Preferences& prefs) {
   WiFi.mode(WIFI_STA);
   wifiApplyStaTuning();
 
+#if WIFI_RECOVERY_NONBLOCK
+  // Kick only — do not sit in wifiWaitConnected (that froze Classic HTTP/MQTT).
+  Serial.printf("WiFi soft kick: %s\n", ssid.c_str());
+  WiFi.disconnect(false);
+  delay(20);
+  WiFi.begin(ssid.c_str(), pass.c_str());
+  return WiFi.status() == WL_CONNECTED;
+#else
   Serial.printf("WiFi soft reconnect: %s\n", ssid.c_str());
   if (WiFi.reconnect() && wifiWaitConnected(WIFI_SOFT_WAIT_MS)) {
     wifiStoreRememberSsid(prefs, ssid);
@@ -183,6 +188,7 @@ inline bool wifiStoreTrySoftReconnect(Preferences& prefs) {
   if (!wifiWaitConnected(WIFI_BEGIN_WAIT_MS)) return false;
   wifiStoreRememberSsid(prefs, ssid);
   return true;
+#endif
 }
 
 // Boot / portal / explicit connect only — sync AP scan blocks the radio for a long time.

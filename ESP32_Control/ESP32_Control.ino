@@ -815,8 +815,11 @@ bool mqttConnect() {
   mqtt.setCallback(mqttCallback);
 
   mqtt.setBufferSize(10240);
-
-
+#if defined(ESP32_SLIM_BUILD)
+  // Short socket timeout — default ~15s blocks Classic loop / web server.
+  mqtt.setSocketTimeout(3);
+  mqtt.setKeepAlive(30);
+#endif
 
   String clientId = "esp32-" + deviceId;
 
@@ -1596,6 +1599,7 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWifiTry = 0;
     static uint8_t wifiFailStreak = 0;
+    static unsigned long wifiKickAt = 0;
 
     if (!wifiDownSince) wifiDownSince = millis();
 
@@ -1611,6 +1615,23 @@ void loop() {
 #endif
     }
 
+#if WIFI_RECOVERY_NONBLOCK
+    // Count a failed kick only after grace — begin() is async on Classic.
+    if (wifiKickAt && (millis() - wifiKickAt > WIFI_KICK_GRACE_MS)) {
+      wifiKickAt = 0;
+      if (WiFi.status() != WL_CONNECTED) {
+        wifiFailStreak++;
+        Serial.printf("WiFi kick grace expired (%u/%u)\n",
+                      wifiFailStreak, WIFI_RECONNECT_FAIL_RESTART);
+        if (wifiFailStreak >= WIFI_RECONNECT_FAIL_RESTART) {
+          Serial.println("WiFi reconnect exhausted, restarting...");
+          delay(500);
+          ESP.restart();
+        }
+      }
+    }
+#endif
+
     if (millis() - lastWifiTry > WIFI_RECONNECT_INTERVAL_MS) {
       lastWifiTry = millis();
       wifiApplyStaTuning();
@@ -1622,9 +1643,16 @@ void loop() {
 #if WIFI_RECOVERY_ALLOW_SCAN
       if (!ok) ok = wifiStoreTryConnect(prefs);
 #endif
+#if WIFI_RECOVERY_NONBLOCK
+      if (!ok) {
+        wifiKickAt = millis();
+        Serial.println("WiFi soft kick issued (non-blocking)");
+      }
+#endif
 
-      if (ok) {
+      if (ok || WiFi.status() == WL_CONNECTED) {
         wifiFailStreak = 0;
+        wifiKickAt = 0;
         blePausedForWifi = false;
         wifiDownSince = 0;
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -1635,6 +1663,7 @@ void loop() {
         startMdns();
         mqttConnect();
       } else {
+#if !WIFI_RECOVERY_NONBLOCK
         wifiFailStreak++;
         Serial.printf("WiFi reconnect failed (%u/%u)\n",
                       wifiFailStreak, WIFI_RECONNECT_FAIL_RESTART);
@@ -1643,6 +1672,7 @@ void loop() {
           delay(500);
           ESP.restart();
         }
+#endif
       }
     }
   } else {

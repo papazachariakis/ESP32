@@ -56,6 +56,14 @@ inline void wifiApplyStaTuning() {
   // Keep IDF auto-reconnect on — Classic still kicks begin() from loop, but must not
   // disable background recovery (that left STA associated with a dead Arduino loop).
   WiFi.setAutoReconnect(true);
+  // Max legal TX for this core (hardware may clamp slightly lower per PHY mode).
+#ifdef WIFI_POWER_21dBm
+  WiFi.setTxPower(WIFI_POWER_21dBm);
+#elif defined(WIFI_POWER_20_5dBm)
+  WiFi.setTxPower(WIFI_POWER_20_5dBm);
+#else
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+#endif
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
   // Classic shares one radio with BLE — keep WiFi prioritized except during BLE scan.
   esp_coex_preference_set(ESP_COEX_PREFER_WIFI);

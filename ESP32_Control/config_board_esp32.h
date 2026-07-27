@@ -2,7 +2,7 @@
 
 // Classic ESP32 dev board + external XY-485 / TTL-RS485 module
 #define BOARD_ID "esp32"
-#define BOARD_LABEL "ESP32 Dev + external RS485"
+#define BOARD_LABEL "ESP32 Classic · Basen BMS"
 
 // Smaller image for min_spiffs OTA (<= 1.96 MB). Drops HTTPS OTA + ENTES profile.
 #define ESP32_SLIM_BUILD 1

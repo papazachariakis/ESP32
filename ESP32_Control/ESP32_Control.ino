@@ -50,9 +50,9 @@
 #include "hub_reset.h"
 #include "ota.h"
 #include "mqtt_auth.h"
+#ifndef ESP32_SLIM_BUILD
 #include "cummins_gen.h"
 #include "genset_schedule.h"
-#ifndef ESP32_SLIM_BUILD
 #include "entes_meter.h"
 #endif
 
@@ -67,9 +67,9 @@ PubSubClient mqtt(wifiClient);
 Preferences prefs;
 
 BmsManager bmsMgr;
+#ifndef ESP32_SLIM_BUILD
 GenManager genMgr;
 GenSchedule genSched;
-#ifndef ESP32_SLIM_BUILD
 MeterManager meterMgr;
 #endif
 
@@ -93,9 +93,10 @@ unsigned long lastMqttPublish = 0;
 
 unsigned long lastBleReconnect = 0;
 
+#ifndef ESP32_SLIM_BUILD
 volatile bool gModbusScanPending = false;
-
 volatile bool gModbusLoopbackPending = false;
+#endif
 
 volatile bool gWifiScanPending = false;
 
@@ -190,6 +191,7 @@ inline void startMdns() {
 
 
 void publishGensetMqtt() {
+#ifndef ESP32_SLIM_BUILD
   if (!mqtt.connected()) return;
   StaticJsonDocument<4096> doc;
   JsonObject root = doc.to<JsonObject>();
@@ -204,6 +206,7 @@ void publishGensetMqtt() {
   char payload[4096];
   serializeJson(doc, payload);
   mqtt.publish(topicGenset.c_str(), payload);
+#endif
 }
 
 #ifndef ESP32_SLIM_BUILD
@@ -335,7 +338,11 @@ String buildStatusJson() {
 
   mq["topic_bms"] = topicBms;
 
+#if defined(ESP32_SLIM_BUILD)
+  mq["topic_genset"] = "";
+#else
   mq["topic_genset"] = topicGenset;
+#endif
 
 #ifndef ESP32_SLIM_BUILD
   mq["topic_meter"] = topicMeter;
@@ -345,6 +352,14 @@ String buildStatusJson() {
 
   mq["topic_ble"] = topicBle;
 
+#if defined(ESP32_SLIM_BUILD)
+  JsonObject genset = doc.createNestedObject("genset");
+  genset["enabled"] = false;
+  genset["valid"] = false;
+  genset["error"] = "genset removed — Classic is Basen BMS only";
+  JsonObject sched = doc.createNestedObject("genset_schedule");
+  sched["enabled"] = false;
+#else
   JsonObject genset = doc.createNestedObject("genset");
   genFillJson(genset, genMgr.data, genMgr.profile);
   genset["enabled"] = genMgr.enabled;
@@ -355,15 +370,14 @@ String buildStatusJson() {
   genset["modbus_tx"] = MODBUS_TX_PIN;
   genset["modbus_de"] = MODBUS_DE_PIN;
 
-#ifndef ESP32_SLIM_BUILD
   JsonObject meter = doc.createNestedObject("meter");
   meterFillJson(meter, meterMgr.data);
   meter["enabled"] = meterMgr.enabled;
   meter["slave_id"] = meterMgr.slaveId;
-#endif
 
   JsonObject sched = doc.createNestedObject("genset_schedule");
   genSched.fillJson(sched);
+#endif
 
 
 
@@ -548,6 +562,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     publishStatus();
   }
 
+#ifndef ESP32_SLIM_BUILD
   if (doc.containsKey("genset")) {
     if (!mqttDocAuthorized(doc)) {
       Serial.println("MQTT: genset rejected (bad password)");
@@ -631,21 +646,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     genMgr.save(prefs);
     genMgr.applyBaud();
-#ifndef ESP32_SLIM_BUILD
     if (cfg.containsKey("meter_enabled")) meterMgr.enabled = cfg["meter_enabled"].as<bool>();
     if (cfg.containsKey("meter_slave_id")) meterMgr.slaveId = (uint8_t)(cfg["meter_slave_id"].as<int>());
     meterMgr.save(prefs);
-#endif
     genMgr.data.lastScan = "CFG OK baud=" + String(genMgr.baud) + " slave=" + String(genMgr.slaveId);
     Serial.printf("MQTT: modbus cfg baud=%u id=%u\n", genMgr.baud, genMgr.slaveId);
     if (genMgr.enabled) genMgr.pollOnce();
-#ifndef ESP32_SLIM_BUILD
     if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600) meterMgr.poll();
-#endif
     publishGensetMqtt();
-#ifndef ESP32_SLIM_BUILD
     publishMeterMqtt();
-#endif
     publishStatus();
   }
 
@@ -666,6 +675,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println("MQTT: modbus loopback requested");
     gModbusLoopbackPending = true;
   }
+#endif
 
   if (doc.containsKey("reboot")) {
     if (!mqttDocAuthorized(doc)) {
@@ -889,11 +899,11 @@ void loadSettings() {
   if (bmsMgr.type == BmsType::None && bmsMgr.mac.length()) bmsMgr.type = BmsType::Jk;
 #endif
 
+#ifndef ESP32_SLIM_BUILD
   genMgr.load(prefs);
   genMgr.pollIntervalMs = MODBUS_POLL_INTERVAL_MS;
   genSched.load(prefs);
   genEvents().begin(prefs);
-#ifndef ESP32_SLIM_BUILD
   meterMgr.load(prefs);
 #endif
 
@@ -1158,6 +1168,7 @@ void handleBleConnect() {
 
 
 
+#ifndef ESP32_SLIM_BUILD
 void handleGenset() {
 
   StaticJsonDocument<2560> doc;
@@ -1181,9 +1192,12 @@ void handleGenset() {
   server.send(200, "application/json", out);
 
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleGensetCmd() {
 
   if (!server.hasArg("plain")) {
@@ -1227,9 +1241,12 @@ void handleGensetCmd() {
   server.send(200, "application/json", "{\"ok\":true}");
 
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleGensetScheduleGet() {
   StaticJsonDocument<1024> doc;
   JsonObject o = doc.to<JsonObject>();
@@ -1238,9 +1255,12 @@ void handleGensetScheduleGet() {
   serializeJson(doc, out);
   server.send(200, "application/json", out);
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleGensetSchedulePost() {
   if (!server.hasArg("plain")) {
     server.send(400, "application/json", "{\"ok\":false}");
@@ -1259,9 +1279,12 @@ void handleGensetSchedulePost() {
   publishStatus();
   server.send(200, "application/json", "{\"ok\":true}");
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleModbusSave() {
 
   if (!server.hasArg("plain")) {
@@ -1321,9 +1344,12 @@ void handleModbusSave() {
   server.send(200, "application/json", "{\"ok\":true}");
 
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleModbusScan() {
   if (!webBodyAuthorized()) { webRejectAuth(); return; }
   bool found = genMgr.scanBus(1, 8);
@@ -1341,9 +1367,12 @@ void handleModbusScan() {
   serializeJson(doc, out);
   server.send(200, "application/json", out);
 }
+#endif
 
 
 
+
+#ifndef ESP32_SLIM_BUILD
 void handleModbusLoopback() {
   if (!webBodyAuthorized()) { webRejectAuth(); return; }
   String r = genMgr.loopbackTest();
@@ -1355,6 +1384,8 @@ void handleModbusLoopback() {
   serializeJson(doc, out);
   server.send(200, "application/json", out);
 }
+#endif
+
 
 
 
@@ -1460,6 +1491,7 @@ void setupRoutes() {
   server.on("/api/factory/reset", HTTP_POST, handleFactoryReset);
 
   server.on("/api/mqtt", HTTP_POST, handleMqttSave);
+#ifndef ESP32_SLIM_BUILD
   server.on("/api/genset", HTTP_GET, handleGenset);
   server.on("/api/genset/cmd", HTTP_POST, handleGensetCmd);
   server.on("/api/genset/schedule", HTTP_GET, handleGensetScheduleGet);
@@ -1467,6 +1499,7 @@ void setupRoutes() {
   server.on("/api/modbus", HTTP_POST, handleModbusSave);
   server.on("/api/modbus/scan", HTTP_POST, handleModbusScan);
   server.on("/api/modbus/loopback", HTTP_POST, handleModbusLoopback);
+#endif
   registerOtaRoutes(server);
 
   server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
@@ -1505,7 +1538,9 @@ void setup() {
 
   topicBms = "home/" + deviceId + "/bms";
 
+#ifndef ESP32_SLIM_BUILD
   topicGenset = "home/" + deviceId + "/genset";
+#endif
 
 #ifndef ESP32_SLIM_BUILD
   topicMeter = "home/" + deviceId + "/meter";
@@ -1521,17 +1556,19 @@ void setup() {
 
   setupWiFi();
 
-  genMgr.begin();
 #ifndef ESP32_SLIM_BUILD
+  genMgr.begin();
   meterMgr.attach(&Serial2, MODBUS_DE_PIN);
-#endif
   if (genMgr.enabled) genMgr.pollOnce();
+#endif
 
 
 
   setupRoutes();
   setupArduinoOta();
+#ifndef ESP32_SLIM_BUILD
   genSched.begin();
+#endif
   otaPrepHook() = []() {
     if (bmsMgr.client && bmsMgr.client->isConnected()) {
       bmsMgr.client->disconnect();
@@ -1558,7 +1595,11 @@ void setup() {
   Serial.println("ESP32 Control Hub ready");
   Serial.printf("Board: %s (%s)\n", BOARD_LABEL, BOARD_ID);
   Serial.printf("Device ID: %s\n", deviceId.c_str());
+#ifndef ESP32_SLIM_BUILD
   Serial.printf("Modbus RX=%d TX=%d DE=%d\n", MODBUS_RX_PIN, MODBUS_TX_PIN, MODBUS_DE_PIN);
+#else
+  Serial.println("Classic: Basen BMS only (genset/modbus removed)");
+#endif
 
   Serial.println("Open http://" + WiFi.localIP().toString());
 
@@ -1734,6 +1775,7 @@ void loop() {
 
 
 
+#ifndef ESP32_SLIM_BUILD
   if (gModbusScanPending && !otaInProgress()) {
     gModbusScanPending = false;
     Serial.println("Running Modbus scan...");
@@ -1756,6 +1798,7 @@ void loop() {
     publishGensetMqtt();
     publishStatus();
   }
+#endif
 
   if (gWifiScanPending && !otaInProgress()) {
     gWifiScanPending = false;
@@ -1813,15 +1856,14 @@ void loop() {
     bmsMgr.maintain();
   }
 
+#ifndef ESP32_SLIM_BUILD
   genMgr.poll();
   genMgr.loopTickDelays();
 
   genSched.tick(genMgr, prefs);
 
-#ifndef ESP32_SLIM_BUILD
   if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600)
     meterMgr.poll();
-#endif
 
   static unsigned long lastGenMqtt = 0;
 
@@ -1832,7 +1874,6 @@ void loop() {
     publishGensetMqtt();
   }
 
-#ifndef ESP32_SLIM_BUILD
   static unsigned long lastMeterMqtt = 0;
   if (meterMgr.enabled && genMgr.profile == MODBUS_PROFILE_PS0600
       && (meterMgr.takePublishPending()

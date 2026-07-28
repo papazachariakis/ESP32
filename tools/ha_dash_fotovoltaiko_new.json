@@ -1,0 +1,66 @@
+{
+  "views": [
+    {
+      "title": "PVX",
+      "path": "pvx",
+      "icon": "mdi:lightning-bolt-circle",
+      "type": "masonry",
+      "cards": [
+        {
+          "type": "custom:pvx-hero-card",
+          "title": "ΦΩΤΟΒΟΛΤΑΪΚΟ",
+          "tag": "PVX · OWN CARDS",
+          "meta": "Deye · Basen 30kWh · Grid · Breaker · custom Lovelace"
+        },
+        {
+          "type": "custom:pvx-kpi-card",
+          "title": "LIVE POWER",
+          "subtitle": "Real-time inverter rails",
+          "pv_entity": "sensor.inverter_pv_power",
+          "load_entity": "sensor.inverter_load_power",
+          "grid_entity": "sensor.inverter_grid_power",
+          "battery_entity": "sensor.inverter_battery_power"
+        },
+        {
+          "type": "custom:pvx-flow-card",
+          "title": "POWER FLOW",
+          "pv_entity": "sensor.inverter_pv_power",
+          "load_entity": "sensor.inverter_load_power",
+          "grid_entity": "sensor.inverter_grid_power",
+          "battery_entity": "sensor.inverter_battery_power",
+          "soc_entity": "sensor.inverter_battery"
+        },
+        {
+          "type": "custom:pvx-battery-card",
+          "title": "BASEN 30kWh"
+        },
+        {
+          "type": "custom:pvx-cells-card",
+          "title": "CELL MATRIX",
+          "count": 16,
+          "base_entity": "sensor.tp_bstbd_25c_2_cell_voltage"
+        },
+        {
+          "type": "custom:pvx-today-card",
+          "title": "TODAY ENERGY"
+        },
+        {
+          "type": "custom:pvx-breaker-card",
+          "title": "BREAKER",
+          "switch_entity": "switch.breaker_switch"
+        },
+        {
+          "type": "entities",
+          "title": "Quick controls",
+          "show_header_toggle": false,
+          "entities": [
+            "switch.inverter",
+            "switch.inverter_off_grid",
+            "switch.breaker_switch",
+            "switch.piestiko_tuya_local"
+          ]
+        }
+      ]
+    }
+  ]
+}

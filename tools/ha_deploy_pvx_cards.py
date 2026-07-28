@@ -25,6 +25,9 @@ TITLE = "ΦΩΤΟΒΟΛΤΑΙΚΟ NEW"
 ICON = "mdi:solar-power-variant"
 PORT = 8766
 CARD_JS = "fotovoltaiko-extreme-cards.js"
+# Permanent HA resource (GitHub Pages). Prefer this over LAN :8766.
+GH_RESOURCE_URL = f"https://papazachariakis.github.io/ESP32/{CARD_JS}"
+LOCAL_RESOURCE_URL = f"/local/{CARD_JS}"
 
 
 def lan_ip() -> str:

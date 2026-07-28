@@ -458,7 +458,35 @@
     return u.toString();
   }
 
+  async function connectBridge(bridge) {
+    setConn(false, "BRIDGE…");
+    $("overlay").classList.add("hide");
+    async function pull() {
+      try {
+        const r = await fetch(bridge.replace(/\/$/, "") + "/api/states", { cache: "no-store" });
+        if (!r.ok) throw new Error("bridge " + r.status);
+        const arr = await r.json();
+        for (const s of arr) states[s.entity_id] = s;
+        render();
+        setConn(true, "LIVE · REMOTE");
+      } catch (e) {
+        setConn(false, "BRIDGE ERR");
+        $("cfgErr").textContent = String(e.message || e);
+      }
+    }
+    await pull();
+    setInterval(pull, 2000);
+  }
+
   async function connect() {
+    // Bridge mode (public remote via PC tunnel)
+    if (cfg.mode === "bridge" && cfg.bridge) {
+      return connectBridge(cfg.bridge);
+    }
+    if (window.PVX_BRIDGE) {
+      saveCfg({ ...cfg, mode: "bridge", bridge: window.PVX_BRIDGE });
+      return connectBridge(window.PVX_BRIDGE);
+    }
     if (!cfg.url || !cfg.token) {
       $("overlay").classList.remove("hide");
       return;

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#070b14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>ΦΩΤΟΒΟΛΤΑΪΚΟ NEW · PVX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --pv:#ffcc33;--load:#5cff6a;--grid:#3de7ff;--bat:#c084fc;
+      --ok:#34d399;--warn:#fbbf24;--bad:#fb7185;--charge:#38bdf8;--discharge:#fb923c;
+      --text:#f4fbff;--muted:#8aa0b8;--line:rgba(120,160,200,.18);
+      --mono:'JetBrains Mono',ui-monospace,monospace;
+      --display:'Orbitron',system-ui,sans-serif;
+      --ui:'Rajdhani',system-ui,sans-serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;}
+    body{
+      font-family:var(--ui);color:var(--text);background:#05080f;
+      background-image:
+        radial-gradient(ellipse 100% 80% at 15% -10%,rgba(255,204,51,.16),transparent 50%),
+        radial-gradient(ellipse 70% 60% at 100% 0%,rgba(61,231,255,.1),transparent 45%),
+        radial-gradient(ellipse 80% 70% at 80% 110%,rgba(192,132,252,.12),transparent 50%),
+        linear-gradient(165deg,#070b14 0%,#0c1422 45%,#091018 100%);
+    }
+    .wrap{max-width:1400px;margin:0 auto;padding:14px 14px 40px}
+    .top{
+      display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+      padding:12px 14px;border:1px solid var(--line);border-radius:16px;
+      background:rgba(8,14,24,.72);backdrop-filter:blur(10px);
+    }
+    .brand{font-family:var(--display);font-weight:900;letter-spacing:.08em;font-size:1rem;color:var(--pv)}
+    .brand span{color:var(--muted);font-weight:500;font-size:.72rem;letter-spacing:.06em}
+    .spacer{flex:1}
+    .pill{
+      display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+      border:1px solid var(--line);font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;
+    }
+    .pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+    .pill.on{border-color:rgba(92,255,106,.4);color:var(--load)}
+    .pill.on i{background:var(--load);box-shadow:0 0 10px var(--load);animation:pulse 1.4s ease infinite}
+    .pill.off{color:var(--bad);border-color:rgba(251,113,133,.4)}
+    .pill.off i{background:var(--bad)}
+    @keyframes pulse{50%{opacity:.35}}
+    .btn{
+      border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--text);
+      padding:8px 12px;border-radius:10px;font-family:var(--display);font-size:.72rem;
+      letter-spacing:.1em;text-transform:uppercase;cursor:pointer;font-weight:700;
+    }
+    .btn:hover{border-color:var(--pv);color:var(--pv)}
+    .grid{display:grid;gap:14px;grid-template-columns:1.15fr 1fr}
+    @media(max-width:980px){.grid{grid-template-columns:1fr}}
+    .card{
+      position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);
+      background:linear-gradient(165deg,rgba(17,26,46,.9),rgba(8,14,24,.92));
+      box-shadow:0 18px 50px rgba(0,0,0,.4);padding:18px;
+    }
+    .card::before{
+      content:'';position:absolute;inset:0 0 auto 0;height:1px;
+      background:linear-gradient(90deg,transparent,var(--accent,var(--pv)),transparent);
+    }
+    .tag{font-family:var(--display);font-size:.85rem;letter-spacing:.16em;color:var(--accent,var(--pv));font-weight:700;margin-bottom:8px}
+    .sub{color:var(--muted);font-size:1.05rem;margin-bottom:12px}
+    .hero-title{
+      font-family:var(--display);font-weight:900;font-size:clamp(2.1rem,6vw,3.2rem);letter-spacing:.06em;line-height:.95;
+      background:linear-gradient(105deg,#fff8d6,#ffcc33,#5cff6a,#3de7ff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .hero-tag{margin-top:8px;font-family:var(--display);color:var(--load);letter-spacing:.28em;font-size:1.05rem;font-weight:700}
+    .rails{margin-top:16px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    @media(max-width:700px){.rails{grid-template-columns:1fr 1fr}}
+    .rail{
+      position:relative;padding:14px;border-radius:14px;border:1px solid var(--line);
+      background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(0,0,0,.28));min-height:88px;
+    }
+    .rail::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c);box-shadow:0 0 14px var(--c)}
+    .rail .k{font-size:.9rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+    .rail .v{margin-top:6px;font-family:var(--display);font-weight:900;font-size:1.55rem;color:var(--c)}
+    .flow-svg{width:100%;height:min(620px,92vw);display:block}
+    .flow-node{fill:rgba(6,10,18,.88);stroke:var(--line);stroke-width:2}
+    .flow-node.on{stroke:var(--nc);filter:drop-shadow(0 0 12px color-mix(in srgb, var(--nc) 55%, transparent))}
+    .flow-label{fill:#c5d4e8;font-family:var(--ui);font-size:22px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+    .flow-val{fill:var(--nc,#fff);font-family:var(--display);font-weight:900;font-size:34px}
+    .flow-sub{fill:#d2deec;font-family:var(--mono);font-size:18px}
+    .flow-dir{fill:var(--nc);font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:.1em}
+    .flow-hub{fill:url(#hubGrad);stroke:rgba(255,255,255,.22);stroke-width:2}
+    .beam{fill:none;stroke:var(--bc);stroke-width:3.5;stroke-linecap:round;opacity:.25}
+    .beam.on{opacity:.95;stroke-dasharray:10 12;animation:dash 1.1s linear infinite;filter:drop-shadow(0 0 6px var(--bc))}
+    .beam.rev.on{animation-direction:reverse}
+    @keyframes dash{to{stroke-dashoffset:-44}}
+    .chips{margin-top:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    @media(max-width:900px){.chips{grid-template-columns:1fr 1fr}}
+    .chip{padding:14px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.28)}
+    .chip .k{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+    .chip .v{margin-top:6px;font-family:var(--mono);font-size:1.15rem;line-height:1.4}
+    .chip .v b{color:var(--c);font-family:var(--display);font-size:1.35rem}
+    .bat{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:center}
+    @media(max-width:700px){.bat{grid-template-columns:1fr}}
+    .gauge{position:relative;width:100%;max-width:220px;margin:0 auto;aspect-ratio:1}
+    .gauge svg{width:100%;height:100%;transform:rotate(-135deg)}
+    .gauge .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+    .gauge .pct{font-family:var(--display);font-weight:900;font-size:2.7rem;line-height:1}
+    .gauge .cap{margin-top:4px;font-size:.95rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+    .gauge .mode{margin-top:8px;font-family:var(--display);font-size:1rem;font-weight:700}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .stat{padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.28)}
+    .stat .k{font-size:.88rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+    .stat .v{margin-top:4px;font-family:var(--display);font-weight:700;font-size:1.3rem}
+    .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .mini{padding:7px 12px;border-radius:999px;border:1px solid var(--line);font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+    .mini.on{color:var(--ok);border-color:rgba(52,211,153,.45)}
+    .mini.chg{color:var(--charge);border-color:rgba(56,189,248,.45)}
+    .mini.dsg{color:var(--discharge);border-color:rgba(251,146,60,.45)}
+    .mini.bad{color:var(--bad);border-color:rgba(251,113,133,.5)}
+    .cells{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    @media(min-width:760px){.cells{grid-template-columns:repeat(8,minmax(0,1fr))}}
+    .cell{padding:8px 6px;border-radius:12px;border:1px solid var(--line);text-align:center;background:rgba(0,0,0,.28)}
+    .cell .i{font-size:.8rem;color:var(--muted);font-weight:600}
+    .cell .bar{height:42px;margin:6px 2px;border-radius:6px;background:rgba(255,255,255,.04);display:flex;align-items:flex-end;overflow:hidden}
+    .cell .bar span{display:block;width:100%;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--ok),rgba(52,211,153,.25))}
+    .cell .cv{font-family:var(--display);font-weight:700;font-size:1rem}
+    .cell.hi{border-color:rgba(251,113,133,.55)} .cell.lo{border-color:rgba(56,189,248,.5)}
+    .overlay{
+      position:fixed;inset:0;z-index:50;background:rgba(3,6,12,.88);display:flex;align-items:center;justify-content:center;padding:16px;
+    }
+    .overlay.hide{display:none}
+    .box{
+      width:min(460px,100%);background:#0c1422;border:1px solid var(--line);border-radius:18px;padding:22px;
+    }
+    .box h2{font-family:var(--display);font-size:1.1rem;margin-bottom:8px;color:var(--pv)}
+    .box p{color:var(--muted);font-size:.95rem;line-height:1.45;margin-bottom:14px}
+    .box label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px;letter-spacing:.06em;text-transform:uppercase}
+    .box input{
+      width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#05080f;color:var(--text);
+      font-family:var(--mono);font-size:.95rem;
+    }
+    .box .row{display:flex;gap:8px;margin-top:16px}
+    .box .row .btn{flex:1;padding:12px}
+    .hint{font-size:.82rem;color:var(--muted);margin-top:10px;line-height:1.4}
+    .err{color:var(--bad);margin-top:10px;font-size:.95rem}
+    .full{grid-column:1/-1}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">PVX <span>ΦΩΤΟΒΟΛΤΑΪΚΟ NEW · WEB</span></div>
+      <div class="spacer"></div>
+      <span class="pill off" id="connPill"><i></i><span id="connText">OFFLINE</span></span>
+      <button class="btn" id="btnSettings" type="button">Settings</button>
+    </header>
+
+    <div class="grid">
+      <section class="card" style="--accent:var(--pv)">
+        <div class="tag">SOLAR COMMAND · LIVE</div>
+        <div class="hero-title">ΦΩΤΟΒΟΛΤΑΪΚΟ</div>
+        <div class="hero-tag">NEW · EXTREME</div>
+        <div class="rails">
+          <div class="rail" style="--c:var(--pv)"><div class="k">PV</div><div class="v" id="rPv">—</div></div>
+          <div class="rail" style="--c:var(--load)"><div class="k">Load</div><div class="v" id="rLoad">—</div></div>
+          <div class="rail" style="--c:var(--grid)"><div class="k">Grid</div><div class="v" id="rGrid">—</div></div>
+          <div class="rail" style="--c:var(--bat)"><div class="k">Battery</div><div class="v" id="rBat">—</div></div>
+        </div>
+      </section>
+
+      <section class="card" style="--accent:var(--bat)">
+        <div class="tag">BASEN 30kWh</div>
+        <div class="sub">ESP32 Classic · BLE · MQTT Discovery</div>
+        <div class="bat">
+          <div class="gauge" id="gauge">
+            <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="12"/>
+              <circle id="socTrack" cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="12" stroke-linecap="round"/>
+              <circle id="socArc" cx="100" cy="100" r="88" fill="none" stroke="#c084fc" stroke-width="12" stroke-linecap="round"/>
+            </svg>
+            <div class="mid"><div class="pct" id="socPct">—</div><div class="cap">SOC</div><div class="mode" id="socMode">—</div></div>
+          </div>
+          <div>
+            <div class="stats">
+              <div class="stat"><div class="k">Voltage</div><div class="v" id="bV">—</div></div>
+              <div class="stat"><div class="k">Current</div><div class="v" id="bA">—</div></div>
+              <div class="stat"><div class="k">Power</div><div class="v" id="bW">—</div></div>
+              <div class="stat"><div class="k">Temp</div><div class="v" id="bT">—</div></div>
+              <div class="stat"><div class="k">SOH</div><div class="v" id="bSoh">—</div></div>
+              <div class="stat"><div class="k">Δ Cell</div><div class="v" id="bD">—</div></div>
+            </div>
+            <div class="pills">
+              <span class="mini" id="pChg">Charging</span>
+              <span class="mini" id="pDsg">Discharging</span>
+              <span class="mini" id="pBal">Balancing</span>
+              <span class="mini" id="pOk">Healthy</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card full" style="--accent:var(--load)">
+        <div class="tag">POWER FLOW</div>
+        <div class="sub">PV strings · 3-phase load · battery · grid · daily</div>
+        <svg class="flow-svg" viewBox="0 0 900 560" id="flowSvg">
+          <defs>
+            <linearGradient id="hubGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#1a2740"/><stop offset="100%" stop-color="#0a1220"/>
+            </linearGradient>
+          </defs>
+          <path id="beamPv" class="beam" style="--bc:var(--pv)" d="M450 150 L450 210"/>
+          <path id="beamBat" class="beam" style="--bc:var(--bat)" d="M250 290 L330 290"/>
+          <path id="beamLoad" class="beam" style="--bc:var(--load)" d="M570 290 L650 290"/>
+          <path id="beamGrid" class="beam" style="--bc:var(--grid)" d="M450 370 L450 420"/>
+
+          <rect id="nPv" class="flow-node" style="--nc:var(--pv)" x="260" y="16" width="380" height="140" rx="22"/>
+          <text class="flow-label" x="450" y="50" text-anchor="middle">Solar PV</text>
+          <text class="flow-val" style="--nc:var(--pv)" x="450" y="92" text-anchor="middle" id="fPv">—</text>
+          <text class="flow-sub" x="450" y="118" text-anchor="middle" id="fPv1">PV1 —</text>
+          <text class="flow-sub" x="450" y="142" text-anchor="middle" id="fPv2">PV2 —</text>
+
+          <rect id="nBat" class="flow-node" style="--nc:var(--bat)" x="20" y="210" width="240" height="170" rx="22"/>
+          <text class="flow-label" x="140" y="248" text-anchor="middle">Battery</text>
+          <text class="flow-val" style="--nc:var(--bat)" x="140" y="292" text-anchor="middle" id="fBat">—</text>
+          <text class="flow-dir" style="--nc:var(--bat)" x="140" y="320" text-anchor="middle" id="fBatDir">—</text>
+          <text class="flow-sub" x="140" y="348" text-anchor="middle" id="fBatSub1">—</text>
+          <text class="flow-sub" x="140" y="372" text-anchor="middle" id="fBatSub2">—</text>
+
+          <rect class="flow-hub" x="340" y="210" width="220" height="170" rx="24"/>
+          <text class="flow-label" x="450" y="248" text-anchor="middle" style="fill:#c9d7ea">Inverter</text>
+          <text class="flow-val" style="--nc:#f4fbff" x="450" y="292" text-anchor="middle">DEYE</text>
+          <text class="flow-sub" x="450" y="328" text-anchor="middle" id="fInv1">—</text>
+          <text class="flow-sub" x="450" y="356" text-anchor="middle" id="fInv2">—</text>
+
+          <rect id="nLoad" class="flow-node" style="--nc:var(--load)" x="640" y="210" width="240" height="170" rx="22"/>
+          <text class="flow-label" x="760" y="248" text-anchor="middle">Load</text>
+          <text class="flow-val" style="--nc:var(--load)" x="760" y="292" text-anchor="middle" id="fLoad">—</text>
+          <text class="flow-sub" x="760" y="328" text-anchor="middle" id="fL1">L1 —</text>
+          <text class="flow-sub" x="760" y="354" text-anchor="middle" id="fL23">L2/L3 —</text>
+
+          <rect id="nGrid" class="flow-node" style="--nc:var(--grid)" x="260" y="420" width="380" height="130" rx="22"/>
+          <text class="flow-label" x="450" y="454" text-anchor="middle">Grid</text>
+          <text class="flow-val" style="--nc:var(--grid)" x="450" y="496" text-anchor="middle" id="fGrid">—</text>
+          <text class="flow-dir" style="--nc:var(--grid)" x="450" y="524" text-anchor="middle" id="fGridDir">—</text>
+          <text class="flow-sub" x="450" y="546" text-anchor="middle" id="fGridSub">—</text>
+        </svg>
+        <div class="chips">
+          <div class="chip" style="--c:var(--pv)"><div class="k">PV today</div><div class="v" id="cPv">—</div></div>
+          <div class="chip" style="--c:var(--load)"><div class="k">Load today</div><div class="v" id="cLoad">—</div></div>
+          <div class="chip" style="--c:var(--bat)"><div class="k">Battery today</div><div class="v" id="cBat">—</div></div>
+          <div class="chip" style="--c:var(--grid)"><div class="k">Grid today</div><div class="v" id="cGrid">—</div></div>
+        </div>
+      </section>
+
+      <section class="card full" style="--accent:var(--charge)">
+        <div class="tag">CELL MATRIX</div>
+        <div class="sub" id="cellSub">—</div>
+        <div class="cells" id="cells"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="box">
+      <h2>Σύνδεση Home Assistant</h2>
+      <p>Πλήρες live dashboard εκτός HA. Βάλε το URL του HA και ένα Long-Lived Access Token (Profile → Long-Lived Access Tokens).</p>
+      <label>HA URL</label>
+      <input id="haUrl" placeholder="http://192.168.99.100:8123 ή https://xxx.ui.nabu.casa" />
+      <label>Long-Lived Token</label>
+      <input id="haToken" type="password" placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
+      <label>PIN (προαιρετικό)</label>
+      <input id="haPin" type="password" placeholder="π.χ. 1234 — προστασία σελίδας" />
+      <div class="row">
+        <button class="btn" type="button" id="btnSave">Σύνδεση</button>
+        <button class="btn" type="button" id="btnClose">Κλείσιμο</button>
+      </div>
+      <div class="hint">Για θέαση από internet χρειάζεται Nabu Casa ή Cloudflare Tunnel στο HA. Στο LAN δούλεψε με το IP <b>192.168.99.100:8123</b>.</div>
+      <div class="err" id="cfgErr"></div>
+    </div>
+  </div>
+
+  <script>
+(() => {
+  const KEY = "pvx_web_cfg_v1";
+  const E = {
+    pv: "sensor.inverter_pv_power",
+    load: "sensor.inverter_load_power",
+    grid: "sensor.inverter_grid_power",
+    bat: "sensor.inverter_battery_power",
+    soc: "sensor.inverter_battery",
+    pv1: "sensor.inverter_pv1_power",
+    pv2: "sensor.inverter_pv2_power",
+    pv1v: "sensor.inverter_pv1_voltage",
+    pv2v: "sensor.inverter_pv2_voltage",
+    pv1a: "sensor.inverter_pv1_current",
+    pv2a: "sensor.inverter_pv2_current",
+    batV: "sensor.inverter_battery_voltage",
+    batA: "sensor.inverter_battery_current",
+    batT: "sensor.inverter_battery_temperature",
+    l1: "sensor.inverter_load_l1_power",
+    l2: "sensor.inverter_load_l2_power",
+    l3: "sensor.inverter_load_l3_power",
+    freq: "sensor.inverter_output_frequency",
+    invP: "sensor.inverter_power",
+    status: "sensor.inverter_device_state",
+    dayPv: "sensor.inverter_today_production",
+    dayLoad: "sensor.inverter_today_load_consumption",
+    dayImp: "sensor.inverter_today_energy_import",
+    dayExp: "sensor.inverter_today_energy_export",
+    dayBch: "sensor.inverter_today_battery_charge",
+    dayBd: "sensor.inverter_today_battery_discharge",
+    bSoc: "sensor.tp_bstbd_25c_2_state_of_charge",
+    bV: "sensor.tp_bstbd_25c_2_total_voltage",
+    bA: "sensor.tp_bstbd_25c_2_current",
+    bW: "sensor.tp_bstbd_25c_2_power",
+    bT: "sensor.tp_bstbd_25c_2_temperature",
+    bSoh: "sensor.tp_bstbd_25c_2_state_of_health",
+    bD: "sensor.tp_bstbd_25c_2_delta_cell_voltage",
+    chg: "binary_sensor.tp_bstbd_25c_2_charging",
+    dsg: "binary_sensor.tp_bstbd_25c_2_discharging",
+    bal: "binary_sensor.tp_bstbd_25c_2_balancing",
+    prob: "binary_sensor.tp_bstbd_25c_2_problem",
+  };
+
+  const states = {};
+  let ws = null;
+  let nid = 1;
+  let cfg = loadCfg();
+
+  function loadCfg() {
+    try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
+  }
+  function saveCfg(c) {
+    cfg = c;
+    localStorage.setItem(KEY, JSON.stringify(c));
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function num(id, d = 0) {
+    const st = states[id];
+    if (!st) return null;
+    const v = parseFloat(st.state);
+    return Number.isFinite(v) ? Number(v.toFixed(d)) : null;
+  }
+  function st(id) { return states[id]?.state ?? "unavailable"; }
+  function fmt(v, u = "", d = 0) {
+    if (v === null || v === undefined) return "—";
+    return `${Number(v).toFixed(d)}${u ? " " + u : ""}`;
+  }
+  function fmtW(v) {
+    if (v === null || v === undefined) return "—";
+    return Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(2)} kW` : `${Math.round(v)} W`;
+  }
+  function on(v) { return Math.abs(v || 0) > 25; }
+  function setBeam(el, active, rev = false) {
+    el.classList.toggle("on", !!active);
+    el.classList.toggle("rev", !!rev);
+  }
+  function setNode(el, active) { el.classList.toggle("on", !!active); }
+
+  function render() {
+    const pv = num(E.pv) || 0, load = num(E.load) || 0, grid = num(E.grid) || 0, bat = num(E.bat) || 0;
+    const soc = num(E.soc) ?? num(E.bSoc);
+    $("rPv").textContent = fmtW(num(E.pv));
+    $("rLoad").textContent = fmtW(num(E.load));
+    $("rGrid").textContent = fmtW(num(E.grid));
+    $("rBat").textContent = fmtW(num(E.bat));
+
+    $("fPv").textContent = fmtW(num(E.pv));
+    $("fPv1").textContent = `PV1 ${fmtW(num(E.pv1))} · ${fmt(num(E.pv1v, 1), "V", 0)} · ${fmt(num(E.pv1a, 1), "A", 1)}`;
+    $("fPv2").textContent = `PV2 ${fmtW(num(E.pv2))} · ${fmt(num(E.pv2v, 1), "V", 0)} · ${fmt(num(E.pv2a, 1), "A", 1)}`;
+    $("fBat").textContent = fmtW(num(E.bat));
+    const batDir = bat > 40 ? "CHARGE" : bat < -40 ? "DISCHARGE" : "IDLE";
+    const gridDir = grid > 40 ? "IMPORT" : grid < -40 ? "EXPORT" : "IDLE";
+    $("fBatDir").textContent = batDir;
+    $("fBatSub1").textContent = `SOC ${soc ?? "—"}% · ${fmt(num(E.batV, 1), "V", 1)}`;
+    $("fBatSub2").textContent = `${fmt(num(E.batA, 1), "A", 1)} · ${fmt(num(E.batT, 1), "°C", 0)}`;
+    $("fLoad").textContent = fmtW(num(E.load));
+    $("fL1").textContent = `L1 ${fmtW(num(E.l1))}`;
+    $("fL23").textContent = `L2 ${fmtW(num(E.l2))} · L3 ${fmtW(num(E.l3))}`;
+    $("fGrid").textContent = fmtW(num(E.grid));
+    $("fGridDir").textContent = gridDir;
+    $("fGridSub").textContent = `Today import ${fmt(num(E.dayImp, 1), "kWh", 1)} · export ${fmt(num(E.dayExp, 1), "kWh", 1)}`;
+    $("fInv1").textContent = `${fmtW(num(E.invP))} · ${fmt(num(E.freq, 2), "Hz", 2)}`;
+    $("fInv2").textContent = st(E.status);
+
+    setBeam($("beamPv"), on(pv));
+    setBeam($("beamBat"), on(bat), bat < 0);
+    setBeam($("beamLoad"), on(load));
+    setBeam($("beamGrid"), on(grid), grid < 0);
+    setNode($("nPv"), on(pv)); setNode($("nBat"), on(bat)); setNode($("nLoad"), on(load)); setNode($("nGrid"), on(grid));
+
+    $("cPv").innerHTML = `<b>${fmt(num(E.dayPv, 1), "kWh", 1)}</b><br>strings ${fmtW(num(E.pv1))} + ${fmtW(num(E.pv2))}`;
+    $("cLoad").innerHTML = `<b>${fmt(num(E.dayLoad, 1), "kWh", 1)}</b><br>L1/L2/L3 ${fmtW(num(E.l1))} / ${fmtW(num(E.l2))} / ${fmtW(num(E.l3))}`;
+    $("cBat").innerHTML = `<b>Δ ${fmt(num(E.dayBch, 1), "", 1)} / ${fmt(num(E.dayBd, 1), "", 1)} kWh</b><br>Basen ${num(E.bSoc) ?? "—"}% · ${fmtW(num(E.bW))}`;
+    $("cGrid").innerHTML = `<b>${gridDir}</b><br>imp ${fmt(num(E.dayImp, 1), "kWh", 1)} · exp ${fmt(num(E.dayExp, 1), "kWh", 1)}`;
+
+    // Basen panel
+    const bs = num(E.bSoc) || 0;
+    let ring = "#c084fc";
+    if (bs > 70) ring = "#34d399"; else if (bs > 35) ring = "#fbbf24"; else ring = "#fb7185";
+    const C = 2 * Math.PI * 88, usable = C * 0.75;
+    const offset = C * 0.25 + usable * (1 - Math.max(0, Math.min(100, bs)) / 100);
+    const arc = $("socArc"), track = $("socTrack");
+    track.setAttribute("stroke-dasharray", `${usable} ${C}`);
+    track.setAttribute("stroke-dashoffset", String(C * 0.25));
+    arc.setAttribute("stroke", ring);
+    arc.setAttribute("stroke-dasharray", `${usable} ${C}`);
+    arc.setAttribute("stroke-dashoffset", String(offset));
+    arc.style.filter = `drop-shadow(0 0 8px ${ring})`;
+    $("socPct").textContent = `${bs}%`;
+    $("socPct").style.color = ring;
+    const chg = st(E.chg) === "on", dsg = st(E.dsg) === "on";
+    $("socMode").textContent = chg ? "CHARGING" : dsg ? "DISCHARGING" : "IDLE";
+    $("socMode").style.color = chg ? "var(--charge)" : dsg ? "var(--discharge)" : "var(--muted)";
+    $("bV").textContent = fmt(num(E.bV, 1), "V", 1);
+    $("bA").textContent = fmt(num(E.bA, 1), "A", 1);
+    $("bW").textContent = fmtW(num(E.bW));
+    $("bT").textContent = fmt(num(E.bT, 1), "°C", 1);
+    $("bSoh").textContent = fmt(num(E.bSoh), "%", 0);
+    $("bD").textContent = fmt(num(E.bD, 3), "V", 3);
+    $("pChg").className = "mini" + (chg ? " chg on" : "");
+    $("pDsg").className = "mini" + (dsg ? " dsg on" : "");
+    $("pBal").className = "mini" + (st(E.bal) === "on" ? " on" : "");
+    const prob = st(E.prob) === "on";
+    $("pOk").className = "mini" + (prob ? " bad" : " on");
+    $("pOk").textContent = prob ? "Problem" : "Healthy";
+
+    // cells
+    const vals = [];
+    for (let i = 1; i <= 16; i++) {
+      const eid = i === 1 ? "sensor.tp_bstbd_25c_2_cell_voltage" : `sensor.tp_bstbd_25c_2_cell_voltage_${i}`;
+      vals.push({ i, v: num(eid, 3) });
+    }
+    const known = vals.map(x => x.v).filter(v => v !== null);
+    const hi = known.length ? Math.max(...known) : null;
+    const lo = known.length ? Math.min(...known) : null;
+    const span = hi !== null && lo !== null && hi !== lo ? hi - lo : 0.05;
+    $("cellSub").textContent = `Hi ${hi ?? "—"} V · Lo ${lo ?? "—"} V · Δ ${hi !== null && lo !== null ? (hi - lo).toFixed(3) : "—"} V`;
+    $("cells").innerHTML = vals.map(({ i, v }) => {
+      let cls = "";
+      if (v !== null && hi !== null && v === hi && hi !== lo) cls = "hi";
+      if (v !== null && lo !== null && v === lo && hi !== lo) cls = "lo";
+      const pct = v === null || lo === null ? 40 : Math.max(12, Math.min(100, ((v - (lo - 0.01)) / (span + 0.02)) * 100));
+      return `<div class="cell ${cls}"><div class="i">C${String(i).padStart(2,"0")}</div><div class="bar"><span style="height:${pct}%"></span></div><div class="cv">${v === null ? "—" : v.toFixed(3)}</div></div>`;
+    }).join("");
+  }
+
+  function setConn(ok, text) {
+    const p = $("connPill");
+    p.className = "pill " + (ok ? "on" : "off");
+    $("connText").textContent = text;
+  }
+
+  function wsUrl(httpUrl) {
+    const u = new URL(httpUrl);
+    u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+    u.pathname = "/api/websocket";
+    u.search = ""; u.hash = "";
+    return u.toString();
+  }
+
+  async function connect() {
+    if (!cfg.url || !cfg.token) {
+      $("overlay").classList.remove("hide");
+      return;
+    }
+    if (cfg.pin) {
+      const pin = sessionStorage.getItem("pvx_pin_ok");
+      if (pin !== cfg.pin) {
+        const entered = prompt("PIN");
+        if (entered !== cfg.pin) {
+          $("cfgErr").textContent = "Λάθος PIN";
+          $("overlay").classList.remove("hide");
+          return;
+        }
+        sessionStorage.setItem("pvx_pin_ok", cfg.pin);
+      }
+    }
+    try {
+      if (ws) try { ws.close(); } catch {}
+      setConn(false, "CONNECTING");
+      ws = new WebSocket(wsUrl(cfg.url));
+      await new Promise((resolve, reject) => {
+        ws.onopen = resolve;
+        ws.onerror = () => reject(new Error("WebSocket error — έλεγξε URL / tunnel / CORS"));
+        setTimeout(() => reject(new Error("Timeout σύνδεσης")), 12000);
+      });
+      await recvUntil(m => m.type === "auth_required");
+      ws.send(JSON.stringify({ type: "auth", access_token: cfg.token }));
+      const auth = await recvUntil(m => m.type === "auth_ok" || m.type === "auth_invalid");
+      if (auth.type !== "auth_ok") throw new Error("Άκυρο token");
+      setConn(true, "LIVE");
+      $("overlay").classList.add("hide");
+      $("cfgErr").textContent = "";
+      // get states
+      const id = nid++;
+      ws.send(JSON.stringify({ id, type: "get_states" }));
+      const stMsg = await recvUntil(m => m.id === id);
+      for (const s of stMsg.result || []) states[s.entity_id] = s;
+      render();
+      const subId = nid++;
+      ws.send(JSON.stringify({ id: subId, type: "subscribe_events", event_type: "state_changed" }));
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (m.type === "event" && m.event?.event_type === "state_changed") {
+          const s = m.event.data.new_state;
+          if (s?.entity_id) {
+            states[s.entity_id] = s;
+            render();
+          }
+        }
+      };
+      ws.onclose = () => {
+        setConn(false, "OFFLINE");
+        setTimeout(connect, 4000);
+      };
+    } catch (e) {
+      setConn(false, "ERROR");
+      $("cfgErr").textContent = String(e.message || e);
+      $("overlay").classList.remove("hide");
+    }
+  }
+
+  function recvUntil(pred) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("HA δεν απάντησε")), 15000);
+      const prev = ws.onmessage;
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (pred(m)) {
+          clearTimeout(t);
+          ws.onmessage = prev;
+          resolve(m);
+        } else if (prev) prev(ev);
+      };
+    });
+  }
+
+  // UI
+  $("haUrl").value = cfg.url || "http://192.168.99.100:8123";
+  $("haToken").value = cfg.token || "";
+  $("haPin").value = cfg.pin || "";
+  if (!cfg.url || !cfg.token) $("overlay").classList.remove("hide");
+  else $("overlay").classList.add("hide");
+
+  $("btnSettings").onclick = () => $("overlay").classList.remove("hide");
+  $("btnClose").onclick = () => { if (cfg.url && cfg.token) $("overlay").classList.add("hide"); };
+  $("btnSave").onclick = () => {
+    saveCfg({
+      url: $("haUrl").value.trim().replace(/\/$/, ""),
+      token: $("haToken").value.trim(),
+      pin: $("haPin").value.trim(),
+    });
+    connect();
+  };
+
+  connect();
+})();
+  </script>
+</body>
+</html>

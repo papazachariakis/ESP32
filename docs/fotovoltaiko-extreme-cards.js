@@ -3,7 +3,7 @@
  * v2 — richer visuals, SVG gauges, animated flow
  */
 (() => {
-  const VER = "2.0.0";
+  const VER = "2.1.0";
   const FONT =
     "https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap";
 
@@ -117,8 +117,8 @@
   .kpi .hint{position:relative;margin-top:8px;font-size:.78rem;color:var(--muted)}
 
   /* FLOW */
-  .flow-stage{position:relative;min-height:300px;margin-top:4px}
-  .flow-svg{width:100%;height:min(340px,52vw);display:block}
+  .flow-stage{position:relative;min-height:360px;margin-top:4px}
+  .flow-svg{width:100%;height:min(420px,68vw);display:block}
   .flow-node{
     fill:rgba(6,10,18,.88);stroke:var(--line);stroke-width:1.5;
     filter:drop-shadow(0 8px 18px rgba(0,0,0,.35));
@@ -126,6 +126,8 @@
   .flow-node.on{stroke:var(--nc);filter:drop-shadow(0 0 12px color-mix(in srgb,var(--nc) 55%,transparent))}
   .flow-label{fill:var(--muted);font-family:var(--ui);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
   .flow-val{fill:var(--nc,#fff);font-family:var(--display);font-weight:700;font-size:15px}
+  .flow-sub{fill:var(--muted);font-family:var(--mono);font-size:9.5px;letter-spacing:.02em}
+  .flow-dir{fill:var(--nc);font-family:var(--display);font-size:9px;font-weight:700;letter-spacing:.12em}
   .flow-hub{
     fill:url(#hubGrad);stroke:rgba(255,255,255,.22);stroke-width:1.5;
   }
@@ -134,6 +136,17 @@
     filter:drop-shadow(0 0 6px var(--bc))}
   .beam.rev.on{animation-direction:reverse}
   @keyframes dash{to{stroke-dashoffset:-36}}
+  .flow-details{
+    margin-top:12px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+  }
+  @media(max-width:720px){.flow-details{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .flow-chip{
+    padding:10px 11px;border-radius:12px;border:1px solid var(--line);
+    background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(0,0,0,.28));
+  }
+  .flow-chip .k{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .flow-chip .v{margin-top:3px;font-family:var(--mono);font-size:.78rem;color:var(--text);line-height:1.35}
+  .flow-chip .v b{color:var(--c,var(--pv));font-family:var(--display);font-weight:700}
 
   /* BATTERY */
   .bat-layout{display:grid;grid-template-columns:minmax(180px,220px) 1fr;gap:18px;align-items:center}
@@ -328,7 +341,7 @@
 
   class PvxFlowCard extends PvxBase {
     getCardSize() {
-      return 5;
+      return 7;
     }
     _render() {
       const h = this._hass;
@@ -338,48 +351,94 @@
       const grid = num(h, c.grid_entity || "sensor.inverter_grid_power", 0) || 0;
       const bat = num(h, c.battery_entity || "sensor.inverter_battery_power", 0) || 0;
       const soc = num(h, c.soc_entity || "sensor.inverter_battery", 0);
-      const on = (v) => (Math.abs(v) > 25 ? "on" : "");
-      // battery: positive often charge depending on invert — use absolute for animation presence
+      const pv1 = num(h, c.pv1_entity || "sensor.inverter_pv1_power", 0);
+      const pv2 = num(h, c.pv2_entity || "sensor.inverter_pv2_power", 0);
+      const pv1v = num(h, c.pv1_v || "sensor.inverter_pv1_voltage", 1);
+      const pv2v = num(h, c.pv2_v || "sensor.inverter_pv2_voltage", 1);
+      const pv1a = num(h, c.pv1_a || "sensor.inverter_pv1_current", 1);
+      const pv2a = num(h, c.pv2_a || "sensor.inverter_pv2_current", 1);
+      const batV = num(h, c.bat_v || "sensor.inverter_battery_voltage", 1);
+      const batA = num(h, c.bat_a || "sensor.inverter_battery_current", 1);
+      const batT = num(h, c.bat_t || "sensor.inverter_battery_temperature", 1);
+      const l1 = num(h, c.l1 || "sensor.inverter_load_l1_power", 0);
+      const l2 = num(h, c.l2 || "sensor.inverter_load_l2_power", 0);
+      const l3 = num(h, c.l3 || "sensor.inverter_load_l3_power", 0);
+      const freq = num(h, c.freq || "sensor.inverter_output_frequency", 2);
+      const invP = num(h, c.inv_p || "sensor.inverter_power", 0);
+      const st = state(h, c.status || "sensor.inverter_device_state");
+      const dayPv = num(h, c.day_pv || "sensor.inverter_today_production", 1);
+      const dayLoad = num(h, c.day_load || "sensor.inverter_today_load_consumption", 1);
+      const dayImp = num(h, c.day_imp || "sensor.inverter_today_energy_import", 1);
+      const dayExp = num(h, c.day_exp || "sensor.inverter_today_energy_export", 1);
+      const dayBch = num(h, c.day_bch || "sensor.inverter_today_battery_charge", 1);
+      const dayBd = num(h, c.day_bd || "sensor.inverter_today_battery_discharge", 1);
+      const basenSoc = num(h, c.basen_soc || "sensor.tp_bstbd_25c_2_state_of_charge", 0);
+      const basenW = num(h, c.basen_w || "sensor.tp_bstbd_25c_2_power", 0);
+
+      const on = (v) => (Math.abs(v || 0) > 25 ? "on" : "");
+      const batDir = bat > 40 ? "CHARGE" : bat < -40 ? "DISCHARGE" : "IDLE";
+      const gridDir = grid > 40 ? "IMPORT" : grid < -40 ? "EXPORT" : "IDLE";
+      const esc = (s) => String(s ?? "—").replace(/[<>&]/g, "");
+
       this._paint(
         shell(
           "#5cff6a",
-          `<div class="eyebrow"><span class="tag">${c.title || "POWER FLOW"}</span><span class="live"><i></i>TOPOLOGY</span></div>
-           <div class="sub">Custom PVX energy theatre · animated rails</div>
+          `<div class="eyebrow"><span class="tag">${c.title || "POWER FLOW"}</span><span class="live"><i></i>DETAILED</span></div>
+           <div class="sub">PV strings · 3-phase load · battery rails · grid direction · daily energy</div>
            <div class="flow-stage">
-             <svg class="flow-svg" viewBox="0 0 640 340" preserveAspectRatio="xMidYMid meet">
+             <svg class="flow-svg" viewBox="0 0 720 430" preserveAspectRatio="xMidYMid meet">
                <defs>
                  <linearGradient id="hubGrad" x1="0" y1="0" x2="1" y2="1">
                    <stop offset="0%" stop-color="#1a2740"/><stop offset="100%" stop-color="#0a1220"/>
                  </linearGradient>
-                 <filter id="soft"><feGaussianBlur stdDeviation="2.2"/></filter>
                </defs>
-               <path class="beam ${on(pv)}" style="--bc:var(--pv)" d="M320 78 L320 140"/>
-               <path class="beam ${on(bat)} ${bat < 0 ? "rev" : ""}" style="--bc:var(--bat)" d="M168 170 L250 170"/>
-               <path class="beam ${on(load)}" style="--bc:var(--load)" d="M390 170 L472 170"/>
-               <path class="beam ${on(grid)} ${grid < 0 ? "rev" : ""}" style="--bc:var(--grid)" d="M320 200 L320 262"/>
+               <path class="beam ${on(pv)}" style="--bc:var(--pv)" d="M360 108 L360 168"/>
+               <path class="beam ${on(bat)} ${bat < 0 ? "rev" : ""}" style="--bc:var(--bat)" d="M198 214 L278 214"/>
+               <path class="beam ${on(load)}" style="--bc:var(--load)" d="M442 214 L522 214"/>
+               <path class="beam ${on(grid)} ${grid < 0 ? "rev" : ""}" style="--bc:var(--grid)" d="M360 260 L360 318"/>
 
-               <rect class="flow-node ${on(pv)}" style="--nc:var(--pv)" x="250" y="28" width="140" height="58" rx="14"/>
-               <text class="flow-label" x="320" y="48" text-anchor="middle">Solar</text>
-               <text class="flow-val" style="--nc:var(--pv)" x="320" y="70" text-anchor="middle">${fmtW(pv)}</text>
+               <!-- SOLAR -->
+               <rect class="flow-node ${on(pv)}" style="--nc:var(--pv)" x="250" y="18" width="220" height="92" rx="16"/>
+               <text class="flow-label" x="360" y="40" text-anchor="middle">Solar PV</text>
+               <text class="flow-val" style="--nc:var(--pv)" x="360" y="64" text-anchor="middle">${fmtW(pv)}</text>
+               <text class="flow-sub" x="360" y="82" text-anchor="middle">PV1 ${fmtW(pv1)} · ${fmt(pv1v, "V", 0)} · ${fmt(pv1a, "A", 1)}</text>
+               <text class="flow-sub" x="360" y="96" text-anchor="middle">PV2 ${fmtW(pv2)} · ${fmt(pv2v, "V", 0)} · ${fmt(pv2a, "A", 1)}</text>
 
-               <rect class="flow-node ${on(bat)}" style="--nc:var(--bat)" x="40" y="140" width="130" height="62" rx="14"/>
-               <text class="flow-label" x="105" y="162" text-anchor="middle">Battery</text>
-               <text class="flow-val" style="--nc:var(--bat)" x="105" y="184" text-anchor="middle">${fmtW(bat)}</text>
+               <!-- BATTERY -->
+               <rect class="flow-node ${on(bat)}" style="--nc:var(--bat)" x="28" y="168" width="172" height="108" rx="16"/>
+               <text class="flow-label" x="114" y="190" text-anchor="middle">Battery</text>
+               <text class="flow-val" style="--nc:var(--bat)" x="114" y="214" text-anchor="middle">${fmtW(bat)}</text>
+               <text class="flow-dir" style="--nc:var(--bat)" x="114" y="230" text-anchor="middle">${batDir}</text>
+               <text class="flow-sub" x="114" y="248" text-anchor="middle">SOC ${soc ?? "—"}% · ${fmt(batV, "V", 1)}</text>
+               <text class="flow-sub" x="114" y="262" text-anchor="middle">${fmt(batA, "A", 1)} · ${fmt(batT, "°C", 0)}</text>
 
-               <rect class="flow-hub" x="260" y="140" width="120" height="62" rx="16"/>
-               <text class="flow-label" x="320" y="162" text-anchor="middle" style="fill:#c9d7ea">Inverter</text>
-               <text class="flow-val" style="--nc:#f4fbff" x="320" y="184" text-anchor="middle">DEYE</text>
+               <!-- INVERTER HUB -->
+               <rect class="flow-hub" x="286" y="168" width="148" height="108" rx="18"/>
+               <text class="flow-label" x="360" y="190" text-anchor="middle" style="fill:#c9d7ea">Inverter</text>
+               <text class="flow-val" style="--nc:#f4fbff" x="360" y="214" text-anchor="middle">DEYE</text>
+               <text class="flow-sub" x="360" y="234" text-anchor="middle">${fmtW(invP)} · ${fmt(freq, "Hz", 2)}</text>
+               <text class="flow-sub" x="360" y="252" text-anchor="middle">${esc(st)}</text>
 
-               <rect class="flow-node ${on(load)}" style="--nc:var(--load)" x="470" y="140" width="130" height="62" rx="14"/>
-               <text class="flow-label" x="535" y="162" text-anchor="middle">Load</text>
-               <text class="flow-val" style="--nc:var(--load)" x="535" y="184" text-anchor="middle">${fmtW(load)}</text>
+               <!-- LOAD -->
+               <rect class="flow-node ${on(load)}" style="--nc:var(--load)" x="520" y="168" width="172" height="108" rx="16"/>
+               <text class="flow-label" x="606" y="190" text-anchor="middle">Load</text>
+               <text class="flow-val" style="--nc:var(--load)" x="606" y="214" text-anchor="middle">${fmtW(load)}</text>
+               <text class="flow-sub" x="606" y="236" text-anchor="middle">L1 ${fmtW(l1)}</text>
+               <text class="flow-sub" x="606" y="250" text-anchor="middle">L2 ${fmtW(l2)} · L3 ${fmtW(l3)}</text>
 
-               <rect class="flow-node ${on(grid)}" style="--nc:var(--grid)" x="250" y="262" width="140" height="58" rx="14"/>
-               <text class="flow-label" x="320" y="282" text-anchor="middle">Grid</text>
-               <text class="flow-val" style="--nc:var(--grid)" x="320" y="304" text-anchor="middle">${fmtW(grid)}</text>
-
-               <text class="flow-label" x="105" y="214" text-anchor="middle" style="font-size:10px">SOC ${soc ?? "—"}%</text>
+               <!-- GRID -->
+               <rect class="flow-node ${on(grid)}" style="--nc:var(--grid)" x="250" y="318" width="220" height="92" rx="16"/>
+               <text class="flow-label" x="360" y="340" text-anchor="middle">Grid</text>
+               <text class="flow-val" style="--nc:var(--grid)" x="360" y="364" text-anchor="middle">${fmtW(grid)}</text>
+               <text class="flow-dir" style="--nc:var(--grid)" x="360" y="382" text-anchor="middle">${gridDir}</text>
+               <text class="flow-sub" x="360" y="398" text-anchor="middle">Today import ${fmt(dayImp, "kWh", 1)} · export ${fmt(dayExp, "kWh", 1)}</text>
              </svg>
+           </div>
+           <div class="flow-details">
+             <div class="flow-chip" style="--c:var(--pv)"><div class="k">PV today</div><div class="v"><b>${fmt(dayPv, "kWh", 1)}</b><br>strings ${fmtW(pv1)} + ${fmtW(pv2)}</div></div>
+             <div class="flow-chip" style="--c:var(--load)"><div class="k">Load today</div><div class="v"><b>${fmt(dayLoad, "kWh", 1)}</b><br>L1/L2/L3 ${fmtW(l1)} / ${fmtW(l2)} / ${fmtW(l3)}</div></div>
+             <div class="flow-chip" style="--c:var(--bat)"><div class="k">Battery today</div><div class="v"><b>Δ ${fmt(dayBch, "", 1)} / ${fmt(dayBd, "", 1)} kWh</b><br>Basen ${basenSoc ?? "—"}% · ${fmtW(basenW)}</div></div>
+             <div class="flow-chip" style="--c:var(--grid)"><div class="k">Grid today</div><div class="v"><b>${gridDir}</b><br>imp ${fmt(dayImp, "kWh", 1)} · exp ${fmt(dayExp, "kWh", 1)}</div></div>
            </div>`
         )
       );

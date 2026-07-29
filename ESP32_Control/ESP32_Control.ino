@@ -39,6 +39,7 @@
 
 #include "config.h"
 #include "ble_radio.h"
+#include "ha_mqtt_discovery.h"
 
 #if defined(ESP32_SLIM_BUILD)
 #include "webui_slim.h"
@@ -502,6 +503,14 @@ void runBleConnectJob() {
   }
   BmsType bt = bleConnectResolveType(typeStr, name);
   Serial.printf("MQTT BLE connect: %s [%s] %s\n", name.c_str(), bmsTypeId(bt), mac.c_str());
+  // Persist intended pairing before radio attempt so auto-reconnect survives reboot
+  // even when the BMS is temporarily offline / phone-held.
+  prefs.putString("ble_mac", mac);
+  prefs.putString("ble_name", name);
+  prefs.putString("bms_type", bmsTypeId(bt));
+  bmsMgr.type = bt;
+  bmsMgr.name = name;
+  bmsMgr.mac = mac;
   bool ok = bmsMgr.connect(bt, name, mac, prefs);
   if (ok) {
     publishBmsMqtt();
@@ -837,7 +846,9 @@ bool mqttConnect() {
 
     mqtt.subscribe(topicCmd.c_str());
 
+    publishHaBmsDiscovery(mqtt, deviceId, topicBms, FIRMWARE_VERSION);
     publishStatus();
+    if (bmsMgr.bms.valid) publishBmsMqtt();
 
     Serial.println("MQTT connected");
 
@@ -868,15 +879,44 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
-  if (bmsMgr.name.length()) {
+#if defined(BMS_DEFAULT_MAC)
+  if (!bmsMgr.mac.length()) {
+    bmsMgr.mac = BMS_DEFAULT_MAC;
+    bmsMgr.name = BMS_DEFAULT_NAME;
+    bmsMgr.type = bmsTypeFromString(BMS_DEFAULT_TYPE);
+    prefs.putString("ble_mac", bmsMgr.mac);
+    prefs.putString("ble_name", bmsMgr.name);
+    prefs.putString("bms_type", BMS_DEFAULT_TYPE);
+    Serial.printf("BMS default seeded: %s [%s] %s\n",
+                  bmsMgr.name.c_str(), BMS_DEFAULT_TYPE, bmsMgr.mac.c_str());
+  }
+#endif
+  // Only infer type from name when prefs have no type — never override an
+  // explicit JK pairing (S3 JK uses Espressif MAC + hex serial name).
+  if (bmsMgr.name.length() && bmsMgr.type == BmsType::None) {
     BmsType detected = bmsDetectFromName(bmsMgr.name);
-    if (detected != BmsType::None && detected != bmsMgr.type) {
-      Serial.printf("BMS type corrected: %s -> %s (%s)\n",
-                    bmsTypeId(bmsMgr.type), bmsTypeId(detected), bmsMgr.name.c_str());
+    if (detected != BmsType::None) {
+      Serial.printf("BMS type inferred: %s (%s)\n", bmsTypeId(detected), bmsMgr.name.c_str());
       bmsMgr.type = detected;
       prefs.putString("bms_type", bmsTypeId(detected));
     }
   }
+  // Classic only: force known Basen default identity even if prefs were saved
+  // as JK by the old TP_BSTBD -> "_BD" mis-detect bug.
+#if defined(ESP32_SLIM_BUILD) && defined(BMS_DEFAULT_MAC)
+  {
+    String defMac = BMS_DEFAULT_MAC;
+    defMac.toUpperCase();
+    String curMac = bmsMgr.mac;
+    curMac.toUpperCase();
+    if (curMac == defMac) {
+      bmsMgr.name = BMS_DEFAULT_NAME;
+      bmsMgr.type = BmsType::Basen;
+      prefs.putString("ble_name", bmsMgr.name);
+      prefs.putString("bms_type", "basen");
+    }
+  }
+  // Classic only: hex-serial + Espressif MAC was a false ESP32 advertise, not JK.
   if (bmsMgr.type == BmsType::Jk && bmsNameLooksLikeHexSerial(bmsMgr.name)) {
     Serial.printf("BMS hex serial %s -> basen (was jk)\n", bmsMgr.name.c_str());
     bmsMgr.type = BmsType::Basen;
@@ -891,6 +931,16 @@ void loadSettings() {
     prefs.remove("ble_name");
     prefs.remove("bms_type");
   }
+  if (!bmsMgr.mac.length()) {
+    bmsMgr.mac = BMS_DEFAULT_MAC;
+    bmsMgr.name = BMS_DEFAULT_NAME;
+    bmsMgr.type = BmsType::Basen;
+    prefs.putString("ble_mac", bmsMgr.mac);
+    prefs.putString("ble_name", bmsMgr.name);
+    prefs.putString("bms_type", "basen");
+    Serial.printf("BMS default re-seeded: %s %s\n", bmsMgr.name.c_str(), bmsMgr.mac.c_str());
+  }
+#endif
   if (bmsMgr.type == BmsType::None && bmsMgr.name.length())
     bmsMgr.type = bmsDetectFromName(bmsMgr.name);
 #if defined(ESP32_SLIM_BUILD)
@@ -1730,7 +1780,7 @@ void loop() {
       }
     }
   } else {
-    // Connected: keep Classic radio biased to WiFi so BLE BMS doesn't kick STA off.
+    // Connected: keep STA alive, but don't starve Basen BLE with permanent WIFI bias.
     if (wifiDownSince || blePausedForWifi) {
       wifiDownSince = 0;
       blePausedForWifi = false;
@@ -1739,7 +1789,9 @@ void loop() {
     static unsigned long lastCoexWifi = 0;
     if (millis() - lastCoexWifi > 30000) {
       lastCoexWifi = millis();
-      esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+      // While BMS link is up, prefer balance so notifies keep flowing.
+      if (bmsMgr.connected) esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+      else esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
       WiFi.setSleep(false);
     }
 #endif
@@ -1836,11 +1888,12 @@ void loop() {
     }
   }
 
-  // Do not fight WiFi recovery with BLE reconnect on Classic coexistence.
+  // Classic: auto-reconnect Basen only after WiFi has been stable (bleRadioOk).
 #if BLE_AUTO_RECONNECT
   if (bleRadioOk && bmsMgr.mac.length() > 0 && !bmsMgr.connected
       && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
     lastBleReconnect = millis();
+    Serial.printf("BLE auto-reconnect: %s\n", bmsMgr.mac.c_str());
     bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
   }
 #endif

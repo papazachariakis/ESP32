@@ -27,7 +27,8 @@
 #define WIFI_KICK_GRACE_MS 45000
 #define WIFI_DOWN_DEBOUNCE_MS 5000
 #define BLE_PAUSE_WIFI_DOWN_MS 500
-#define BLE_AUTO_RECONNECT 0
+// Auto-reconnect Basen after WiFi is stable; keep interval gentle for coexistence.
+#define BLE_AUTO_RECONNECT 1
 #else
 #define WIFI_RECONNECT_INTERVAL_MS 15000
 #define WIFI_RECONNECT_FAIL_RESTART 5
@@ -46,10 +47,22 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.63"
+#define FIRMWARE_VERSION "3.0.68"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
+
+#if defined(ESP32_SLIM_BUILD)
+// Factory default Basen Green for this Classic hub (user site).
+#define BMS_DEFAULT_MAC  "00:9C:17:A9:69:0E"
+#define BMS_DEFAULT_NAME "TP_BSTBD-25C-2"
+#define BMS_DEFAULT_TYPE "basen"
+#else
+// Waveshare S3 hub — JK BMS (separate battery from Classic Basen).
+#define BMS_DEFAULT_MAC  "C8:47:80:3C:43:28"
+#define BMS_DEFAULT_NAME "50514652C101132"
+#define BMS_DEFAULT_TYPE "jk"
+#endif
 
 #define STATUS_JSON_CAPACITY 12288
 #define WIFI_SCAN_JSON_CAPACITY 4096
@@ -72,10 +85,14 @@
 #define BLE_SCAN_SECONDS 3
 #define BLE_SCAN_INTERVAL_MS 160
 #define BLE_SCAN_WINDOW_MS 80
-#define BLE_RECONNECT_MS 300000
-#define BLE_POLL_MS 15000
+// Retry Basen quickly — link flaps under WiFi coexistence.
+#define BLE_RECONNECT_MS 12000
+#define BLE_POLL_MS 8000
 // Wait for STA to settle before any BLE activity after boot/reconnect.
-#define BLE_WIFI_STABLE_MS 60000
+#define BLE_WIFI_STABLE_MS 15000
+#define BLE_NOTIFY_KICK_MS 12000
+#define BLE_NOTIFY_RESET_MS 90000
+#define BLE_CELL_STALE_MS 90000
 #else
 #define BLE_SCAN_SECONDS 15
 #define BLE_SCAN_INTERVAL_MS 80
@@ -83,10 +100,10 @@
 #define BLE_RECONNECT_MS 2000
 #define BLE_POLL_MS 5000
 #define BLE_WIFI_STABLE_MS 0
-#endif
 #define BLE_NOTIFY_KICK_MS 8000
 #define BLE_NOTIFY_RESET_MS 30000
 #define BLE_CELL_STALE_MS 25000
+#endif
 #define BLE_SESSION_REFRESH_MS 0
 #define BLE_WRITE_RETRY 2
 

@@ -47,7 +47,7 @@
 #define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
 #define WIFI_DEFAULT_SEED_COUNT 2
 
-#define FIRMWARE_VERSION "3.0.68"
+#define FIRMWARE_VERSION "3.0.70"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -57,12 +57,8 @@
 #define BMS_DEFAULT_MAC  "00:9C:17:A9:69:0E"
 #define BMS_DEFAULT_NAME "TP_BSTBD-25C-2"
 #define BMS_DEFAULT_TYPE "basen"
-#else
-// Waveshare S3 hub — JK BMS (separate battery from Classic Basen).
-#define BMS_DEFAULT_MAC  "C8:47:80:3C:43:28"
-#define BMS_DEFAULT_NAME "50514652C101132"
-#define BMS_DEFAULT_TYPE "jk"
 #endif
+// S3: no factory BMS seed — offline JK auto-connect blocks the web server.
 
 #define STATUS_JSON_CAPACITY 12288
 #define WIFI_SCAN_JSON_CAPACITY 4096
@@ -94,12 +90,13 @@
 #define BLE_NOTIFY_RESET_MS 90000
 #define BLE_CELL_STALE_MS 90000
 #else
-#define BLE_SCAN_SECONDS 15
+// S3: keep BLE gentle — blocking connect() starves HTTP when JK is offline.
+#define BLE_SCAN_SECONDS 8
 #define BLE_SCAN_INTERVAL_MS 80
 #define BLE_SCAN_WINDOW_MS 79
-#define BLE_RECONNECT_MS 2000
+#define BLE_RECONNECT_MS 45000
 #define BLE_POLL_MS 5000
-#define BLE_WIFI_STABLE_MS 0
+#define BLE_WIFI_STABLE_MS 20000
 #define BLE_NOTIFY_KICK_MS 8000
 #define BLE_NOTIFY_RESET_MS 30000
 #define BLE_CELL_STALE_MS 25000

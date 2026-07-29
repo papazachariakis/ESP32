@@ -846,7 +846,10 @@ bool mqttConnect() {
 
     mqtt.subscribe(topicCmd.c_str());
 
+#if defined(ESP32_SLIM_BUILD)
+    // Classic Basen only — never let S3 overwrite the same unique_id discovery.
     publishHaBmsDiscovery(mqtt, deviceId, topicBms, FIRMWARE_VERSION);
+#endif
     publishStatus();
     if (bmsMgr.bms.valid) publishBmsMqtt();
 
@@ -879,6 +882,19 @@ void loadSettings() {
   bmsMgr.name = prefs.getString("ble_name", "");
 
   bmsMgr.type = bmsTypeFromString(prefs.getString("bms_type", ""));
+#if !defined(ESP32_SLIM_BUILD)
+  // 3.0.70: drop sticky JK pairing that blocked HTTP when the BMS was offline.
+  if (!prefs.getBool("ble_fix_370", false)) {
+    prefs.putBool("ble_fix_370", true);
+    prefs.remove("ble_mac");
+    prefs.remove("ble_name");
+    prefs.remove("bms_type");
+    bmsMgr.mac = "";
+    bmsMgr.name = "";
+    bmsMgr.type = BmsType::None;
+    Serial.println("S3: cleared sticky BLE prefs (HTTP starve fix)");
+  }
+#endif
 #if defined(BMS_DEFAULT_MAC)
   if (!bmsMgr.mac.length()) {
     bmsMgr.mac = BMS_DEFAULT_MAC;
@@ -1888,13 +1904,21 @@ void loop() {
     }
   }
 
-  // Classic: auto-reconnect Basen only after WiFi has been stable (bleRadioOk).
+  // Auto-reconnect BMS after WiFi has been stable (bleRadioOk).
 #if BLE_AUTO_RECONNECT
   if (bleRadioOk && bmsMgr.mac.length() > 0 && !bmsMgr.connected
       && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
-    lastBleReconnect = millis();
-    Serial.printf("BLE auto-reconnect: %s\n", bmsMgr.mac.c_str());
-    bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+#if !defined(ESP32_SLIM_BUILD)
+    // Weak WiFi + blocking BLE connect kills the LAN web server.
+    if (WiFi.RSSI() < -70) {
+      lastBleReconnect = millis();
+    } else
+#endif
+    {
+      lastBleReconnect = millis();
+      Serial.printf("BLE auto-reconnect: %s\n", bmsMgr.mac.c_str());
+      bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+    }
   }
 #endif
 

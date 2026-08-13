@@ -25,29 +25,31 @@
 #define WIFI_RECOVERY_ALLOW_SCAN 0
 #define WIFI_RECOVERY_NONBLOCK 1
 #define WIFI_KICK_GRACE_MS 45000
-#define WIFI_DOWN_DEBOUNCE_MS 5000
-#define BLE_PAUSE_WIFI_DOWN_MS 500
+// Classic: WiFi status flaps during BLE connect — don't kill Basen for ~30s.
+#define WIFI_DOWN_DEBOUNCE_MS 30000
+#define BLE_PAUSE_WIFI_DOWN_MS 5000
 // Auto-reconnect Basen after WiFi is stable; keep interval gentle for coexistence.
 #define BLE_AUTO_RECONNECT 1
 #else
-#define WIFI_RECONNECT_INTERVAL_MS 15000
-#define WIFI_RECONNECT_FAIL_RESTART 5
+#define WIFI_RECONNECT_INTERVAL_MS 12000
+#define WIFI_RECONNECT_FAIL_RESTART 4
 #define WIFI_SOFT_WAIT_MS 8000
 #define WIFI_BEGIN_WAIT_MS 12000
 #define WIFI_RECOVERY_ALLOW_SCAN 1
 #define WIFI_RECOVERY_NONBLOCK 0
 #define WIFI_KICK_GRACE_MS 0
-#define WIFI_DOWN_DEBOUNCE_MS 0
-#define BLE_PAUSE_WIFI_DOWN_MS 8000
+#define WIFI_DOWN_DEBOUNCE_MS 2000
+#define BLE_PAUSE_WIFI_DOWN_MS 3000
 #define BLE_AUTO_RECONNECT 1
 #endif
 
 // Default WiFi SSIDs (passwords in wifi_secrets.h — gitignored)
-#define WIFI_DEFAULT_SSID_PRIMARY   "mikrotik"
-#define WIFI_DEFAULT_SSID_SECONDARY "kalithea"
-#define WIFI_DEFAULT_SEED_COUNT 2
+#define WIFI_DEFAULT_SSID_PRIMARY   "OTEc70dd0"
+#define WIFI_DEFAULT_SSID_SECONDARY "mikrotik"
+#define WIFI_DEFAULT_SSID_TERTIARY  "kalithea"
+#define WIFI_DEFAULT_SEED_COUNT 3
 
-#define FIRMWARE_VERSION "3.0.70"
+#define FIRMWARE_VERSION "3.0.107-hivemq"
 
 // Shared password for OTA, MQTT remote commands, and protected HTTP APIs
 #define DEVICE_CMD_PASSWORD "esp32ota"
@@ -71,35 +73,51 @@
 #define MODBUS_DEFAULT_METER_ENABLED true
 #define MODBUS_DEFAULT_METER_SLAVE_ID 2
 
-#define MQTT_DEFAULT_BROKER "broker.hivemq.com"
+// Prefer local HA Mosquitto (fast/reliable). HiveMQ public broker stalls HA updates.
+#define MQTT_DEFAULT_BROKER "192.168.99.100"
 #define MQTT_DEFAULT_PORT 1883
-#define MQTT_PUBLISH_INTERVAL_MS 2000
-#define MQTT_BMS_PUBLISH_INTERVAL_MS 2000
+#define MQTT_DEFAULT_USER "mqtt"
+#define MQTT_DEFAULT_PASS "mqttlocal"
+#define MQTT_PUBLISH_INTERVAL_MS 1000
+#define MQTT_BMS_PUBLISH_INTERVAL_MS 800
 
 #if defined(ESP32_SLIM_BUILD)
 // Classic: short BLE scan — long PREFER_BT scans drop STA.
 #define BLE_SCAN_SECONDS 3
 #define BLE_SCAN_INTERVAL_MS 160
 #define BLE_SCAN_WINDOW_MS 80
-// Retry Basen quickly — link flaps under WiFi coexistence.
-#define BLE_RECONNECT_MS 12000
-#define BLE_POLL_MS 8000
-// Wait for STA to settle before any BLE activity after boot/reconnect.
+// Balanced: decent refresh without freezing Classic WiFi/HTTP.
+#define BLE_DUTY_CYCLE 1
+#define BLE_DUTY_IDLE_MS 2500
+#define BLE_DUTY_HOLD_MS 7000
+#define BLE_RECONNECT_MS 15000
+#define BLE_RECONNECT_MIN_RSSI -85
+#define BLE_RECONNECT_FAIL_BACKOFF_MS 60000
+#define BLE_POLL_MS 700
 #define BLE_WIFI_STABLE_MS 15000
 #define BLE_NOTIFY_KICK_MS 12000
-#define BLE_NOTIFY_RESET_MS 90000
-#define BLE_CELL_STALE_MS 90000
+#define BLE_NOTIFY_RESET_MS 180000
+#define BLE_CELL_STALE_MS 180000
+#define WIFI_ROAM_MIN_RSSI -75
+#define WIFI_ROAM_IMPROVE_DB 8
+#define WIFI_ROAM_CHECK_MS 180000
 #else
+#define BLE_DUTY_CYCLE 0
 // S3: keep BLE gentle — blocking connect() starves HTTP when JK is offline.
 #define BLE_SCAN_SECONDS 8
 #define BLE_SCAN_INTERVAL_MS 80
 #define BLE_SCAN_WINDOW_MS 79
 #define BLE_RECONNECT_MS 45000
+#define BLE_RECONNECT_MIN_RSSI -70
+#define BLE_RECONNECT_FAIL_BACKOFF_MS 90000
 #define BLE_POLL_MS 5000
 #define BLE_WIFI_STABLE_MS 20000
 #define BLE_NOTIFY_KICK_MS 8000
 #define BLE_NOTIFY_RESET_MS 30000
 #define BLE_CELL_STALE_MS 25000
+#define WIFI_ROAM_MIN_RSSI -75
+#define WIFI_ROAM_IMPROVE_DB 12
+#define WIFI_ROAM_CHECK_MS 900000
 #endif
 #define BLE_SESSION_REFRESH_MS 0
 #define BLE_WRITE_RETRY 2

@@ -1080,7 +1080,7 @@
       </div>
       <div class="diag-grid cols2">
         <div class="card">
-          <div class="card-title"><span class="dot bms"></span>BLE / JK BMS</div>
+          <div class="card-title"><span class="dot bms"></span>BLE / Basen BMS</div>
           <div class="diag-rows" id="diagBle"></div>
         </div>
         <div class="card">
@@ -1110,10 +1110,15 @@
   <aside class="drawer" id="drawer">
     <h2>⚙ Ρυθμίσεις</h2>
     <label>Device ID</label>
-    <input id="deviceId" placeholder="000401000000" />
+    <input id="deviceId" placeholder="38182B8BD5CC" />
     <label>MQTT WebSocket</label>
     <input id="broker" value="wss://broker.hivemq.com:8884/mqtt" />
-    <p class="small muted" style="margin:4px 0 8px">Τοπικά = HTTP στο ESP32. GitHub = MQTT cloud — κάθε ESP32 έχει <b>μοναδικό Device ID</b> (από MAC). Η σάρωση βρίσκει μόνο <b>ESP32 Classic</b> online στον broker.</p>
+    <p class="small muted" style="margin:4px 0 8px">
+      Classic Device ID: <b>38182B8BD5CC</b>. Το firmware dual-publish: τοπικό Mosquitto
+      (<code>192.168.99.100</code>) <b>και</b> HiveMQ (<code>home/38182B8BD5CC/status</code> + <code>/bms</code>).
+      Στο LAN: <a href="http://192.168.99.64/" target="_blank" rel="noopener">http://192.168.99.64</a>
+      · DEYE/BMS cloud: <a href="https://pvx-web.vercel.app" target="_blank" rel="noopener">pvx-web.vercel.app</a>.
+    </p>
     <button class="btn" onclick="connect();closeDrawer()">Σύνδεση</button>
     <button class="btn sec" onclick="scanDevices()">🔍 Εύρεση συσκευών</button>
     <button class="btn sec" onclick="disconnect()">Αποσύνδεση</button>
@@ -1180,12 +1185,16 @@
   <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <script>
     const LS = { id: 'esp32_classic_device_id', broker: 'esp32_classic_broker' };
+    const DEFAULT_DEVICE_ID = '38182B8BD5CC';
     const BOARD_EXPECT = 'esp32';
     const BOARD_LABEL = 'ESP32 Classic';
     const OTA_FIRMWARE_FILE = 'firmware.bin';
     const FIRMWARE_BIN_URL = 'https://github.com/papazachariakis/ESP32/raw/master/docs/firmware.bin';
-    const EXPECTED_FIRMWARE = '3.0.63';
+    const EXPECTED_FIRMWARE = '3.0.107-hivemq';
     const MQTT_CMD_PW = 'esp32ota';
+    const CLASSIC_LAN_IP = '192.168.99.64';
+    const KNOWN_CLASSIC_IDS = new Set(['38182B8BD5CC']);
+    const JUNK_DEVICE_RE = /^(DEVICE_|PUMP|LIGHT|RELAY|WINDOW|SWITCH)/i;
 
     function pubCmd(obj) {
       if (!client) return;
@@ -1206,10 +1215,29 @@
     let otaUiActive = false;
     let otaBrowserSent = 0;
 
-    const savedId = localStorage.getItem(LS.id);
-    if (savedId) document.getElementById('deviceId').value = savedId;
+    let savedId = localStorage.getItem(LS.id);
+    // Migrate old/wrong Classic IDs (placeholder / DEVICE_* scans) to the known Basen hub.
+    if (!savedId || /^DEVICE_/i.test(savedId) || savedId === '000401000000') {
+      savedId = DEFAULT_DEVICE_ID;
+      localStorage.setItem(LS.id, savedId);
+    }
+    document.getElementById('deviceId').value = savedId;
     const savedBroker = localStorage.getItem(LS.broker) || localStorage.getItem('esp32_ws_broker');
     if (savedBroker) document.getElementById('broker').value = savedBroker;
+
+    function brokerLooksPublicCloud(url) {
+      const u = String(url || '').toLowerCase();
+      return u.includes('hivemq.com') || u.includes('emqx.io') || u.includes('broker.emqx');
+    }
+
+    function noDataHint(url) {
+      if (brokerLooksPublicCloud(url)) {
+        return 'MQTT OK στο HiveMQ χωρίς μηνύματα — βάλε Device ID 38182B8BD5CC, ' +
+          'βεβαιώσου ότι το Classic τρέχει 3.0.107-hivemq+ (dual-publish), ή άνοιξε http://' +
+          CLASSIC_LAN_IP + ' στο LAN.';
+      }
+      return 'MQTT OK αλλά χωρίς μηνύματα — έλεγξε Device ID / broker WebSocket / mqtt.connected στο ESP.';
+    }
 
     function toast(msg, ms = 3000) {
       const w = document.getElementById('toasts');
@@ -1413,7 +1441,18 @@
         return hints;
       }
       if (connected && !lastUpdate) {
-        hints.push('MQTT συνδέθηκε αλλά <b>δεν έρχονται μηνύματα</b> — έλεγξε <b>mqtt.connected:true</b> στο <code>http://IP/api/status</code>.');
+        const url = (document.getElementById('broker') || {}).value || '';
+        if (brokerLooksPublicCloud(url)) {
+          hints.push(
+            'MQTT OK στο <b>HiveMQ/cloud</b>, αλλά το Classic δημοσιεύει BMS μόνο στο <b>τοπικό</b> Mosquitto ' +
+            '<code>192.168.99.100:1883</code> (<code>home/38182B8BD5CC/…</code>). ' +
+            'Το GitHub Pages δεν βλέπει LAN MQTT. Στο σπίτι άνοιξε ' +
+            '<a href="http://' + CLASSIC_LAN_IP + '/" target="_blank" rel="noopener">http://' + CLASSIC_LAN_IP + '</a> ' +
+            'ή <code>/api/status</code>.'
+          );
+        } else {
+          hints.push('MQTT συνδέθηκε αλλά <b>δεν έρχονται μηνύματα</b> — έλεγξε Device ID και <b>mqtt.connected:true</b> στο <code>http://IP/api/status</code>.');
+        }
       }
 
       const sec = ageSec(lastUpdate);
@@ -1423,7 +1462,7 @@
       if (!ble.mac)
         hints.push('Δεν έχει ρυθμιστεί BMS MAC — κάνε pairing από το setup portal (<code>http://IP-ESP32</code>).');
       else if (!ble.connected)
-        hints.push('BLE <b>αποσυνδεδεμένο</b> — το JK BMS πρέπει να είναι κοντά (&lt;10m). Retry κάθε <b>15s</b>.');
+        hints.push('BLE <b>αποσυνδεδεμένο</b> — το Basen BMS πρέπει να είναι κοντά (&lt;10m). Retry κάθε <b>12s</b>.');
       else if (!bms.valid && (ble.cell_frames || 0) === 0)
         hints.push('BLE συνδέθηκε αλλά <b>0 cell frames</b> — περίμενε ή κάνε reboot BMS/ESP32.');
       else if (!bms.valid && (ble.crc_errors || 0) > 0)
@@ -2476,26 +2515,44 @@
     }
 
     function deviceForThisPage(d) {
-      if (!d.board) return true;
-      return d.board === BOARD_EXPECT;
+      const id = String(d.id || '').toUpperCase();
+      if (!id || JUNK_DEVICE_RE.test(id)) return false;
+      if (KNOWN_CLASSIC_IDS.has(id)) return true;
+      if (d.board && d.board !== BOARD_EXPECT) return false;
+      const label = String(d.board_label || '');
+      if (/classic|basen/i.test(label)) return true;
+      if (d.board === BOARD_EXPECT) {
+        // Require a real firmware / LAN fingerprint — empty public junk often has board=esp32.
+        if (d.firmware || (d.ip && String(d.ip).startsWith('192.168.'))) return true;
+        return false;
+      }
+      // No board field: only accept if payload looks like our hub (fw + ip), not empty shells.
+      if (!d.board && d.firmware && /^3\.0\./.test(String(d.firmware)) && d.ip) return true;
+      return false;
+    }
+
+    function classicSortKey(d) {
+      if (KNOWN_CLASSIC_IDS.has(String(d.id || '').toUpperCase())) return 1000 + (d.rssi || 0);
+      if (/basen/i.test(String(d.board_label || ''))) return 500 + (d.rssi || 0);
+      return d.rssi || -999;
     }
 
     function renderDeviceList() {
       const el = document.getElementById('deviceList');
       const all = [...foundDevices.values()];
-      const items = all.filter(deviceForThisPage).sort((a, b) => (b.rssi || -999) - (a.rssi || -999));
-      const others = all.filter(d => d.board && d.board !== BOARD_EXPECT).length;
+      const items = all.filter(deviceForThisPage).sort((a, b) => classicSortKey(b) - classicSortKey(a));
+      const others = all.length - items.length;
       if (!items.length) {
-        el.innerHTML = `<div class="small muted">Δεν βρέθηκε ${BOARD_LABEL} online.${others ? ` (${others} άλλη/ες συσκευή/ές στον broker)` : ''}</div>`;
+        el.innerHTML = `<div class="small muted">Δεν βρέθηκε ${BOARD_LABEL} online.${others ? ` (${others} άλλη/ες στον broker — αγνοήθηκαν)` : ''} Προεπιλογή: <b>${DEFAULT_DEVICE_ID}</b>.</div>`;
         return;
       }
       el.innerHTML = items.map(d => `
           <div class="device-item" onclick="selectDevice('${d.id}')">
-            <div><div class="id">${d.id}</div>
+            <div><div class="id">${d.id}${KNOWN_CLASSIC_IDS.has(d.id) ? ' ★' : ''}</div>
               <div class="meta">${d.board_label || BOARD_LABEL} · FW ${d.firmware ? 'v' + d.firmware : '?'} · ${d.ip || '?'} · ${d.ssid || '?'} · ${d.rssi ?? '?'} dBm</div>
             </div><span class="chip ok">online</span>
           </div>`).join('')
-        + (others ? `<div class="small muted" style="margin-top:8px">${others} άλλη/ες συσκευή/ές (άλλη πλακέτα) — άνοιξε το σωστό dashboard.</div>` : '');
+        + (others ? `<div class="small muted" style="margin-top:8px">${others} άλλη/ες συσκευή/ές αγνοήθηκαν (junk / άλλη πλακέτα).</div>` : '');
     }
 
     function warnWrongBoard(j) {
@@ -2552,9 +2609,12 @@
     }
 
     function connect() {
-      const id = document.getElementById('deviceId').value.trim().toUpperCase();
+      let id = document.getElementById('deviceId').value.trim().toUpperCase();
+      if (!id) {
+        id = DEFAULT_DEVICE_ID;
+        document.getElementById('deviceId').value = id;
+      }
       const url = document.getElementById('broker').value.trim();
-      if (!id) { toast('Βάλε Device ID'); return; }
       if (!url) { toast('Βάλε MQTT broker'); return; }
       localStorage.setItem(LS.id, id);
       localStorage.setItem(LS.broker, url);
@@ -2586,8 +2646,16 @@
         toast('MQTT συνδέθηκε — αναμονή ESP32...');
         setTimeout(() => {
           if (connected && !lastUpdate) {
-            toast('Δεν ήρθαν δεδομένα — έλεγξε mqtt.connected στο ESP32', 6000);
-            document.getElementById('statusLine').textContent = 'MQTT OK αλλά χωρίς μηνύματα από ESP32';
+            const hint = noDataHint(url);
+            toast(hint, 9000);
+            document.getElementById('statusLine').textContent = hint;
+            setBadge('MQTT OK · χωρίς δεδομένα', 'warn');
+            const hero = document.getElementById('heroBmsDetail');
+            if (hero && hero.textContent.indexOf('Αναμονή') >= 0) {
+              hero.textContent = brokerLooksPublicCloud(url)
+                ? 'Cloud broker χωρίς Classic publish — δες http://' + CLASSIC_LAN_IP
+                : 'Χωρίς status/bms στο broker';
+            }
           }
         }, 12000);
       });

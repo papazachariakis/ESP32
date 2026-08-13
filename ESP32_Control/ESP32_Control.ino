@@ -40,6 +40,11 @@
 #include "config.h"
 #include "ble_radio.h"
 #include "ha_mqtt_discovery.h"
+#include "solarman_deye.h"
+#include "pvx_cloud.h"
+#if defined(ESP32_SLIM_BUILD)
+#include "hivemq_pages.h"
+#endif
 
 #if defined(ESP32_SLIM_BUILD)
 #include "webui_slim.h"
@@ -68,6 +73,11 @@ PubSubClient mqtt(wifiClient);
 Preferences prefs;
 
 BmsManager bmsMgr;
+SolarmanDeye deyeMgr;
+PvxCloud pvxCloud;
+#if defined(ESP32_SLIM_BUILD)
+HiveMqPagesMirror hiveMqPages;
+#endif
 #ifndef ESP32_SLIM_BUILD
 GenManager genMgr;
 GenSchedule genSched;
@@ -81,6 +91,10 @@ String deviceId;
 String mqttBroker = MQTT_DEFAULT_BROKER;
 
 uint16_t mqttPort = MQTT_DEFAULT_PORT;
+
+String mqttUser = MQTT_DEFAULT_USER;
+
+String mqttPass = MQTT_DEFAULT_PASS;
 
 String topicStatus, topicCmd, topicBms, topicGenset, topicMeter, topicWifi, topicBle;
 
@@ -103,6 +117,9 @@ volatile bool gWifiScanPending = false;
 
 volatile bool gWifiConnectPending = false;
 
+volatile bool gForceWifiRoam = false;
+volatile unsigned long gBlePreferBtUntil = 0;
+
 volatile bool gBleScanPending = false;
 
 volatile bool gBleConnectPending = false;
@@ -118,10 +135,25 @@ String gBleConnectName;
 String gBleConnectType;
 
 void startBleScan();
+void mqttCallback(char* topic, byte* payload, unsigned int length);
+void publishStatus();
+void publishBmsMqtt();
 
 void pumpNetwork() {
   server.handleClient();
   if (WiFi.status() == WL_CONNECTED && mqtt.connected()) mqtt.loop();
+#if defined(ESP32_SLIM_BUILD)
+  hiveMqPages.loop();
+#endif
+  pvxPumpLive();
+}
+
+void pvxPumpLive() {
+  static bool busy = false;
+  if (busy) return;
+  busy = true;
+  pvxCloud.loop(deyeMgr, bmsMgr, deviceId, FIRMWARE_VERSION);
+  busy = false;
 }
 
 bool webBodyAuthorized() {
@@ -226,7 +258,7 @@ void publishMeterMqtt() {
 
 void publishBmsMqtt() {
 
-  if (!mqtt.connected() || !bmsMgr.bms.valid) return;
+  if (!bmsMgr.bms.valid) return;
 
   StaticJsonDocument<2048> doc;
 
@@ -238,7 +270,10 @@ void publishBmsMqtt() {
 
   serializeJson(doc, payload);
 
-  mqtt.publish(topicBms.c_str(), payload);
+  if (mqtt.connected()) mqtt.publish(topicBms.c_str(), payload);
+#if defined(ESP32_SLIM_BUILD)
+  hiveMqPages.publishBms(payload);
+#endif
 
 }
 
@@ -328,10 +363,13 @@ String buildStatusJson() {
   JsonObject mq = doc.createNestedObject("mqtt");
 
   mq["broker"] = mqttBroker;
-
   mq["port"] = mqttPort;
-
+  mq["user"] = mqttUser;
   mq["connected"] = mqtt.connected();
+#if defined(ESP32_SLIM_BUILD)
+  mq["hivemq"] = hiveMqPages.broker;
+  mq["hivemq_connected"] = hiveMqPages.connected;
+#endif
 
   mq["topic_status"] = topicStatus;
 
@@ -394,9 +432,12 @@ String buildStatusJson() {
 
 void publishStatus() {
 
-  if (!mqtt.connected()) return;
+  String json = buildStatusJson();
 
-  mqtt.publish(topicStatus.c_str(), buildStatusJson().c_str());
+  if (mqtt.connected()) mqtt.publish(topicStatus.c_str(), json.c_str());
+#if defined(ESP32_SLIM_BUILD)
+  hiveMqPages.publishStatus(json.c_str());
+#endif
 
 }
 
@@ -513,6 +554,10 @@ void runBleConnectJob() {
   bmsMgr.mac = mac;
   bool ok = bmsMgr.connect(bt, name, mac, prefs);
   if (ok) {
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+    gBlePreferBtUntil = millis() + 20000;
+    esp_coex_preference_set(ESP_COEX_PREFER_BT);
+#endif
     publishBmsMqtt();
     publishStatus();
   }
@@ -842,7 +887,14 @@ bool mqttConnect() {
 
   String clientId = "esp32-" + deviceId;
 
-  if (mqtt.connect(clientId.c_str())) {
+  bool ok = false;
+  if (mqttUser.length()) {
+    ok = mqtt.connect(clientId.c_str(), mqttUser.c_str(), mqttPass.c_str());
+  } else {
+    ok = mqtt.connect(clientId.c_str());
+  }
+
+  if (ok) {
 
     mqtt.subscribe(topicCmd.c_str());
 
@@ -876,6 +928,10 @@ void loadSettings() {
   mqttBroker = prefs.getString("mqtt_broker", MQTT_DEFAULT_BROKER);
 
   mqttPort = prefs.getUInt("mqtt_port", MQTT_DEFAULT_PORT);
+
+  mqttUser = prefs.getString("mqtt_user", MQTT_DEFAULT_USER);
+
+  mqttPass = prefs.getString("mqtt_pass", MQTT_DEFAULT_PASS);
 
   bmsMgr.mac = prefs.getString("ble_mac", "");
 
@@ -990,6 +1046,19 @@ void setupWiFi() {
   WiFi.mode(WIFI_STA);
 
   wifiStoreSeedDefaults(prefs);
+  wifiStoreEnsureSeeds(prefs);
+
+  // After OTE was added as primary: prefer strongest saved AP (not sticky last SSID).
+  if (!prefs.getBool("wifi_best_374", false)) {
+    prefs.putBool("wifi_best_374", true);
+    if (wifiStoreTryBestSaved(prefs, 0) || wifiStoreTryConnect(prefs)) {
+      wifiApplyStaTuning();
+      Serial.print("WiFi OK (best saved / OTE migrate): ");
+      Serial.println(WiFi.localIP());
+      startMdns();
+      return;
+    }
+  }
 
   bool forcePortal = prefs.getBool(WIFI_FORCE_PORTAL_KEY, false);
   if (forcePortal) prefs.putBool(WIFI_FORCE_PORTAL_KEY, false);
@@ -1222,6 +1291,10 @@ void handleBleConnect() {
   bool ok = bmsMgr.connect(bt, name, mac, prefs);
 
   if (ok) {
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+    gBlePreferBtUntil = millis() + 20000;
+    esp_coex_preference_set(ESP_COEX_PREFER_BT);
+#endif
     publishBmsMqtt();
     publishStatus();
     server.send(200, "application/json", "{\"ok\":true}");
@@ -1513,7 +1586,7 @@ void handleFactoryReset() {
 
 void handleMqttSave() {
 
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
 
   deserializeJson(doc, server.arg("plain"));
 
@@ -1521,9 +1594,26 @@ void handleMqttSave() {
 
   mqttPort = doc["port"] | MQTT_DEFAULT_PORT;
 
+  if (doc.containsKey("user") || doc.containsKey("username")) {
+    mqttUser = doc["user"] | doc["username"] | "";
+  }
+  if (doc.containsKey("pass") || doc.containsKey("password")) {
+    // Do not treat DEVICE cmd password field as MQTT pass when only broker is sent.
+    const char* p = doc["pass"] | "";
+    if (p[0]) mqttPass = p;
+    else if (doc["password"].is<const char*>() && doc.containsKey("user")) {
+      mqttPass = doc["password"] | "";
+    }
+  }
+  if (doc.containsKey("mqtt_pass")) mqttPass = doc["mqtt_pass"] | mqttPass;
+
   prefs.putString("mqtt_broker", mqttBroker);
 
   prefs.putUInt("mqtt_port", mqttPort);
+
+  prefs.putString("mqtt_user", mqttUser);
+
+  prefs.putString("mqtt_pass", mqttPass);
 
   mqtt.disconnect();
 
@@ -1615,7 +1705,11 @@ void setup() {
   topicWifi = "home/" + deviceId + "/wifi";
   topicBle = "home/" + deviceId + "/ble";
 
-
+  deyeMgr.begin();
+  pvxCloud.begin(deviceId);
+#if defined(ESP32_SLIM_BUILD)
+  hiveMqPages.begin(deviceId, mqttCallback);
+#endif
 
   BLEDevice::init("ESP32-Control");
   configureBleRadio();
@@ -1803,12 +1897,43 @@ void loop() {
     }
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
     static unsigned long lastCoexWifi = 0;
-    if (millis() - lastCoexWifi > 30000) {
+    if (millis() - lastCoexWifi > 5000) {
       lastCoexWifi = millis();
-      // While BMS link is up, prefer balance so notifies keep flowing.
-      if (bmsMgr.connected) esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
-      else esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+      // Classic single radio: while Basen is up, prefer BT briefly then balance.
+      // Permanent WIFI preference starves GATT notifies within seconds.
+      if (bmsMgr.connected) {
+        if (gBlePreferBtUntil && (int32_t)(millis() - gBlePreferBtUntil) < 0)
+          esp_coex_preference_set(ESP_COEX_PREFER_BT);
+        else
+          esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+      } else {
+        esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+      }
       WiFi.setSleep(false);
+    }
+#endif
+#if WIFI_ROAM_CHECK_MS > 0
+    // Never roam/scan while BMS is linked — scan drops Classic BLE.
+    static unsigned long lastRoamCheck = 0;
+    const bool due = gForceWifiRoam || (millis() - lastRoamCheck > WIFI_ROAM_CHECK_MS);
+    if (due && !bmsMgr.connected) {
+      gForceWifiRoam = false;
+      lastRoamCheck = millis();
+      int curRssi = WiFi.RSSI();
+      if (curRssi < WIFI_ROAM_MIN_RSSI) {
+        Serial.printf("WiFi weak (%d dBm) — picking strongest saved AP\n", curRssi);
+        String before = WiFi.SSID();
+        if (wifiStoreTryBestSaved(prefs, WIFI_ROAM_IMPROVE_DB) && WiFi.SSID() != before) {
+          Serial.printf("WiFi roamed %s (%d) -> %s (%d)\n",
+                        before.c_str(), curRssi, WiFi.SSID().c_str(), WiFi.RSSI());
+          startMdns();
+          mqttConnect();
+          publishStatus();
+        }
+      }
+    } else if (due) {
+      gForceWifiRoam = false;
+      lastRoamCheck = millis();
     }
 #endif
   }
@@ -1834,12 +1959,18 @@ void loop() {
       lastTry = millis();
       mqttConnect();
     }
-  } else {
-    if (millis() - lastMqttPublish > MQTT_PUBLISH_INTERVAL_MS) {
-      lastMqttPublish = millis();
-      publishStatus();
-    }
   }
+  // Always build/publish status on interval — local Mosquitto AND HiveMQ Pages mirror.
+  if (WiFi.status() == WL_CONNECTED && millis() - lastMqttPublish > MQTT_PUBLISH_INTERVAL_MS) {
+    lastMqttPublish = millis();
+    publishStatus();
+  }
+
+  // Cloud live first (cached), then one Solarman step, then cloud again —
+  // so 100ms publishes are not stuck behind a TCP register read.
+  pvxCloud.loop(deyeMgr, bmsMgr, deviceId, FIRMWARE_VERSION);
+  deyeMgr.loop();
+  pvxCloud.loop(deyeMgr, bmsMgr, deviceId, FIRMWARE_VERSION);
 
 
 
@@ -1904,34 +2035,117 @@ void loop() {
     }
   }
 
-  // Auto-reconnect BMS after WiFi has been stable (bleRadioOk).
-#if BLE_AUTO_RECONNECT
+  // Auto-reconnect / duty-cycle BMS after WiFi has been stable (bleRadioOk).
+#if BLE_DUTY_CYCLE
+  // Classic: connect briefly, publish snapshot, disconnect — continuous link cannot survive WiFi coex.
+  {
+    static unsigned long dutyIdleUntil = 0;
+    static unsigned long dutyHoldUntil = 0;
+    static bool dutyActive = false;
+    static bool dutyGotSnapshot = false;
+
+    if (!bleRadioOk || bmsMgr.mac.length() == 0 || WiFi.RSSI() < BLE_RECONNECT_MIN_RSSI) {
+      if (dutyActive && bmsMgr.connected) {
+        if (bmsMgr.bms.valid) publishBmsMqtt();
+        bmsMgr.dropLink(true, bmsMgr.bms.valid);
+      }
+      dutyActive = false;
+      dutyGotSnapshot = false;
+    } else if (!dutyActive && millis() >= dutyIdleUntil) {
+      Serial.printf("BLE duty connect: %s (wifi rssi=%d)\n", bmsMgr.mac.c_str(), WiFi.RSSI());
+      pumpNetwork();
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+      gBlePreferBtUntil = millis() + BLE_DUTY_HOLD_MS + 3000;
+      esp_coex_preference_set(ESP_COEX_PREFER_BT);
+#endif
+      bool ok = bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+      pumpNetwork();
+      if (ok) {
+        dutyActive = true;
+        dutyGotSnapshot = false;
+        dutyHoldUntil = millis() + BLE_DUTY_HOLD_MS;
+      } else {
+        dutyIdleUntil = millis() + BLE_DUTY_IDLE_MS;
+      }
+    } else if (dutyActive) {
+      if (bmsMgr.connected) {
+        bmsMgr.poll();
+        pumpNetwork();
+        if (bmsMgr.bms.valid) dutyGotSnapshot = true;
+      }
+      const bool timedOut = millis() >= dutyHoldUntil;
+      const bool linkDown = !bmsMgr.connected;
+      // Keep the BLE session for nearly the full hold window so MQTT can publish often.
+      // Only end early in the last 300ms once we already have a valid snapshot.
+      if (timedOut || linkDown || (dutyGotSnapshot && (int32_t)(dutyHoldUntil - millis()) < 300)) {
+        if (bmsMgr.bms.valid) publishBmsMqtt();
+        bool keep = bmsMgr.bms.valid || dutyGotSnapshot;
+        if (bmsMgr.connected) bmsMgr.dropLink(true, keep);
+        else if (keep) bmsMgr.bms.valid = true;
+        dutyActive = false;
+        dutyGotSnapshot = false;
+        dutyIdleUntil = millis() + BLE_DUTY_IDLE_MS;
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+        esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+#endif
+        Serial.println("BLE duty session end");
+      }
+    }
+  }
+#elif BLE_AUTO_RECONNECT
   if (bleRadioOk && bmsMgr.mac.length() > 0 && !bmsMgr.connected
       && millis() - lastBleReconnect > BLE_RECONNECT_MS) {
-#if !defined(ESP32_SLIM_BUILD)
     // Weak WiFi + blocking BLE connect kills the LAN web server.
-    if (WiFi.RSSI() < -70) {
+    if (WiFi.RSSI() < BLE_RECONNECT_MIN_RSSI) {
       lastBleReconnect = millis();
-    } else
+      Serial.printf("BLE reconnect deferred (wifi rssi=%d) — roam first\n", WiFi.RSSI());
+      gForceWifiRoam = true;
+    } else {
+      lastBleReconnect = millis();
+      Serial.printf("BLE auto-reconnect: %s (wifi rssi=%d)\n", bmsMgr.mac.c_str(), WiFi.RSSI());
+      pumpNetwork();
+      bool ok = bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+      pumpNetwork();
+      if (ok) {
+#if !defined(CONFIG_IDF_TARGET_ESP32S3)
+        gBlePreferBtUntil = millis() + 20000;
+        esp_coex_preference_set(ESP_COEX_PREFER_BT);
 #endif
-    {
-      lastBleReconnect = millis();
-      Serial.printf("BLE auto-reconnect: %s\n", bmsMgr.mac.c_str());
-      bmsMgr.connect(bmsMgr.type, bmsMgr.name, bmsMgr.mac, prefs);
+      } else if (BLE_RECONNECT_FAIL_BACKOFF_MS > BLE_RECONNECT_MS) {
+        // Push next attempt further out after a failed connect.
+        lastBleReconnect = millis() + (BLE_RECONNECT_FAIL_BACKOFF_MS - BLE_RECONNECT_MS);
+      }
     }
   }
 #endif
 
   static unsigned long lastBmsMqtt = 0;
 
+#if BLE_DUTY_CYCLE
+  // Publish while linked, and keep publishing last-good data briefly across reconnect gaps
+  // so Home Assistant does not freeze for many seconds when BLE drops.
   if (bmsMgr.bms.valid && millis() - lastBmsMqtt > MQTT_BMS_PUBLISH_INTERVAL_MS) {
-    lastBmsMqtt = millis();
-    publishBmsMqtt();
+    const bool freshLink = bmsMgr.connected;
+    const bool grace = bmsMgr.lastCellMs && (millis() - bmsMgr.lastCellMs) < 12000;
+    if (freshLink || grace) {
+      lastBmsMqtt = millis();
+      publishBmsMqtt();
+    }
+  }
+#else
+  if (bmsMgr.bms.valid && millis() - lastBmsMqtt > MQTT_BMS_PUBLISH_INTERVAL_MS) {
+    const bool freshLink = bmsMgr.connected;
+    const bool grace = bmsMgr.lastCellMs && (millis() - bmsMgr.lastCellMs) < 12000;
+    if (freshLink || grace) {
+      lastBmsMqtt = millis();
+      publishBmsMqtt();
+    }
   }
 
   if (bleRadioOk) {
     bmsMgr.maintain();
   }
+#endif
 
 #ifndef ESP32_SLIM_BUILD
   genMgr.poll();
